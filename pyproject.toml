@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "elasticity"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[tool.poetry.group.test.dependencies]
+black = "^24.2.0"
+pylint = "^3.1.0"
+ruff = "^0.2.2"
+pyright = "^1.1.351"
+bandit = "^1.7.7"
+
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.22.1"
+jupyterlab = "^4.1.2"
+ipywidgets = "^8.1.2"
+seaborn = "^0.13.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -69,10 +69,15 @@ def calculate_elasticity_from_parameters(model_type: str, a: float, b: float, pr
         raise ValueError("Invalid model type. Use 'linear', 'power', or 'exponential'.")
     return round(elasticity, 2)
 
-def estimate_coefficients(data: pd.DataFrame, model_type: str, price_col: str = 'price', quantity_col: str = 'quantity') -> Tuple[float, float, float, float, float]:
+def estimate_coefficients(data: pd.DataFrame,
+                          model_type: str,
+                          price_col: str = 'price',
+                          quantity_col: str = 'quantity',
+                          weights_col: str = 'days') -> Tuple[float, float, float, float, float]:
     """Estimate coefficients for demand model using log transformation if nonlinear."""
     X = sm.add_constant(data[[price_col]])
     y = data[quantity_col]
+    weights = data[weights_col]
     
     if model_type == 'power':
         y = np.log(y)
@@ -80,7 +85,7 @@ def estimate_coefficients(data: pd.DataFrame, model_type: str, price_col: str = 
     elif model_type == 'exponential':
         y = np.log(y)
     
-    model = sm.OLS(y, X).fit()
+    model = sm.WLS(y, X, weights=weights).fit()
     pvalue = model.f_pvalue
     r_squared = model.rsquared
 
@@ -89,7 +94,13 @@ def estimate_coefficients(data: pd.DataFrame, model_type: str, price_col: str = 
     elasticity = calculate_elasticity_from_parameters(model_type, a, b, price_point)
     return a, b, pvalue, r_squared, elasticity
 
-def cross_validation(data: pd.DataFrame, model_type: str, test_size: float = 0.1, price_col: str = 'price', quantity_col: str = 'quantity', n_tests: int = 3) -> Tuple[float, float, float, float, float]:
+def cross_validation(data: pd.DataFrame,
+                     model_type: str,
+                     test_size: float = 0.1,
+                     price_col: str = 'price',
+                     quantity_col: str = 'quantity',
+                     weights_col: str = 'days',
+                     n_tests: int = 3) -> Tuple[float, float, float, float, float]:
     """Perform cross-validation."""
     relative_errors = []
     a_lists = []
@@ -98,7 +109,11 @@ def cross_validation(data: pd.DataFrame, model_type: str, test_size: float = 0.1
     r_squared_lists = []
     for i in range(n_tests):
         data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
-        a, b, pvalue, r_squared, elasticity = estimate_coefficients(data_train, model_type, price_col=price_col, quantity_col=quantity_col)
+        a, b, pvalue, r_squared, elasticity = estimate_coefficients(data_train,
+                                                                    model_type,
+                                                                    price_col=price_col,
+                                                                    quantity_col=quantity_col,
+                                                                    weights_col=weights_col)
         predicted_quantity = [calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]]
         absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
         relative_error = np.mean(absolute_errors / data_test[quantity_col]) * 100  # Calculate as a percentage
@@ -117,7 +132,11 @@ def cross_validation(data: pd.DataFrame, model_type: str, test_size: float = 0.1
 
     return mean_relative_error, mean_a, mean_b, mean_elasticity, mean_r_squared
 
-def run_experiment(data: pd.DataFrame, test_size: float = 0.1, price_col: str = 'price', quantity_col: str = 'quantity') -> pd.DataFrame:
+def run_experiment(data: pd.DataFrame,
+                   test_size: float = 0.1,
+                   price_col: str = 'price',
+                   quantity_col: str = 'quantity',
+                   weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment."""
     results = {}
     best_model = None
@@ -129,10 +148,20 @@ def run_experiment(data: pd.DataFrame, test_size: float = 0.1, price_col: str = 
          cv_mean_a,
          cv_mean_b,
          cv_mean_elasticity,
-         cv_mean_r2) = cross_validation(data, model_type, test_size, price_col, quantity_col)
+         cv_mean_r2) = cross_validation(data,
+                                        model_type,
+                                        test_size,
+                                        price_col,
+                                        quantity_col,
+                                        weights_col)
 
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity = estimate_coefficients(data, model_type, price_col=price_col, quantity_col=quantity_col)
+        a, b, pvalue, r_squared, elasticity = estimate_coefficients(
+            data,
+            model_type,
+            price_col=price_col,
+            quantity_col=quantity_col,
+            weights_col=weights_col)
 
         # Store the results in a dictionary
         results[model_type + '_mean_relative_error'] = cv_mean_relative_error
@@ -174,27 +203,51 @@ def run_experiment(data: pd.DataFrame, test_size: float = 0.1, price_col: str = 
 
     return results_df
 
-def run_experiment_for_uid(uid: Any, data: pd.DataFrame, test_size: float = 0.1, price_col: str = 'price', quantity_col: str = 'quantity') -> pd.DataFrame:
+def run_experiment_for_uid(uid: str,
+                           data: pd.DataFrame,
+                           test_size: float = 0.1,
+                           price_col: str = 'price',
+                           quantity_col: str = 'quantity',
+                           weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment for a specific user ID."""
     subset_data = data[data['uid'] == uid]
-    results_df = run_experiment(subset_data, test_size, price_col, quantity_col)
+    results_df = run_experiment(data=subset_data,
+                                test_size=test_size,
+                                price_col=price_col,
+                                quantity_col=quantity_col,
+                                weights_col=weights_col)
     results_df['uid'] = uid
     return results_df
 
-def run_experiment_for_uids_parallel(df: pd.DataFrame, test_size: float = 0.1, price_col: str = 'price', quantity_col: str = 'quantity') -> pd.DataFrame:
+def run_experiment_for_uids_parallel(df: pd.DataFrame,
+                                     test_size: float = 0.1,
+                                     price_col: str = 'price',
+                                     quantity_col: str = 'quantity',
+                                     weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment for multiple user IDs in parallel."""
     unique_uids = df['uid'].unique()
     pool = multiprocessing.Pool()  # Use the default number of processes
-    results_list = pool.starmap(run_experiment_for_uid, [(uid, df, test_size, price_col, quantity_col) for uid in unique_uids])
+    results_list = pool.starmap(
+        run_experiment_for_uid, [(uid,
+                                  df,
+                                  test_size,
+                                  price_col,
+                                  quantity_col,
+                                  weights_col) for uid in unique_uids])
     pool.close()
     pool.join()
     return pd.concat(results_list)
 
-def run_experiment_for_uids_not_parallel(df: pd.DataFrame, test_size: float = 0.1, price_col: str = 'price', quantity_col: str = 'quantity') -> pd.DataFrame:
+def run_experiment_for_uids_not_parallel(
+        df: pd.DataFrame,
+        test_size: float = 0.1,
+        price_col: str = 'price',
+        quantity_col: str = 'quantity',
+        weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment for multiple user IDs (not in parallel)."""
     results_list = []
     unique_uids = df['uid'].unique()
     for uid in unique_uids:
-        results_df = run_experiment_for_uid(uid, df, test_size, price_col, quantity_col)
+        results_df = run_experiment_for_uid(uid, df, test_size, price_col, quantity_col, weights_col)
         results_list.append(results_df)
     return pd.concat(results_list)

@@ -59,7 +59,7 @@ def round_price_effect(price: float) -> float:
 
     - For prices less than 10, rounds down to the nearest half at increments of 0.05.
     - For prices less than 50, rounds down to the nearest half at increments of 0.5.
-    - For prices between 10 and 500, takes the floor of the whole number.
+    - For prices between 50 and 500, takes the floor of the whole number.
     - For prices greater than 500, rounds down to the nearest half at increments of 5.
 
     Example:
@@ -142,13 +142,18 @@ def preprocess_by_price(input_df: pd.DataFrame,
                       uid_col: str = 'uid',
                       date_col: str = 'date',
                       price_col: str = 'price',
-                      quantity_col: str = 'units'
+                      quantity_col: str = 'units',
+                      weights_col: str = 'days',
                       ) ->tuple[pd.DataFrame, pd.DataFrame]:
     
     df_by_price_norm = (input_df.groupby([uid_col, price_col])
                     .agg({quantity_col: 'mean', date_col:'count'})
                     .reset_index().sort_values(by=[uid_col, price_col]))
+    
     df_by_price_norm[quantity_col] = df_by_price_norm[quantity_col] + 0.001
+
+    df_by_price_norm.rename(columns={date_col: weights_col}, inplace=True)
+
     return df_by_price_norm
 
 

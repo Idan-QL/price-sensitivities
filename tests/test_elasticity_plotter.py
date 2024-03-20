@@ -4,8 +4,8 @@ import unittest
 from typing import Callable
 from unittest.mock import patch
 
-from elasticity.elasticity_plotter import ElasticityPlotter
-from elasticity.mock_elasticity_generator import MockElasticityGenerator
+from src.elasticity_plotter import ElasticityPlotter
+from src.mock_elasticity_generator import MockElasticityGenerator
 
 
 class TestElasticityPlotter(unittest.TestCase):
@@ -16,7 +16,7 @@ class TestElasticityPlotter(unittest.TestCase):
     is called correctly with the expected arguments.
     """
 
-    @patch('elasticity.elasticity_plotter.ElasticityPlotter.plot_price_and_units_for_uid_one_graph')
+    @patch('src.elasticity_plotter.ElasticityPlotter.plot_price_and_units_for_uid_one_graph')
     def test_plot_price_and_units_for_uid_one_graph(self, mock_plot_function: Callable) -> None:
         """Test whether plot_price_and_units_for_uid_one_graph is called.
 
@@ -33,7 +33,7 @@ class TestElasticityPlotter(unittest.TestCase):
 
         mock_plot_function.assert_called_once_with(mock_data, uid=uid)
 
-    @patch('elasticity.elasticity_plotter.ElasticityPlotter.plot_price_and_units_for_uid_2_graphs')
+    @patch('src.elasticity_plotter.ElasticityPlotter.plot_price_and_units_for_uid_2_graphs')
     def test_plot_price_and_units_for_uid_2_graphs(self, mock_plot_function: Callable) -> None:
         """Test whether plot_price_and_units_for_uid_2_graphs is called.
 

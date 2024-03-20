@@ -20,8 +20,9 @@ class MockElasticityGenerator:
                  a_linear: float = 999,
                  a_non_linear: float = 500,
                  a_power_non_linear: float = 100,
+                 quantity_noise_std: float = 0,
                  date_col: str = 'date',
-                 price_col: str = 'price_from_revenue',
+                 price_col: str = 'price',
                  demand_col: str = 'units',
                  uid_col: str = 'uid',
                  elasticity_list: list[float] = None) -> None:
@@ -46,17 +47,19 @@ class MockElasticityGenerator:
         self.a_linear = a_linear
         self.a_non_linear = a_non_linear
         self.a_power_non_linear = a_power_non_linear
+        self.quantity_noise_std = quantity_noise_std
         self.date_col = date_col
         self.price_col = price_col
         self.demand_col = demand_col
         self.uid_col = uid_col
 
         if elasticity_list is None:
-            elasticity_list = [5, 2, 1, 0]
+            elasticity_list = [-5, -2, -1, 0]
         self.elasticity_list = elasticity_list
 
     @staticmethod
-    def generate_nonlinear_elasticity(start_date: datetime,
+    def generate_nonlinear_elasticity(self, 
+                                      start_date: datetime,
                                       end_date: datetime,
                                       elasticity: float,
                                       a: float,
@@ -79,20 +82,21 @@ class MockElasticityGenerator:
         min_price, max_price = price_range
         prices = np.random.uniform(min_price, max_price, len(date_range))
         prices = np.round(prices, 2)
-        base_quantity = a * np.power(prices, -1*elasticity)
+        base_quantity = a * np.power(prices, elasticity)
         quantity_noise = np.random.normal(scale=quantity_noise_std, size=len(date_range))
         quantity = base_quantity + quantity_noise
         df_nonlinear = pd.DataFrame({
-            'date': date_range,
-            'price_from_revenue': prices,
-            'units': quantity,
-            'uid': 'uid_nonlinear_' + str(elasticity)
+            self.date_col: date_range,
+            self.price_col: prices,
+            self.demand_col: quantity,
+            self.uid_col: 'uid_nonlinear_' + str(elasticity)
         })
         df_nonlinear['units'] = df_nonlinear['units'].round(3)
         return df_nonlinear
 
     @staticmethod
-    def generate_linear_elasticity(start_date: datetime,
+    def generate_linear_elasticity(self,
+                                   start_date: datetime,
                                    end_date: datetime,
                                    elasticity: float,
                                    a: float,
@@ -100,6 +104,7 @@ class MockElasticityGenerator:
                                    quantity_noise_std: float = 0) -> DataFrame:
         """Generates demand data based on a linear price elasticity model.
 
+        TODO: Delete or change as elasticity not constant
         Parameters:
         - start_date (datetime): Start date for demand generation.
         - end_date (datetime): End date for demand generation.
@@ -114,14 +119,14 @@ class MockElasticityGenerator:
         date_range = pd.date_range(start=start_date, end=end_date, freq='D')
         start_price, end_price = price_range
         prices = np.linspace(start_price, end_price, len(date_range))
-        base_quantity = a + (-1*elasticity) * prices
+        base_quantity = a + (elasticity) * prices
         quantity_noise = np.random.normal(scale=quantity_noise_std, size=len(date_range))
         quantity = base_quantity + quantity_noise
         df_linear = pd.DataFrame({
-            'date': date_range,
-            'price_from_revenue': prices,
-            'units': quantity,
-            'uid': 'uid_linear_' + str(elasticity)
+            self.date_col: date_range,
+            self.price_col: prices,
+            self.demand_col: quantity,
+            self.uid_col: 'uid_linear_' + str(elasticity)
         })
         df_linear['units'] = df_linear['units'].round(3).clip(lower=0)
         return df_linear
@@ -135,20 +140,22 @@ class MockElasticityGenerator:
         mock_elasticity_list = []
         for e in self.elasticity_list:
             df_linear = self.generate_linear_elasticity(
+                self,
                 self.start_date,
                 self.end_date,
                 e,
                 self.a_linear,
                 self.price_range,
-                quantity_noise_std=0)
+                quantity_noise_std=self.quantity_noise_std)
             mock_elasticity_list.append(df_linear)
             df_non_linear = self.generate_nonlinear_elasticity(
-                self.start_date,
-                self.end_date,
-                e,
-                np.power(self.a_power_non_linear, e) * self.a_non_linear,
-                self.price_range,
-                quantity_noise_std=0)
+                self,
+                start_date=self.start_date,
+                end_date=self.end_date,
+                elasticity=e,
+                a=self.a_non_linear,
+                price_range=self.price_range,
+                quantity_noise_std=self.quantity_noise_std)
             mock_elasticity_list.append(df_non_linear)
 
         return pd.concat(mock_elasticity_list)

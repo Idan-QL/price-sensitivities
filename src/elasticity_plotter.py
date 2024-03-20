@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from elasticity.preprocessing import preprocess_by_day
+from src.preprocessing import preprocess_by_day
 
 
 class ElasticityPlotter:
@@ -24,9 +24,9 @@ class ElasticityPlotter:
 
     def __init__(self,
                  uid_col: str ='uid',
-                 price_col: str ='price_from_revenue',
+                 price_col: str ='price',
                  quantity_col: str ='units',
-                 median_price_col: str ='uid_price_from_revenue_median',
+                 median_price_col: str ='uid_price_median',
                  median_quantity_col: str ='median_sale_per_day',
                  date_col: str ='date') -> None:
         """Initializes the ElasticityPlotter with default parameters."""
@@ -67,7 +67,8 @@ class ElasticityPlotter:
 
     def plot_curves(self,
                     df: pd.DataFrame,
-                    uid: str) -> None:
+                    uid: str,
+                    print_raw_data: bool=False) -> None:
         """Plot various curves for a specific UID.
 
         Parameters:
@@ -83,16 +84,17 @@ class ElasticityPlotter:
         median_price_uid = df_by_day_uid[self.median_price_col].iloc[0]
         median_quantity_uid = df_by_day_uid[self.median_quantity_col].iloc[0]
 
-        self.jointplot_with_median(df_uid,
-                                   median_price_uid,
-                                   median_quantity_uid,
-                                   title='Raw data - UID: ' + str(uid),
-                                   color="green")
-        self.jointplot_with_median(df_by_day_uid,
-                                   median_price_uid,
-                                   median_quantity_uid,
-                                   title='Data by day - UID: ' + str(uid),
-                                   color="blue")
+        if print_raw_data:
+            self.jointplot_with_median(df_uid,
+                                    median_price_uid,
+                                    median_quantity_uid,
+                                    title='Raw data - UID: ' + str(uid),
+                                    color="green")
+            self.jointplot_with_median(df_by_day_uid,
+                                    median_price_uid,
+                                    median_quantity_uid,
+                                    title='Data by day - UID: ' + str(uid),
+                                    color="blue")
         self.jointplot_with_median(df_by_price_norm_uid,
                                    median_price_uid,
 

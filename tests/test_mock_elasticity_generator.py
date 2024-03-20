@@ -4,7 +4,7 @@ import unittest
 
 import pandas as pd
 
-from elasticity.mock_elasticity_generator import MockElasticityGenerator
+from src.mock_elasticity_generator import MockElasticityGenerator
 
 
 class TestMockElasticityGenerator(unittest.TestCase):

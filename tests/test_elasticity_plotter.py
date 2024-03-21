@@ -4,7 +4,7 @@ import unittest
 from typing import Callable
 from unittest.mock import patch
 
-from src.elasticity_plotter import ElasticityPlotter
+from src.elasticity.elasticity_plotter import ElasticityPlotter
 from src.mock_elasticity_generator import MockElasticityGenerator
 
 

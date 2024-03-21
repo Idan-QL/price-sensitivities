@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from src.preprocessing import preprocess_by_day
+from elasticity.data import preprocess_by_day
 
 
 class ElasticityPlotter:

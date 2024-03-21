@@ -28,7 +28,9 @@ exclude = [
     "venv",
     "__pycache__"
 ]
+
 line-length = 100
+
 [format]
 # Enable auto-formatting of code examples in docstrings. Markdown,
 # reStructuredText code/literal blocks and doctests are all supported.
@@ -36,6 +38,7 @@ docstring-code-format = true
 # Set the line length limit used when formatting code snippets in
 # docstrings.
 docstring-code-line-length = "dynamic"
+
 [lint]
 extend-select = [
     "A",
@@ -62,8 +65,10 @@ extend-select = [
     "TID"
 ]
 extend-ignore = ["ANN101", "S311"]
+
 [lint.mccabe]
 # Flag errors (`C901`) whenever the complexity level exceeds 5.
 max-complexity = 8
+
 [lint.pydocstyle]
 convention = "google"

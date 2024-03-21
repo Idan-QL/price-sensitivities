@@ -9,6 +9,8 @@ from ql_toolkit.runtime_env import setup
 from elasticity.utils import cli_default_args
 
 from ql_toolkit.config.runtime_config import app_state
+
+
 def run() -> None:
     """This function is the entry point for the article_segmentation batch job.
 

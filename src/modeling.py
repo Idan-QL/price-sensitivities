@@ -90,9 +90,10 @@ def estimate_coefficients(data: pd.DataFrame,
     r_squared = model.rsquared
 
     a, b = model.params.iloc[0], model.params.iloc[1]
-    price_point = data[price_col].median()
-    elasticity = calculate_elasticity_from_parameters(model_type, a, b, price_point)
-    return a, b, pvalue, r_squared, elasticity
+    median_price = data[price_col].median()
+    median_quantity = data[quantity_col].median()
+    elasticity = calculate_elasticity_from_parameters(model_type, a, b, median_price)
+    return a, b, pvalue, r_squared, elasticity, median_quantity, median_price
 
 def cross_validation(data: pd.DataFrame,
                      model_type: str,
@@ -109,7 +110,7 @@ def cross_validation(data: pd.DataFrame,
     r_squared_lists = []
     for i in range(n_tests):
         data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
-        a, b, pvalue, r_squared, elasticity = estimate_coefficients(data_train,
+        a, b, _, r_squared, elasticity, _, _ = estimate_coefficients(data_train,
                                                                     model_type,
                                                                     price_col=price_col,
                                                                     quantity_col=quantity_col,
@@ -156,7 +157,7 @@ def run_experiment(data: pd.DataFrame,
                                         weights_col)
 
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity = estimate_coefficients(
+        a, b, pvalue, r_squared, elasticity, median_quantity, median_price = estimate_coefficients(
             data,
             model_type,
             price_col=price_col,
@@ -189,6 +190,8 @@ def run_experiment(data: pd.DataFrame,
         results['best_model_r2'] = np.nan
         results['best_mean_relative_error'] = np.nan
         results['best_model_elasticity'] = np.nan
+        results['median_quantity'] = np.nan
+        results['median_price'] = np.nan
     else:
         # Add columns for the best model
         results['best_model'] = best_model
@@ -197,6 +200,17 @@ def run_experiment(data: pd.DataFrame,
         results['best_model_r2'] = results[best_model + '_r2']
         results['best_mean_relative_error'] = results[best_model + '_mean_relative_error']
         results['best_model_elasticity'] = results[best_model + '_elasticity']
+        results['median_quantity'] = median_quantity
+        results['median_price'] = median_price
+        results['quality_test'] = np.where(
+            (results['median_quantity'] < 20) &
+            (results['best_mean_relative_error'] <= 25), True,
+            np.where((results['median_quantity'] >= 20) &
+                     (results['median_quantity'] < 100) &
+                     (results['best_mean_relative_error'] <= 20), True,
+                     np.where((results['median_quantity'] >= 100) &
+                              (results['best_mean_relative_error'] <= 15), True,
+                              False)))
 
     # Convert the dictionary to a DataFrame
     results_df = pd.DataFrame(results, index=[0])

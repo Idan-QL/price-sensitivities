@@ -1,5 +1,5 @@
 """Module of preprocessing."""
-
+import logging
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -8,9 +8,10 @@ from elasticity.data.utils import preprocess_by_price
 from elasticity.data.utils import uid_with_price_changes
 from elasticity.data.utils import uid_with_min_conversions
 
+from ql_toolkit.config.runtime_config import app_state
+
 def read_and_preprocess(client_key: str,
                         channel: str,
-                        bucket: str,
                         start_date: str,
                         end_date: str,
                         dir_: str = 'data_science/datasets',
@@ -26,10 +27,13 @@ def read_and_preprocess(client_key: str,
     Returns:
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
+    bucket = app_state.bucket_name
+    logging.info(f"The bucket name is {bucket}")
+    print(x)
 
     df = read_monthly_data(client_key=client_key,
                            channel=channel,
-                           bucket=bucket,
+                           bucket=app_state.bucket_name,
                            start_date=start_date,
                            end_date=end_date,
                            dir_=dir_,

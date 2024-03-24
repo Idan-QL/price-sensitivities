@@ -2,7 +2,8 @@
 import logging
 import numpy as np
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from elasticity.data.utils import round_price_effect
 from elasticity.data.utils import preprocess_by_price
 from elasticity.data.utils import uid_with_price_changes
@@ -12,8 +13,8 @@ from ql_toolkit.config.runtime_config import app_state
 
 def read_and_preprocess(client_key: str,
                         channel: str,
-                        start_date: str,
-                        end_date: str,
+                        start_date: str = None,
+                        end_date: str = None,
                         dir_: str = 'data_science/datasets',
                         price_changes: int = 4, threshold: float = 0.01,
                         min_days_with_conversions: int = 15,
@@ -29,7 +30,18 @@ def read_and_preprocess(client_key: str,
     """
     bucket = app_state.bucket_name
     logging.info(f"The bucket name is {bucket}")
-    print(x)
+
+    if end_date is None:
+        end_date = datetime.now().replace(day=1) - relativedelta(months=1)
+        end_date = end_date.strftime('%Y-%m-%d')
+    
+    if start_date is None:
+        end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        start_date_dt = end_date_dt - relativedelta(months=11)
+        start_date = start_date_dt.strftime('%Y-%m-%d')
+
+    print(f"start_date: {start_date}")
+    print(f"end_date: {end_date}")
 
     df = read_monthly_data(client_key=client_key,
                            channel=channel,
@@ -107,18 +119,20 @@ def read_data(client_key: str, channel: str, bucket: str,
                       dir_: str = 'data_science/datasets') -> pd.DataFrame:
     """Read monthly data and concatenate into a single DataFrame."""
     year_, month_ = datetime.strptime(date, '%Y-%m-%d').strftime('%Y-%m').split("-")
+    cs = ['date',
+        'uid',
+        'conversions_most_common_shelf_price',
+        'views_most_common_shelf_price',
+        'total_units',
+        'price']
     try:
         df = pd.read_parquet(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/',
-                                    columns=['date',
-                                            'uid',
-                                            'conversions_most_common_shelf_price',
-                                            'views_most_common_shelf_price',
-                                            'total_units',
-                                            'price'])
+                                    columns=cs)
         df = process_data(df)
     except:
         print(f'No data for {year_}_{int(month_)}')
         print(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/')
+        df = pd.DataFrame(columns=cs)
         pass
     return df
 

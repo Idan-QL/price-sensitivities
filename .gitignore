@@ -16,3 +16,4 @@ notebooks/
 tests/logs
 **.parquet
 **.csv
+dist/

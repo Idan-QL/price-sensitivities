@@ -4,8 +4,10 @@ import unittest
 from typing import Callable
 from unittest.mock import patch
 
-from src.elasticity.elasticity_plotter import ElasticityPlotter
-from src.mock_elasticity_generator import MockElasticityGenerator
+from sys import path as sys_path
+sys_path.append("../src")
+from elasticity.utils.elasticity_plotter import ElasticityPlotter
+from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator
 
 
 class TestElasticityPlotter(unittest.TestCase):

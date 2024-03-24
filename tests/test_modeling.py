@@ -4,9 +4,10 @@ import unittest
 from typing import Callable
 from unittest.mock import patch
 
-from src.modeling import linear_demand, power_demand, exponential_demand, linear_elasticity, power_elasticity, \
-    exponential_elasticity, calculate_elasticity_from_parameters, estimate_coefficients
-from src.mock_elasticity_generator import MockElasticityGenerator
+from sys import path as sys_path
+sys_path.append("../src")
+from elasticity.model.model import estimate_coefficients
+from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator
 
 
 class TestElasticityPlotter(unittest.TestCase):

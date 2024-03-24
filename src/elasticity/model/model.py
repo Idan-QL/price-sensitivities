@@ -25,9 +25,7 @@ def estimate_coefficients(data: pd.DataFrame,
     model = sm.WLS(y, X, weights=weights).fit()
     pvalue = model.f_pvalue
     r_squared = model.rsquared
-
-    a, b = model.params.iloc[0], model.params.iloc[1]
     median_price = data[price_col].median()
-    median_quantity = data[quantity_col].median()
+    a, b = model.params.iloc[0], model.params.iloc[1]
     elasticity = calculate_elasticity_from_parameters(model_type, a, b, median_price)
-    return a, b, pvalue, r_squared, elasticity, median_quantity, median_price
+    return a, b, pvalue, r_squared, elasticity

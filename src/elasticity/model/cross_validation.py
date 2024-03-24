@@ -20,7 +20,7 @@ def cross_validation(data: pd.DataFrame,
     r_squared_lists = []
     for i in range(n_tests):
         data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
-        a, b, _, r_squared, elasticity, _, _ = estimate_coefficients(data_train,
+        a, b, _, r_squared, elasticity = estimate_coefficients(data_train,
                                                                     model_type,
                                                                     price_col=price_col,
                                                                     quantity_col=quantity_col,

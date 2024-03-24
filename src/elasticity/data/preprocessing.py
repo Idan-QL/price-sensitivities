@@ -15,6 +15,7 @@ def read_and_preprocess(client_key: str,
                         channel: str,
                         start_date: str = None,
                         end_date: str = None,
+                        bucket: str = None,
                         dir_: str = 'data_science/datasets',
                         price_changes: int = 4, threshold: float = 0.01,
                         min_days_with_conversions: int = 15,
@@ -28,8 +29,6 @@ def read_and_preprocess(client_key: str,
     Returns:
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
-    bucket = app_state.bucket_name
-    logging.info(f"The bucket name is {bucket}")
 
     if end_date is None:
         end_date = datetime.now().replace(day=1) - relativedelta(months=1)
@@ -40,12 +39,15 @@ def read_and_preprocess(client_key: str,
         start_date_dt = end_date_dt - relativedelta(months=11)
         start_date = start_date_dt.strftime('%Y-%m-%d')
 
+    if bucket is None:
+        bucket = app_state.bucket_name
+
     print(f"start_date: {start_date}")
     print(f"end_date: {end_date}")
 
     df = read_monthly_data(client_key=client_key,
                            channel=channel,
-                           bucket=app_state.bucket_name,
+                           bucket=bucket,
                            start_date=start_date,
                            end_date=end_date,
                            dir_=dir_,

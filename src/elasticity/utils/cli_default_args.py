@@ -19,7 +19,7 @@ args_kv = {
     },
     "project_name": {
         "flag": "-p",
-        "default": "",
+        "default": "elasticity",
         "type": str,
         "help": "Project name",
         "required": True,

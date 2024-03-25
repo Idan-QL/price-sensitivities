@@ -151,7 +151,7 @@ def run_experiment_for_uid(uid: str,
            'median_price', 'quality_test', 'uid']
 
         results_df = pd.DataFrame(np.nan, index=[0], columns=columns)
-        results_df['uid'] = uid
+    results_df['uid'] = uid
     return results_df
 
 def run_experiment_for_uids_parallel(df: pd.DataFrame,

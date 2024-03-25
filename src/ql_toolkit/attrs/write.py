@@ -87,7 +87,7 @@ def write_actions_list(
             with open(path.join("../artifacts/actions/", file_name), "w") as file:
                 file.write(actions_str)
         else:
-            s3_attrs_dir = "spark/output/test/forecast/" if qa_run else app_state.res_attrs_dir
+            s3_attrs_dir = f"spark/output/test/{app_state.project_name}/" if qa_run else app_state.res_attrs_dir
             logging.info(f"[- attrs -] Writing files to S3: {s3_attrs_dir}")
             s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)
             if not qa_run and not is_local:

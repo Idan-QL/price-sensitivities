@@ -33,7 +33,7 @@ args_kv = {
     },
     "local": {
         "flag": "-l",
-        "default": "False",
+        "default": "True",
         "type": literal_eval,
         "help": "Write results to local 'artifacts' " "folder or to S3",
         "required": False,

@@ -9,14 +9,18 @@ from ql_toolkit.attrs.action_list import create_actions_list
 
 def generate_actions_list(df_results: pd.DataFrame,
                           client_key: str,
-                          channel: str) -> List[Tuple[Any, ...]]:
+                          channel: str,
+                          min_elasticity: float = -3.8) -> List[Tuple[Any, ...]]:
     """Generate actions list from the results DataFrame."""
+    df_results['cap_power_elasticity'] = df_results['power_elasticity'].apply(
+        lambda x: max(x, min_elasticity))
+
     attr_cs = [
         "uid",
         "best_model_a",
         "best_model_b",
         "best_model",
-        "power_elasticity",
+        "cap_power_elasticity",
     ]
     df_actions = df_results[df_results.quality_test][attr_cs]
     df_actions['qlia_elasticity_calc_date'] = datetime.now().strftime("%Y-%m-%d %H:%M")

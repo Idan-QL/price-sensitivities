@@ -67,7 +67,7 @@ def read_and_preprocess(client_key: str,
                                       price_col=price_col,
                                       quantity_col=quantity_col)
 
-    return df_by_price, total_end_date_uid
+    return df_by_price, total_end_date_uid, end_date
 
 
 
@@ -136,10 +136,17 @@ def read_data(client_key: str, channel: str, bucket: str,
         'conversions_most_common_shelf_price',
         'views_most_common_shelf_price',
         'total_units',
-        'price']
+        'price',
+        'inventory'
+        ]
     try:
         df_read = pd.read_parquet(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/',
-                                    columns=cs)
+                                  columns=cs)
+        # delete uid where inventory is 0
+        logging.info("Number of inventory less or equal to 0: %s",
+                     len(df_read[df_read['inventory'] <= 0]))
+        df_read = df_read[df_read['inventory'] > 0]
+        del df_read['inventory']
         df_read = process_data(df_read)
     except Exception:
         logging.info('No data for %s_%s}', (str(year_), str(int(month_))))

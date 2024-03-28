@@ -76,7 +76,6 @@ def write_actions_list(
     if filename_prefix is None:
         filename_prefix = f"{app_state.project_name}_actions"
     logging.info("Writing %s actions to file...", len(actions_list))
-    monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
 
     for i in range(0, len(actions_list), chunk_size):
         chunk = actions_list[i : i + chunk_size]
@@ -91,5 +90,6 @@ def write_actions_list(
             logging.info(f"[- attrs -] Writing files to S3: {s3_attrs_dir}")
             s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)
             if not qa_run and not is_local:
+                monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
                 file_name = "_".join(file_name.split("_")[:-1]) + ".txt"
                 s3io.upload_to_s3(s3_dir=monitor_run_dir, file_name=file_name, file_obj=actions_str)

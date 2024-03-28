@@ -1,21 +1,25 @@
 """Module of preprocessing."""
 import logging
+from datetime import datetime
+from typing import Optional
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from elasticity.data.utils import round_price_effect
-from elasticity.data.utils import preprocess_by_price
-from elasticity.data.utils import uid_with_price_changes
-from elasticity.data.utils import uid_with_min_conversions
-
+from elasticity.data.utils import (
+    preprocess_by_price,
+    round_price_effect,
+    uid_with_min_conversions,
+    uid_with_price_changes,
+)
 from ql_toolkit.config.runtime_config import app_state
+
 
 def read_and_preprocess(client_key: str,
                         channel: str,
-                        start_date: str = None,
-                        end_date: str = None,
-                        bucket: str = None,
+                        start_date: Optional[str] = None,
+                        end_date: Optional[str] = None,
+                        bucket: Optional[str] = None,
                         dir_: str = 'data_science/datasets',
                         price_changes: int = 4, threshold: float = 0.01,
                         min_days_with_conversions: int = 15,
@@ -24,16 +28,16 @@ def read_and_preprocess(client_key: str,
                         quantity_col: str = 'units',
                         date_col: str = 'date') ->tuple[pd.DataFrame, pd.DataFrame]:
     """Read and preprocess the DataFrame.
-    TODO: add original price_col base for round_price
+
+    TODO: add original price_col base for round_price.
 
     Returns:
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
-
     if end_date is None:
         end_date = datetime.now().replace(day=1) - relativedelta(months=1)
         end_date = end_date.strftime('%Y-%m-%d')
-    
+
     if start_date is None:
         end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
         start_date_dt = end_date_dt - relativedelta(months=11)
@@ -42,10 +46,10 @@ def read_and_preprocess(client_key: str,
     if bucket is None:
         bucket = app_state.bucket_name
 
-    print(f"start_date: {start_date}")
-    print(f"end_date: {end_date}")
+    logging.info("start_date: %s", start_date)
+    logging.info("end_date: %s", end_date)
 
-    df = read_monthly_data(client_key=client_key,
+    df, total_end_date_uid = read_monthly_data(client_key=client_key,
                            channel=channel,
                            bucket=bucket,
                            start_date=start_date,
@@ -56,14 +60,14 @@ def read_and_preprocess(client_key: str,
                            uid_col=uid_col,
                            price_col=price_col,
                            quantity_col=quantity_col)
-    
+
     df_by_price = preprocess_by_price(df,
                                       uid_col=uid_col,
                                       date_col=date_col,
                                       price_col=price_col,
                                       quantity_col=quantity_col)
 
-    return df_by_price
+    return df_by_price, total_end_date_uid
 
 
 
@@ -82,14 +86,21 @@ def read_monthly_data(client_key: str, channel: str, bucket: str,
     start_date_dt = datetime.strptime(start_date, '%Y-%m-%d')
     end_date_dt = datetime.strptime(end_date, '%Y-%m-%d')
     df_ko = pd.DataFrame()  # Initialize df_ko
+    total_end_date_uid = 0
     while end_date_dt >= start_date_dt:
-        print(f'reading {end_date_dt}')
-        df_part = read_data(client_key, channel, bucket, date=end_date_dt.strftime('%Y-%m-%d'), dir_=dir_)
+        logging.info("reading: %s", end_date_dt.strftime('%Y-%m-%d'))
+        df_part = read_data(client_key,
+                            channel,
+                            bucket,
+                            date=end_date_dt.strftime('%Y-%m-%d'), dir_=dir_)
+        if total_end_date_uid ==0:
+            total_end_date_uid = df_part['uid'].nunique()
+            logging.info("Total uid: %s", total_end_date_uid)
         df_part = df_part[~df_part['uid'].isin(uid_ok)]
-        
+
         # Concatenate df_part with df_ko
         df_part = pd.concat([df_part, df_ko])
-        
+
         uid_changes = uid_with_price_changes(df_part,
                                              price_changes=price_changes,
                                              threshold=threshold,
@@ -103,16 +114,15 @@ def read_monthly_data(client_key: str, channel: str, bucket: str,
         uid_ok.extend(uid_intersection_change_conversions)
 
         df_ok = df_part[df_part['uid'].isin(uid_intersection_change_conversions)]
-        print(f'number of uid ok: {len(uid_ok)}')
+        logging.info("number of uid ok: %s", len(uid_ok))
         df_ko = df_part[~df_part['uid'].isin(uid_intersection_change_conversions)]
-        # print(f'number of uid not ok: {df_ko['uid'].nunique()}')
 
         df_full_list.append(df_ok)
         end_date_dt -= pd.DateOffset(months=1)
 
     result_df = pd.concat(df_full_list)
-    print(f'Number of unique user IDs: {result_df["uid"].nunique()}')
-    return result_df
+    logging.info('Number of unique user IDs: %s', result_df["uid"].nunique())
+    return result_df, total_end_date_uid
 
 
 
@@ -128,15 +138,16 @@ def read_data(client_key: str, channel: str, bucket: str,
         'total_units',
         'price']
     try:
-        df = pd.read_parquet(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/',
+        df_read = pd.read_parquet(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/',
                                     columns=cs)
-        df = process_data(df)
-    except:
-        print(f'No data for {year_}_{int(month_)}')
-        print(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/')
-        df = pd.DataFrame(columns=cs)
+        df_read = process_data(df_read)
+    except Exception:
+        logging.info('No data for %s_%s}', (str(year_), str(int(month_))))
+        logging.info('s3://%s/%s/%s/%s/elasticity/%s_%s_full_data.parquet/',
+                     (bucket, dir_, client_key, channel, year_, int(month_)))
+        df_read = pd.DataFrame(columns=cs)
         pass
-    return df
+    return df_read
 
 
 def process_data(df_full: pd.DataFrame) -> pd.DataFrame:
@@ -158,9 +169,3 @@ def process_data(df_full: pd.DataFrame) -> pd.DataFrame:
 
     return df_full[['date','uid','round_price','units','price_merged','source']]
 
-def grouped_months(client: str, channel: str, bucket: str,
-                   start_date: str = '2023-12-01', end_date: str = '2024-02-29',
-                   dir_: str = 'data_science/datasets') -> pd.DataFrame:
-    """Group the data by month and year."""
-    df_full = read_monthly_data(client, channel, bucket, start_date, end_date, dir_)
-    return df_full

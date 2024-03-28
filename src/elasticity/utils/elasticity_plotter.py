@@ -6,7 +6,6 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-
 from elasticity.data import preprocess_by_day
 
 

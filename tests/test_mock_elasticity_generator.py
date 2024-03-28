@@ -1,10 +1,10 @@
 """Test module of mock_elasticity_generator.generate_mock_elasticity_data()."""
 
 import unittest
+from sys import path as sys_path
 
 import pandas as pd
 
-from sys import path as sys_path
 sys_path.append("../src")
 from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator
 

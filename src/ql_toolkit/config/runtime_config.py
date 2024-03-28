@@ -132,7 +132,7 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join(self.s3_sgmkr_dir, "job_artifacts", self.project_name)
 
-    @property
+
     def s3_monitoring_dir(
         self, client_key: Optional[str] = None, channel: Optional[str] = None
     ) -> str:

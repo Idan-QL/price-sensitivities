@@ -1,10 +1,10 @@
 """Test module of elasticity_plotter."""
 
 import unittest
+from sys import path as sys_path
 from typing import Callable
 from unittest.mock import patch
 
-from sys import path as sys_path
 sys_path.append("../src")
 from elasticity.utils.elasticity_plotter import ElasticityPlotter
 from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator

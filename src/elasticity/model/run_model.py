@@ -1,9 +1,12 @@
 """Module of modeling."""
+import logging
+import multiprocessing
+
 import numpy as np
 import pandas as pd
-import multiprocessing
 from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
+
 
 def run_model_type(data: pd.DataFrame,
                    model_type: str,
@@ -46,7 +49,7 @@ def run_model_type(data: pd.DataFrame,
         results[model_type + '_r2'] = r_squared
         results[model_type + '_elasticity'] = elasticity
     except Exception as e:
-        print(f"Error in run_model_type: {e}")
+        logging.info("Error in run_model_type: %s", e)
         # Set all the results to np.nan
         results[model_type + '_mean_relative_error'] = np.nan
         results[model_type + '_mean_a'] = np.nan
@@ -85,9 +88,9 @@ def run_experiment(data: pd.DataFrame,
             best_model = model_type
 
         results.update(model_results)
-    
+
     if best_model is None:
-        print("No best model found")
+        logging.info("No best model found")
         # Add columns for the best model
         results['best_model'] = np.nan
         results['best_model_a'] = np.nan
@@ -118,9 +121,7 @@ def run_experiment(data: pd.DataFrame,
                               False)))
 
     # Convert the dictionary to a DataFrame
-    results_df = pd.DataFrame(results, index=[0])
-
-    return results_df
+    return pd.DataFrame(results, index=[0])
 
 def run_experiment_for_uid(uid: str,
                            data: pd.DataFrame,
@@ -137,7 +138,7 @@ def run_experiment_for_uid(uid: str,
                                     quantity_col=quantity_col,
                                     weights_col=weights_col)
     except Exception as e:
-        print(f"Error for user ID {uid}: {e}")
+        logging.info("Error for user ID %s: %s", uid, e)
         columns = ['linear_mean_relative_error', 'linear_mean_a', 'linear_mean_b',
            'linear_mean_elasticity', 'linear_mean_r2', 'linear_a', 'linear_b',
            'linear_pvalue', 'linear_r2', 'linear_elasticity', 'power_mean_relative_error',
@@ -154,19 +155,19 @@ def run_experiment_for_uid(uid: str,
     results_df['uid'] = uid
     return results_df
 
-def run_experiment_for_uids_parallel(df: pd.DataFrame,
+def run_experiment_for_uids_parallel(df_input: pd.DataFrame,
                                      test_size: float = 0.1,
                                      price_col: str = 'price',
                                      quantity_col: str = 'quantity',
                                      weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment for multiple user IDs in parallel."""
     # Delete rows with price equal to zero
-    df = df[df[price_col]!=0]
-    unique_uids = df['uid'].unique()
+    df_input = df_input[df_input[price_col]!=0]
+    unique_uids = df_input['uid'].unique()
     pool = multiprocessing.Pool()  # Use the default number of processes
     results_list = pool.starmap(
         run_experiment_for_uid, [(uid,
-                                  df,
+                                  df_input,
                                   test_size,
                                   price_col,
                                   quantity_col,
@@ -176,17 +177,22 @@ def run_experiment_for_uids_parallel(df: pd.DataFrame,
     return pd.concat(results_list)
 
 def run_experiment_for_uids_not_parallel(
-        df: pd.DataFrame,
+        df_input: pd.DataFrame,
         test_size: float = 0.1,
         price_col: str = 'price',
         quantity_col: str = 'quantity',
         weights_col: str = 'days') -> pd.DataFrame:
     """Run experiment for multiple user IDs (not in parallel)."""
     # Delete rows with price equal to zero
-    df = df[df[price_col]!=0]
+    df_input = df_input[df_input[price_col]!=0]
     results_list = []
-    unique_uids = df['uid'].unique()
+    unique_uids = df_input['uid'].unique()
     for uid in unique_uids:
-        results_df = run_experiment_for_uid(uid, df, test_size, price_col, quantity_col, weights_col)
+        results_df = run_experiment_for_uid(uid,
+                                            df_input,
+                                            test_size,
+                                            price_col,
+                                            quantity_col,
+                                            weights_col)
         results_list.append(results_df)
     return pd.concat(results_list)

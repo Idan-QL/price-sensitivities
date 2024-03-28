@@ -1,10 +1,8 @@
 """Test moduling."""
 
 import unittest
-from typing import Callable
-from unittest.mock import patch
-
 from sys import path as sys_path
+
 sys_path.append("../src")
 from elasticity.model.model import estimate_coefficients
 from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator
@@ -23,7 +21,7 @@ class TestElasticityPlotter(unittest.TestCase):
                 a=test_a,
                 price_range=mock_elasticity_generator.price_range,
                 quantity_noise_std=0)
-        
+
         a, b, pvalue, r_squared, elasticity = estimate_coefficients(data=mock_non_linear_elasticity,
                                                                     model_type='power',
                                                                     price_point=100,

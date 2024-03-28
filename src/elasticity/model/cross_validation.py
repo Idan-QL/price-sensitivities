@@ -1,9 +1,12 @@
-import pandas as pd
-import numpy as np
+"""Modul of cross-validation function."""
 from typing import Tuple
-from sklearn.model_selection import train_test_split
-from elasticity.model.utils import calculate_quantity_from_price
+
+import numpy as np
+import pandas as pd
 from elasticity.model.model import estimate_coefficients
+from elasticity.model.utils import calculate_quantity_from_price
+from sklearn.model_selection import train_test_split
+
 
 def cross_validation(data: pd.DataFrame,
                      model_type: str,
@@ -25,9 +28,10 @@ def cross_validation(data: pd.DataFrame,
                                                                     price_col=price_col,
                                                                     quantity_col=quantity_col,
                                                                     weights_col=weights_col)
-        predicted_quantity = [calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]]
+        predicted_quantity = [calculate_quantity_from_price(p, a, b, model_type)
+                              for p in data_test[price_col]]
         absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
-        relative_error = np.mean(absolute_errors / data_test[quantity_col]) * 100  # Calculate as a percentage
+        relative_error = np.mean(absolute_errors / data_test[quantity_col]) * 100
         relative_errors.append(relative_error)
         a_lists.append(a)
         b_lists.append(b)

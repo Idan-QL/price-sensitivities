@@ -1,5 +1,6 @@
 """Module of modeling."""
 from typing import Tuple
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -15,13 +16,13 @@ def estimate_coefficients(data: pd.DataFrame,
     X = sm.add_constant(data[[price_col]])
     y = data[quantity_col]
     weights = data[weights_col]
-    
+
     if model_type == 'power':
         y = np.log(y)
         X[price_col] = np.log(X[price_col])
     elif model_type == 'exponential':
         y = np.log(y)
-    
+
     model = sm.WLS(y, X, weights=weights).fit()
     pvalue = model.f_pvalue
     r_squared = model.rsquared

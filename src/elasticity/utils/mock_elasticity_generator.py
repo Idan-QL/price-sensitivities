@@ -58,7 +58,7 @@ class MockElasticityGenerator:
         self.elasticity_list = elasticity_list
 
     @staticmethod
-    def generate_nonlinear_elasticity(self, 
+    def generate_nonlinear_elasticity(self,
                                       start_date: datetime,
                                       end_date: datetime,
                                       elasticity: float,

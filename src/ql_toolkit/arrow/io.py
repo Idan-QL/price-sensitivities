@@ -1,3 +1,4 @@
+"""This module provides functions for reading and writing Arrow tables using Polars DataFrames."""
 import logging
 from typing import Optional
 
@@ -56,7 +57,7 @@ def get_arrow_table(
         else:
             logging.error("ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1])
     except Exception as err:
-        logging.error(f"Err caught: {err}")
+        logging.error("Err caught: %s", err)
     return table
 
 

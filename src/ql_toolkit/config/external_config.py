@@ -1,3 +1,4 @@
+"""This module contains functions to retrieve and print the configuration dictionary."""
 import logging
 from os import path
 from sys import exit as sys_exit
@@ -44,8 +45,8 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
     return config
 
 
-def print_config(config: dict):
-    """Print the configuration dictionary
+def print_config(config: dict) -> None:
+    """Print the configuration dictionary.
 
     Args:
         config (dict): The configuration dictionary to print

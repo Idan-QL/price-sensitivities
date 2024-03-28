@@ -10,6 +10,7 @@ from ql_toolkit.s3.utils import set_aws_access
 
 
 def run_setup(args_dict: dict) -> tuple[dict, dict]:
+    """This function sets up the runtime environment for the job."""
     print("Setting up runtime environment...")
     parser = cli.Parser(kv=args_dict)
     parser.set_args_dict()

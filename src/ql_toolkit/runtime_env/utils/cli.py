@@ -41,6 +41,7 @@ class CliArgsParser:
     """Factory class for argparse.ArgumentParser."""
 
     def __init__(self, kv: dict[str, dict], parser_name: str = "") -> None:
+        """This function initializes the class."""
         self.kv = kv
         self.parser_name = parser_name
         self.parser = None
@@ -84,7 +85,8 @@ class Parser(CliArgsParser):
         kv: dict[str, dict],
         parser_name: str = "",
         cli_args_conf_path: str = "run_files",
-    ):
+    ) -> None:
+        """This function initializes the class."""
         super().__init__(kv, parser_name)
         # Notice that for Sagemaker, the cli args are given as a json file
         self.cli_args_conf_path = cli_args_conf_path
@@ -133,7 +135,7 @@ class Parser(CliArgsParser):
         if self.args_dict is None:
             sys_exit("No arguments found. Exiting!")
 
-    def set_bool_arg(self, key: str):
+    def set_bool_arg(self, key: str) -> None:
         """This function sets up a bool argument.
 
         Args:

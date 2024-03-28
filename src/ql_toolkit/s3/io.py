@@ -228,7 +228,7 @@ def maybe_get_txt_file(
 
     if file_content and isinstance(file_content, str):
         return file_content
-    logging.error(f"[- S3 I/O -] File {file_name} not found or could not be decoded as UTF-8!")
+    logging.error("[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name)
 
     return ""
 
@@ -310,16 +310,18 @@ def maybe_get_pd_parquet_file(
         return pd.DataFrame()
 
     try:
-        df = pd.read_parquet(BytesIO(buffer.getvalue()))
+        df_input = pd.read_parquet(BytesIO(buffer.getvalue()))
     except Exception as err:
         logging.error("[- S3 I/O -] Error reading parquet file %s: %s", file_name, err)
         return pd.DataFrame()
 
     if validate_datetime_index:
-        if not isinstance(df.index, pd.DatetimeIndex):
-            if "date" in df.columns:
+        if not isinstance(df_input.index, pd.DatetimeIndex):
+            if "date" in df_input.columns:
                 try:
-                    df = df.set_index(pd.to_datetime(df["date"]), drop=True)
+                    df_input = df_input.set_index(
+                        pd.to_datetime(df_input["date"]),
+                        drop=True)
                 except Exception as err:
                     logging.warning(
                         "[- S3 I/O -] Failed to convert 'date' column to "
@@ -332,7 +334,7 @@ def maybe_get_pd_parquet_file(
                     "[- S3 I/O -] 'date' column not found in %s to set as datetime index.",
                     file_name,
                 )
-    return df
+    return df_input
 
 
 def write_dataframe_to_s3(
@@ -572,6 +574,6 @@ def upload_local_file_to_s3(
     try:
         _ = s3_client.upload_file(local_file_name, bucket_name, s3_file_path)
     except ClientError as err:
-        logging.error(f"[- S3 I/O -] Error uploading file to S3: {err}")
+        logging.error("[- S3 I/O -] Error uploading file to S3: %s", err)
         return False
     return True

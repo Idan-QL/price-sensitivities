@@ -1,3 +1,4 @@
+"""Module for creating actions list and action dictionaries."""
 import json
 from datetime import datetime
 

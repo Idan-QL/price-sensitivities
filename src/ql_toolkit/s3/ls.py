@@ -1,3 +1,4 @@
+"""This module contains functions to list files and directories in an S3 bucket."""
 import logging
 from os import path
 

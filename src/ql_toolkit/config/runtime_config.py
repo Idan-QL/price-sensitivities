@@ -1,3 +1,4 @@
+"""This module contains the AppState class that holds the state of the application."""
 from os import path
 from typing import Optional
 
@@ -34,7 +35,7 @@ class AppState(metaclass=SingletonMeta):
     directory paths.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the AppState instance with default values."""
         self._bucket = None
         self._project = None

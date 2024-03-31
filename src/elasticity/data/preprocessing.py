@@ -21,7 +21,7 @@ def read_and_preprocess(client_key: str,
                         end_date: Optional[str] = None,
                         bucket: Optional[str] = None,
                         dir_: str = 'data_science/datasets',
-                        price_changes: int = 4, threshold: float = 0.01,
+                        price_changes: int = 5, threshold: float = 0.01,
                         min_days_with_conversions: int = 15,
                         uid_col: str = 'uid',
                         price_col: str = 'round_price',
@@ -49,17 +49,18 @@ def read_and_preprocess(client_key: str,
     logging.info("start_date: %s", start_date)
     logging.info("end_date: %s", end_date)
 
-    df, total_end_date_uid = read_monthly_data(client_key=client_key,
-                           channel=channel,
-                           bucket=bucket,
-                           start_date=start_date,
-                           end_date=end_date,
-                           dir_=dir_,
-                           price_changes=price_changes, threshold=threshold,
-                           min_days_with_conversions=min_days_with_conversions,
-                           uid_col=uid_col,
-                           price_col=price_col,
-                           quantity_col=quantity_col)
+    df, total_end_date_uid = progressive_monthly_aggregate(
+        client_key=client_key,
+        channel=channel,
+        bucket=bucket,
+        start_date=start_date,
+        end_date=end_date,
+        dir_=dir_,
+        price_changes=price_changes, threshold=threshold,
+        min_days_with_conversions=min_days_with_conversions,
+        uid_col=uid_col,
+        price_col=price_col,
+        quantity_col=quantity_col)
 
     df_by_price = preprocess_by_price(df,
                                       uid_col=uid_col,
@@ -71,7 +72,7 @@ def read_and_preprocess(client_key: str,
 
 
 
-def read_monthly_data(client_key: str, channel: str, bucket: str,
+def progressive_monthly_aggregate(client_key: str, channel: str, bucket: str,
                       start_date: str, end_date: str,
                       dir_: str = 'data_science/datasets',
                       price_changes: int = 4, threshold: float = 0.01,
@@ -93,6 +94,15 @@ def read_monthly_data(client_key: str, channel: str, bucket: str,
                             channel,
                             bucket,
                             date=end_date_dt.strftime('%Y-%m-%d'), dir_=dir_)
+        
+        # delete uid where inventory is 0
+        logging.info("Number of inventory less or equal to 0: %s",
+                     len(df_part[df_part['inventory'] <= 0]))
+        df_part = df_part[df_part['inventory'] > 0]
+        del df_part['inventory']
+        # Process data
+        df_part = process_data(df_part)
+
         if total_end_date_uid ==0:
             total_end_date_uid = df_part['uid'].nunique()
             logging.info("Total uid: %s", total_end_date_uid)
@@ -127,7 +137,7 @@ def read_monthly_data(client_key: str, channel: str, bucket: str,
 
 
 def read_data(client_key: str, channel: str, bucket: str,
-                      date: str = '2023-02-01',
+                      date: str = '2024-02-01',
                       dir_: str = 'data_science/datasets') -> pd.DataFrame:
     """Read monthly data and concatenate into a single DataFrame."""
     year_, month_ = datetime.strptime(date, '%Y-%m-%d').strftime('%Y-%m').split("-")
@@ -142,12 +152,6 @@ def read_data(client_key: str, channel: str, bucket: str,
     try:
         df_read = pd.read_parquet(f's3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/',
                                   columns=cs)
-        # delete uid where inventory is 0
-        logging.info("Number of inventory less or equal to 0: %s",
-                     len(df_read[df_read['inventory'] <= 0]))
-        df_read = df_read[df_read['inventory'] > 0]
-        del df_read['inventory']
-        df_read = process_data(df_read)
     except Exception:
         logging.info('No data for %s_%s}', (str(year_), str(int(month_))))
         logging.info('s3://%s/%s/%s/%s/elasticity/%s_%s_full_data.parquet/',

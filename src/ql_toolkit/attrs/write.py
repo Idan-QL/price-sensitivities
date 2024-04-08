@@ -2,7 +2,7 @@
 import json
 import logging
 from datetime import datetime
-from os import path
+from os import path, makedirs
 
 from ql_toolkit.attrs import action_list as al
 from ql_toolkit.config.runtime_config import app_state
@@ -85,7 +85,10 @@ def write_actions_list(
         monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
         if is_local:
             logging.info("[- attrs -] Writing files to local folder...")
-            with open(path.join("../artifacts/actions/", file_name), "w") as file:
+            directory = "../artifacts/actions/"
+            if not path.exists(directory):
+                makedirs(directory)
+            with open(path.join(directory, file_name), "w") as file:
                 file.write(actions_str)
         else:
             s3_attrs_dir = (f"spark/output/test/{app_state.project_name}/"

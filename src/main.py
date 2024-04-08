@@ -5,6 +5,7 @@ Run with `python src/main.py -d us -c config_qa -p elasticity` from the project 
 """
 import logging
 from sys import exit as sys_exit
+
 import pandas as pd
 
 from elasticity.data import preprocessing
@@ -25,12 +26,12 @@ def run() -> None:
     """
     # Env Setup
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
-    logging.info('args_dict: %s', args_dict)
-    logging.info('config: %s', config)
+    logging.info("args_dict: %s", args_dict)
+    logging.info("config: %s", config)
     client_keys_map = config["client_keys"]
     # End of setup
-    logging.info('bucket_name: %s', app_state.bucket_name)
-    logging.info('client_keys_map: %s', client_keys_map)
+    logging.info("bucket_name: %s", app_state.bucket_name)
+    logging.info("client_keys_map: %s", client_keys_map)
 
     try:
         is_local = args_dict["local"]
@@ -58,43 +59,79 @@ def run() -> None:
                 df, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
                     client_key=client_key,
                     channel=channel,
-                    price_changes=5, threshold=0.01,
-                    min_days_with_conversions=10)
+                    price_changes=5,
+                    threshold=0.01,
+                    min_days_with_conversions=10,
+                )
                 logging.info("End date: %s", end_date)
                 logging.info("Total number of uid: %s", total_end_date_uid)
 
-                df_results = run_experiment_for_uids_parallel(df,
-                                                            price_col='round_price',
-                                                            quantity_col='units',
-                                                            weights_col='days')
-                logging.info('elasticity quality test: %s', df_results.quality_test.value_counts())
+                df_results = run_experiment_for_uids_parallel(
+                    df,
+                    price_col="round_price",
+                    quantity_col="units",
+                    weights_col="days",
+                )
+                logging.info(
+                    "elasticity quality test: %s",
+                    df_results.quality_test.value_counts(),
+                )
 
-                df_results_quality = df_results[df_results['quality_test'] == True] 
-            
+                df_results_quality = df_results[df_results["quality_test"] == True]
+
                 # Append the required information to the data list
-                data_report.append({
-                    'client_key': client_key,
-                    'channel': channel,
-                    'total_end_date_uid': total_end_date_uid,
-                    'uid_with_elasticity': len(df_results_quality),
-                    'uid_with_elasticity': len(df_results_quality),
-                    'uid_with_elasticity_less_than_minus3.8': len(df_results_quality[df_results_quality.best_model_elasticity<-3.8]),
-                    'uid_with_elasticity_moreorequal_minus3.8_less_than_minus1': len(df_results_quality[
-                        (df_results_quality.best_model_elasticity>=-3.8) & (df_results_quality.best_model_elasticity<-1)]),
-                    'uid_with_elasticity_moreorequal_minus1_less_than_0': len(df_results_quality[
-                        (df_results_quality.best_model_elasticity>=-1) & (df_results_quality.best_model_elasticity<0)]),
-                    'uid_with_elasticity_moreorequal_0_less_than_1': len(df_results_quality[
-                        (df_results_quality.best_model_elasticity>=0) & (df_results_quality.best_model_elasticity<1)]),
-                    'uid_with_elasticity_moreorequal_1_less_than_3.8': len(df_results_quality[
-                        (df_results_quality.best_model_elasticity>=1) & (df_results_quality.best_model_elasticity<3.8)]),
-                    'uid_with_elasticity_more_than_3.8': len(df_results_quality[df_results_quality.best_model_elasticity>3.8]),
-                    'uid_with_elasticity_quality_test_false': len(df_results[df_results['quality_test'] == False])
+                data_report.append(
+                    {
+                        "client_key": client_key,
+                        "channel": channel,
+                        "total_end_date_uid": total_end_date_uid,
+                        "uid_with_elasticity": len(df_results_quality),
+                        "uid_with_elasticity": len(df_results_quality),
+                        "uid_with_elasticity_less_than_minus3.8": len(
+                            df_results_quality[
+                                df_results_quality.best_model_elasticity < -3.8
+                            ]
+                        ),
+                        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
+                            df_results_quality[
+                                (df_results_quality.best_model_elasticity >= -3.8)
+                                & (df_results_quality.best_model_elasticity < -1)
+                            ]
+                        ),
+                        "uid_with_elasticity_moreorequal_minus1_less_than_0": len(
+                            df_results_quality[
+                                (df_results_quality.best_model_elasticity >= -1)
+                                & (df_results_quality.best_model_elasticity < 0)
+                            ]
+                        ),
+                        "uid_with_elasticity_moreorequal_0_less_than_1": len(
+                            df_results_quality[
+                                (df_results_quality.best_model_elasticity >= 0)
+                                & (df_results_quality.best_model_elasticity < 1)
+                            ]
+                        ),
+                        "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
+                            df_results_quality[
+                                (df_results_quality.best_model_elasticity >= 1)
+                                & (df_results_quality.best_model_elasticity < 3.8)
+                            ]
+                        ),
+                        "uid_with_elasticity_more_than_3.8": len(
+                            df_results_quality[
+                                df_results_quality.best_model_elasticity > 3.8
+                            ]
+                        ),
+                        "uid_with_elasticity_quality_test_false": len(
+                            df_results[df_results["quality_test"] == False]
+                        ),
+                    }
+                )
 
-                })
-
-                s3io.write_dataframe_to_s3(file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
-                                        xdf=df_results,
-                                        s3_dir='data_science/eval_results/elasticity/')
+                s3io.write_dataframe_to_s3(
+                    file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
+                    xdf=df_results,
+                    s3_dir="data_science/eval_results/elasticity/",
+                )
 
                 actions_list = generate_actions_list(df_results, client_key, channel)
 
@@ -105,16 +142,20 @@ def run() -> None:
                     qa_run=True,
                     is_local=is_local,
                     filename_prefix=None,
-                    chunk_size=5000)
+                    chunk_size=5000,
+                )
 
                 logging.info("Finished processing %s - %s", client_key, channel)
             except Exception as e:
                 logging.error("Error processing %s - %s: %s", client_key, channel, e)
 
     report_df = pd.DataFrame(data_report)
-    s3io.write_dataframe_to_s3(file_name=f"elasticity_report_{end_date}.csv",
-                               xdf=report_df,
-                               s3_dir='data_science/eval_results/elasticity/')
+    s3io.write_dataframe_to_s3(
+        file_name=f"elasticity_report_{end_date}.csv",
+        xdf=report_df,
+        s3_dir="data_science/eval_results/elasticity/",
+    )
+
 
 if __name__ == "__main__":
     run()

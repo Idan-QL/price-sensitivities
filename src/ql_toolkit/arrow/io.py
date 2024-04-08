@@ -1,4 +1,5 @@
 """This module provides functions for reading and writing Arrow tables using Polars DataFrames."""
+
 import logging
 from typing import Optional
 
@@ -6,6 +7,7 @@ import polars as pl
 import pyarrow.parquet as pq
 import s3fs
 from pyarrow import Table
+
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3 import io as s3io
 
@@ -49,13 +51,17 @@ def get_arrow_table(
     else:
         path_or_paths = f"{app_state.bucket_name}/{path_or_paths}"
     try:
-        pq_ds = pq.ParquetDataset(path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters)
+        pq_ds = pq.ParquetDataset(
+            path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters
+        )
         table = pq_ds.read(columns=columns)
     except ValueError as err:
         if isinstance(path_or_paths, list):
             logging.error("ValueError caught: %s for the paths list", err)
         else:
-            logging.error("ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1])
+            logging.error(
+                "ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1]
+            )
     except Exception as err:
         logging.error("Err caught: %s", err)
     return table

@@ -1,20 +1,24 @@
 """Modul of cross-validation function."""
+
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from elasticity.model.model import estimate_coefficients
-from elasticity.model.utils import calculate_quantity_from_price
 from sklearn.model_selection import train_test_split
 
+from elasticity.model.model import estimate_coefficients
+from elasticity.model.utils import calculate_quantity_from_price
 
-def cross_validation(data: pd.DataFrame,
-                     model_type: str,
-                     test_size: float = 0.1,
-                     price_col: str = 'price',
-                     quantity_col: str = 'quantity',
-                     weights_col: str = 'days',
-                     n_tests: int = 3) -> Tuple[float, float, float, float, float]:
+
+def cross_validation(
+    data: pd.DataFrame,
+    model_type: str,
+    test_size: float = 0.1,
+    price_col: str = "price",
+    quantity_col: str = "quantity",
+    weights_col: str = "days",
+    n_tests: int = 3,
+) -> Tuple[float, float, float, float, float]:
     """Perform cross-validation."""
     relative_errors = []
     a_lists = []
@@ -22,14 +26,20 @@ def cross_validation(data: pd.DataFrame,
     elasticity_lists = []
     r_squared_lists = []
     for i in range(n_tests):
-        data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
-        a, b, _, r_squared, elasticity = estimate_coefficients(data_train,
-                                                                    model_type,
-                                                                    price_col=price_col,
-                                                                    quantity_col=quantity_col,
-                                                                    weights_col=weights_col)
-        predicted_quantity = [calculate_quantity_from_price(p, a, b, model_type)
-                              for p in data_test[price_col]]
+        data_train, data_test = train_test_split(
+            data, test_size=test_size, random_state=42 + i
+        )
+        a, b, _, r_squared, elasticity = estimate_coefficients(
+            data_train,
+            model_type,
+            price_col=price_col,
+            quantity_col=quantity_col,
+            weights_col=weights_col,
+        )
+        predicted_quantity = [
+            calculate_quantity_from_price(p, a, b, model_type)
+            for p in data_test[price_col]
+        ]
         absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
         relative_error = np.mean(absolute_errors / data_test[quantity_col]) * 100
         relative_errors.append(relative_error)

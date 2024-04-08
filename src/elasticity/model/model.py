@@ -1,26 +1,30 @@
 """Module of modeling."""
+
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+
 from elasticity.model.utils import calculate_elasticity_from_parameters
 
 
-def estimate_coefficients(data: pd.DataFrame,
-                          model_type: str,
-                          price_col: str = 'price',
-                          quantity_col: str = 'quantity',
-                          weights_col: str = 'days') -> Tuple[float, float, float, float, float]:
+def estimate_coefficients(
+    data: pd.DataFrame,
+    model_type: str,
+    price_col: str = "price",
+    quantity_col: str = "quantity",
+    weights_col: str = "days",
+) -> Tuple[float, float, float, float, float]:
     """Estimate coefficients for demand model using log transformation if nonlinear."""
     X = sm.add_constant(data[[price_col]])
     y = data[quantity_col]
     weights = data[weights_col]
 
-    if model_type == 'power':
+    if model_type == "power":
         y = np.log(y)
         X[price_col] = np.log(X[price_col])
-    elif model_type == 'exponential':
+    elif model_type == "exponential":
         y = np.log(y)
 
     model = sm.WLS(y, X, weights=weights).fit()

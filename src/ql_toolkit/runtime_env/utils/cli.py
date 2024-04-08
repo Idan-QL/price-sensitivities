@@ -54,7 +54,9 @@ class CliArgsParser:
         """
         for arg_name, arg_vals in self.kv.items():
             args = [f"--{arg_name}", arg_vals["flag"]]
-            kwargs = {key: arg_vals[key] for key in ["default", "help", "type", "required"]}
+            kwargs = {
+                key: arg_vals[key] for key in ["default", "help", "type", "required"]
+            }
             self.parser.add_argument(*args, **kwargs)
 
     def set_parser(self) -> None:
@@ -114,14 +116,20 @@ class Parser(CliArgsParser):
             else:
                 # Set reading arguments from an Estimator container
                 if path.exists("/opt/ml"):
-                    print("Reading arguments from /opt/ml/input/config (inside container)")
+                    print(
+                        "Reading arguments from /opt/ml/input/config (inside container)"
+                    )
                     # The config folder contains the "cli args" in json format
                     self.cli_args_conf_path = "/opt/ml/input/config"
                 # Allow reading arguments from an Estimator container in 'local' mode
                 elif path.exists(self.cli_args_conf_path):
-                    print(f"Reading arguments from {self.cli_args_conf_path} (on local machine)")
+                    print(
+                        f"Reading arguments from {self.cli_args_conf_path} (on local machine)"
+                    )
                 try:
-                    with open(path.join(self.cli_args_conf_path, "hyperparameters.json")) as f:
+                    with open(
+                        path.join(self.cli_args_conf_path, "hyperparameters.json")
+                    ) as f:
                         self.args_dict = json.load(f)
                 except FileNotFoundError as err:
                     logging.error("Error caught: %s", err)
@@ -160,7 +168,9 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = int(self.args_dict[key])
             except ValueError as err:
-                sys_exit(f"ValueError caught when trying to set up an int argument: {err}")
+                sys_exit(
+                    f"ValueError caught when trying to set up an int argument: {err}"
+                )
 
     def set_float_arg(self, key: str) -> None:
         """This function sets up a float argument.
@@ -175,7 +185,9 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = float(self.args_dict[key])
             except ValueError as err:
-                sys_exit(f"ValueError caught when trying to set up an float argument: {err}")
+                sys_exit(
+                    f"ValueError caught when trying to set up an float argument: {err}"
+                )
 
     def validate_args(self) -> None:
         """This function validates the arguments given in the hyperparameters.json file.

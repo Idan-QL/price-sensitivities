@@ -1,8 +1,10 @@
 """Module for creating actions list and action dictionaries."""
+
 import json
 from datetime import datetime
 
 import numpy as np
+
 from ql_toolkit.config.runtime_config import app_state
 
 
@@ -111,7 +113,9 @@ def create_action(
     return action
 
 
-def list_to_delimited_string(input_list: list[int] | list[float], delimiter: str = "|") -> str:
+def list_to_delimited_string(
+    input_list: list[int] | list[float], delimiter: str = "|"
+) -> str:
     """Converts a list into a delimited string.
 
     Args:

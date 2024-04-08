@@ -17,3 +17,4 @@ tests/logs
 **.parquet
 **.csv
 dist/
+test_job.ipynb

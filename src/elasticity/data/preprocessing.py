@@ -23,6 +23,7 @@ def read_and_preprocess(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     bucket: Optional[str] = None,
+    uids_to_filter: Optional[str] = None,
     dir_: str = "data_science/datasets",
     price_changes: int = 5,
     threshold: float = 0.01,
@@ -60,6 +61,7 @@ def read_and_preprocess(
         bucket=bucket,
         start_date=start_date,
         end_date=end_date,
+        uids_to_filter=uids_to_filter,
         dir_=dir_,
         price_changes=price_changes,
         threshold=threshold,
@@ -77,7 +79,7 @@ def read_and_preprocess(
         quantity_col=quantity_col,
     )
 
-    return df_by_price, total_end_date_uid, end_date
+    return df_by_price, df, total_end_date_uid, end_date
 
 
 def progressive_monthly_aggregate(
@@ -86,6 +88,7 @@ def progressive_monthly_aggregate(
     bucket: str,
     start_date: str,
     end_date: str,
+    uids_to_filter: Optional[str]  = None,
     dir_: str = "data_science/datasets",
     price_changes: int = 4,
     threshold: float = 0.01,
@@ -107,6 +110,7 @@ def progressive_monthly_aggregate(
             client_key,
             channel,
             bucket,
+            uids_to_filter=uids_to_filter,
             date=end_date_dt.strftime("%Y-%m-%d"),
             dir_=dir_,
         )
@@ -163,6 +167,7 @@ def read_data(
     client_key: str,
     channel: str,
     bucket: str,
+    uids_to_filter: Optional[str]  = None,
     date: str = "2024-02-01",
     dir_: str = "data_science/datasets",
 ) -> pd.DataFrame:
@@ -178,9 +183,11 @@ def read_data(
         "inventory",
     ]
     try:
+        filters = [('uid', 'in', uids_to_filter)] if uids_to_filter is not None else None
         df_read = pd.read_parquet(
             f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/",
             columns=cs,
+            filters=filters
         )
     except Exception:
         logging.info("No data for %s_%s}", (str(year_), str(int(month_))))

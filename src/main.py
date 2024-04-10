@@ -56,7 +56,7 @@ def run() -> None:
             try:
                 logging.info("Processing %s - %s", client_key, channel)
 
-                df, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
+                df, _, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
                     client_key=client_key,
                     channel=channel,
                     price_changes=5,

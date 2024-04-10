@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from elasticity.data import preprocess_by_day
+# from elasticity.data.preprocessing import preprocess_by_day
 
 
 class ElasticityPlotter:
@@ -59,6 +59,7 @@ class ElasticityPlotter:
         Returns:
         None
         """
+
         h = sns.jointplot(data=df, x=self.price_col, y=self.quantity_col, color=color)
         h.refline(x=median_price, y=median_quantity, color="red")
         h.figure.suptitle(title)
@@ -79,10 +80,16 @@ class ElasticityPlotter:
         None
         """
         df_uid = df[df[self.uid_col] == uid]
-        df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
+        # df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
 
-        median_price_uid = df_by_day_uid[self.median_price_col].iloc[0]
-        median_quantity_uid = df_by_day_uid[self.median_quantity_col].iloc[0]
+        if self.median_price_col not in df.columns:
+            df[self.median_price_col] = df[self.price_col].median()
+        if self.median_quantity_col not in df.columns:
+            df[self.median_quantity_col] = df[self.quantity_col].median()
+
+
+        median_price_uid = df[self.median_price_col].iloc[0]
+        median_quantity_uid = df[self.median_quantity_col].iloc[0]
 
         if print_raw_data:
             self.jointplot_with_median(
@@ -93,14 +100,14 @@ class ElasticityPlotter:
                 color="green",
             )
             self.jointplot_with_median(
-                df_by_day_uid,
+                df,
                 median_price_uid,
                 median_quantity_uid,
                 title="Data by day - UID: " + str(uid),
                 color="blue",
             )
         self.jointplot_with_median(
-            df_by_price_norm_uid,
+            df,
             median_price_uid,
             median_quantity_uid,
             title="Data by price normalized - UID: " + str(uid),
@@ -117,14 +124,21 @@ class ElasticityPlotter:
         Returns:
         None
         """
-        df_uid = df[df[self.uid_col] == uid]
-        df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
 
-        median_price_uid = df_by_day_uid[self.median_price_col].iloc[0]
-        median_quantity_uid = df_by_day_uid[self.median_quantity_col].iloc[0]
+        if self.median_price_col not in df.columns:
+            df[self.median_price_col] = df[self.price_col].median()
+        if self.median_quantity_col not in df.columns:
+            df[self.median_quantity_col] = df[self.quantity_col].median()
+
+        df_uid = df[df[self.uid_col] == uid]
+        # df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
+
+
+        median_price_uid = df_uid[self.median_price_col].iloc[0]
+        median_quantity_uid = df_uid[self.median_quantity_col].iloc[0]
 
         self.jointplot_with_median(
-            df_by_price_norm_uid,
+            df_uid,
             median_price_uid,
             median_quantity_uid,
             title="Data by price normalized - UID: " + str(uid),
@@ -143,18 +157,25 @@ class ElasticityPlotter:
         Returns:
         None
         """
-        df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
+        # df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
 
-        df_by_day_uid["date"] = pd.to_datetime(df_by_day_uid[self.date_col])
+        df = df[df[self.uid_col] == uid]
 
-        df_by_day_uid = df_by_day_uid.sort_values(by=self.date_col)
+        df["date"] = pd.to_datetime(df[self.date_col])
 
-        median_price_uid = df_by_day_uid[self.median_price_col].iloc[0]
-        median_quantity_uid = df_by_day_uid[self.median_quantity_col].iloc[0]
+        df = df.sort_values(by=self.date_col)
+
+        if self.median_price_col not in df.columns:
+            df[self.median_price_col] = df[self.price_col].median()
+        if self.median_quantity_col not in df.columns:
+            df[self.median_quantity_col] = df[self.quantity_col].median()
+
+        median_price_uid = df[self.median_price_col].iloc[0]
+        median_quantity_uid = df[self.median_quantity_col].iloc[0]
 
         fig, ax1 = plt.subplots()
 
-        sns.lineplot(data=df_by_day_uid, x="date", y=self.price_col, ax=ax1)
+        sns.lineplot(data=df, x="date", y=self.price_col, ax=ax1)
         ax1.set_ylabel("Price from Revenue", color="tab:blue")
 
         ax1.axhline(
@@ -164,7 +185,7 @@ class ElasticityPlotter:
         ax2 = ax1.twinx()
 
         sns.lineplot(
-            data=df_by_day_uid,
+            data=df,
             x="date",
             y=self.quantity_col,
             ax=ax2,
@@ -172,7 +193,7 @@ class ElasticityPlotter:
         )
         ax2.set_ylabel("Units", color="tab:orange")
 
-        print(df_by_day_uid.date.min(), df_by_day_uid.date.max())
+        print(df.date.min(), df.date.max())
 
         ax2.axhline(
             y=median_quantity_uid,
@@ -204,18 +225,25 @@ class ElasticityPlotter:
         Returns:
         None
         """
-        df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
+        # df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
 
-        df_by_day_uid[self.date_col] = pd.to_datetime(df_by_day_uid[self.date_col])
+        df = df[df[self.uid_col] == uid]
 
-        df_by_day_uid = df_by_day_uid.sort_values(by=self.date_col)
+        df[self.date_col] = pd.to_datetime(df[self.date_col])
 
-        median_price_uid = df_by_day_uid[self.median_price_col].iloc[0]
-        median_quantity_uid = df_by_day_uid[self.median_quantity_col].iloc[0]
+        df = df.sort_values(by=self.date_col)
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-        sns.lineplot(data=df_by_day_uid, x="price", y=self.price_col, ax=ax1)
+        if self.median_price_col not in df.columns:
+            df[self.median_price_col] = df[self.price_col].median()
+        if self.median_quantity_col not in df.columns:
+            df[self.median_quantity_col] = df[self.quantity_col].median()
+
+        median_price_uid = df[self.median_price_col].iloc[0]
+        median_quantity_uid = df[self.median_quantity_col].iloc[0]
+
+        sns.lineplot(data=df, x="price", y=self.price_col, ax=ax1)
         ax1.set_ylabel("Price from Revenue", color="tab:blue")
 
         ax1.axhline(
@@ -224,7 +252,7 @@ class ElasticityPlotter:
         ax1.legend(loc="upper left")
 
         sns.lineplot(
-            data=df_by_day_uid,
+            data=df,
             x="price",
             y=self.quantity_col,
             ax=ax2,

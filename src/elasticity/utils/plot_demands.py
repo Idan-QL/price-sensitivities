@@ -2,6 +2,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+from io import BytesIO
 
 
 def linear_demand_equation(price: float, a: float, b: float) -> float:
@@ -120,6 +121,96 @@ def plot_demand_curves(a_linear=10, b_linear = -0.1,
 
     plt.show()
 
+
+def plot_model_and_prices_buffer(df_results, df_data, uid, title='') -> BytesIO:
+    """
+    Plot the model and prices.
+
+    Parameters:
+        df_results (pd.DataFrame): DataFrame containing model results.
+        df_data (pd.DataFrame): DataFrame containing data.
+        uid (int): Unique identifier.
+        title (str): Title of the plot (optional).
+
+    Returns:
+        BytesIO: Buffer containing the plot.
+    """
+    df_results_uid = df_results[df_results.uid==uid]
+    df_uid = df_data[df_data.uid==uid]
+    a_linear=df_results_uid['best_model_a'].iloc[0]
+    b_linear=df_results_uid['best_model_b'].iloc[0]
+    model_type=df_results_uid['best_model'].iloc[0]
+    prices = np.linspace(df_uid['round_price'].min(), df_uid['round_price'].max(), 100)
+
+    fig, ax = plt.subplots()
+
+    if model_type == "power":
+        quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Power Demand Curve'
+    elif model_type == "exponential":
+        quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Exponential Demand Curve'
+    elif model_type == "linear":
+        quantities = linear_demand_equation(prices, a_linear, b_linear)
+        label = 'Linear Demand Curve'
+    else:
+        print('typo in model type, power, exponential or linear')
+        return None
+
+    ax.plot(quantities, prices, color="blue", label='Quicklizard Model')
+    ax.scatter(df_uid['units'], df_uid['round_price'], s=df_uid['days']*10, marker='+', color="red", label='Actual Data (Average units sold, size is proportional to the number of days at this price)')
+
+    ax.set_xlabel("Quantity")
+    ax.set_ylabel("Price")
+    ax.set_title(title + label + f" - UID: {uid} - Elasticity: {df_results_uid['best_model_elasticity'].iloc[0]:.2f}")
+    ax.grid(True)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
+
+    # Save the plot to a buffer
+    buffer = BytesIO()
+    plt.savefig(buffer, format='png')
+
+    plt.close(fig)  # Close the figure to free memory
+
+    buffer.seek(0)
+    return buffer
+
+
+
+def plot_model_and_prices(df_results, df_data, uid, title='')-> None:
+    print('uid:', uid)
+    df_results_uid = df_results[df_results.uid==uid]
+    print('best_model_elasticity:', df_results_uid['best_model_elasticity'].iloc[0])
+    df_uid = df_data[df_data.uid==uid]
+    a_linear=df_results_uid['best_model_a'].iloc[0]
+    b_linear=df_results_uid['best_model_b'].iloc[0]
+    model_type=df_results_uid['best_model'].iloc[0]
+    prices = np.linspace(df_uid['round_price'].min(), df_uid['round_price'].max(), 100)
+
+
+    if model_type == "power":
+        quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Power Demand Curve'
+    elif model_type == "exponential":
+        quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Exponential Demand Curve'
+    elif model_type == "linear":
+        quantities = linear_demand_equation(prices, a_linear, b_linear)
+        label = 'Linear Demand Curve'
+    else: 
+        print('typo in model type, power, exponential or linear')
+
+    plt.plot(quantities, prices, color="blue", label='Quicklizard Model')
+    plt.scatter(df_uid['units'], df_uid['round_price'], s=df_uid['days']*10, marker='+', color="red", label='Actual Data (Average units sold, size is proportional to the number of days at this price)')
+
+    plt.xlabel("Quantity")
+    plt.ylabel("Price")
+    plt.title(title + label)
+    plt.grid(True)
+        # Place legend outside the plot at the bottom
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
+
+    plt.show()
 
 # Example usage:
 # plot_demand_curves()

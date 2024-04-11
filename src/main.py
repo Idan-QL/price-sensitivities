@@ -5,6 +5,7 @@ Run with `python src/main.py -d us -c config_qa -p elasticity` from the project 
 """
 import logging
 from sys import exit as sys_exit
+from datetime import datetime
 
 import pandas as pd
 
@@ -12,10 +13,12 @@ from elasticity.data import preprocessing
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
+import elasticity.utils.plot_demands as plot_demands
 from ql_toolkit.attrs.write import write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
+from report import report, write_graphs
 
 
 def run() -> None:
@@ -55,19 +58,25 @@ def run() -> None:
         for channel in channels_list:
             try:
                 logging.info("Processing %s - %s", client_key, channel)
+                start_time = datetime.now()
 
-                df, _, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
-                    client_key=client_key,
-                    channel=channel,
-                    price_changes=5,
-                    threshold=0.01,
-                    min_days_with_conversions=10,
-                )
+                # df_by_price, _, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
+                #     client_key=client_key,
+                #     channel=channel,
+                #     price_changes=5,
+                #     threshold=0.01,
+                #     min_days_with_conversions=10,
+                # )
+
+                df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
+                total_end_date_uid = 8074
+                end_date = '2024-03-01'
+
                 logging.info("End date: %s", end_date)
                 logging.info("Total number of uid: %s", total_end_date_uid)
 
                 df_results = run_experiment_for_uids_parallel(
-                    df,
+                    df_by_price,
                     price_col="round_price",
                     quantity_col="units",
                     weights_col="days",
@@ -77,61 +86,18 @@ def run() -> None:
                     df_results.quality_test.value_counts(),
                 )
 
-                df_results_quality = df_results[df_results["quality_test"] == True]
-
-                # Append the required information to the data list
-                data_report.append(
-                    {
-                        "client_key": client_key,
-                        "channel": channel,
-                        "total_end_date_uid": total_end_date_uid,
-                        "uid_with_elasticity": len(df_results_quality),
-                        "uid_with_elasticity": len(df_results_quality),
-                        "uid_with_elasticity_less_than_minus3.8": len(
-                            df_results_quality[
-                                df_results_quality.best_model_elasticity < -3.8
-                            ]
-                        ),
-                        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
-                            df_results_quality[
-                                (df_results_quality.best_model_elasticity >= -3.8)
-                                & (df_results_quality.best_model_elasticity < -1)
-                            ]
-                        ),
-                        "uid_with_elasticity_moreorequal_minus1_less_than_0": len(
-                            df_results_quality[
-                                (df_results_quality.best_model_elasticity >= -1)
-                                & (df_results_quality.best_model_elasticity < 0)
-                            ]
-                        ),
-                        "uid_with_elasticity_moreorequal_0_less_than_1": len(
-                            df_results_quality[
-                                (df_results_quality.best_model_elasticity >= 0)
-                                & (df_results_quality.best_model_elasticity < 1)
-                            ]
-                        ),
-                        "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
-                            df_results_quality[
-                                (df_results_quality.best_model_elasticity >= 1)
-                                & (df_results_quality.best_model_elasticity < 3.8)
-                            ]
-                        ),
-                        "uid_with_elasticity_more_than_3.8": len(
-                            df_results_quality[
-                                df_results_quality.best_model_elasticity > 3.8
-                            ]
-                        ),
-                        "uid_with_elasticity_quality_test_false": len(
-                            df_results[df_results["quality_test"] == False]
-                        ),
-                    }
-                )
-
                 s3io.write_dataframe_to_s3(
                     file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
                     xdf=df_results,
                     s3_dir="data_science/eval_results/elasticity/",
                 )
+
+                #save top 10 graphs
+                for uid in df_results[df_results["quality_test"] == True].sort_values('best_mean_relative_error')[:10]['uid'].unique():
+                    buffer = plot_demands.plot_model_and_prices_buffer(df_results, df_by_price, uid)
+                    s3io.upload_to_s3(s3_dir=f"data_science/eval_results/elasticity/graphs/{client_key}/{channel}/",
+                      file_name=f"{uid}_{end_date}",
+                      file_obj=buffer)
 
                 actions_list = generate_actions_list(df_results, client_key, channel)
 
@@ -145,16 +111,38 @@ def run() -> None:
                     chunk_size=5000,
                 )
 
+                runtime = (datetime.now() - start_time).total_seconds() / 60
+
+                data_report = report.add_run(data_report=data_report,
+                                             client_key=client_key,
+                                             channel=channel,
+                                             total_uid=total_end_date_uid,
+                                             df_results=df_results,
+                                             runtime=runtime)
+
+                write_graphs.save_distribution_graph(client_key=client_key,
+                                channel=channel,
+                                total_uid=total_end_date_uid,
+                                df_report=pd.DataFrame([data_report[-1]]),
+                                end_date=end_date,
+                                s3_dir="data_science/eval_results/elasticity/graphs/")
+
                 logging.info("Finished processing %s - %s", client_key, channel)
+
             except Exception as e:
                 logging.error("Error processing %s - %s: %s", client_key, channel, e)
+                data_report = report.add_error_run(data_report=data_report,
+                                                   client_key=client_key,
+                                                   channel=channel)
 
     report_df = pd.DataFrame(data_report)
+
     s3io.write_dataframe_to_s3(
         file_name=f"elasticity_report_{end_date}.csv",
         xdf=report_df,
         s3_dir="data_science/eval_results/elasticity/",
     )
+    
 
 
 if __name__ == "__main__":

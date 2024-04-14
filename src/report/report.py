@@ -2,6 +2,45 @@
 
 from typing import List, Dict
 import pandas as pd
+import logging
+from ql_toolkit.s3 import io as s3io
+
+
+def compare_model(df_results: pd.DataFrame,
+                  df_results_last_month: pd.DataFrame) -> int:
+    df_compare = df_results[['uid', 'best_model', 'quality_test']].merge(df_results_last_month[['uid', 'best_model']], on='uid', how='left', suffixes=('', '_last_month'))
+    df_compare['model_changes'] = df_compare['best_model'] != df_compare['best_model_last_month']
+    return df_compare[df_compare["quality_test"] == True]['model_changes'].sum()
+
+
+def get_last_month_results(client_key: str,
+                           channel: str,
+                           end_date: str) -> pd.DataFrame:
+    """
+    Get the results from the last month.
+
+    Parameters:
+        end_date (str): The end date.
+
+    Returns:
+        DataFrame: The results from the last month.
+    """
+    # Get the last month's end date
+    last_month_end_date = pd.to_datetime(end_date) - pd.DateOffset(months=1)
+    last_month_end_date = last_month_end_date.strftime("%Y-%m-%d")
+
+    # Read the results from the last month
+    try:
+        df_results_last_month = s3io.maybe_get_pd_csv_df(
+            file_name=f"elasticity_{client_key}_{channel}_{last_month_end_date}.csv",
+            s3_dir="data_science/eval_results/elasticity/",
+        )
+    except FileNotFoundError:
+        logging.error("No results found for last month %s - %s - %s", client_key, channel, last_month_end_date)
+        return None
+
+    return df_results_last_month
+                                                         
 
 def add_run(data_report: List,
                        client_key: str,
@@ -9,8 +48,9 @@ def add_run(data_report: List,
                        total_uid: int,
                        df_results: pd.DataFrame,
                        runtime: float,
-                       total_revenue: float,
+                       total_revenue: int,
                        error_counter: int,
+                       end_date: str,
                        max_elasticity=3.8,
                        min_elasticity=-3.8) -> None:
     """
@@ -30,6 +70,12 @@ def add_run(data_report: List,
 
     df_results_quality = df_results[df_results["quality_test"] == True]
     best_model_counts = df_results_quality['best_model'].value_counts()
+
+    model_changes = None
+    if get_last_month_results(client_key, channel, end_date) is not None:
+        model_changes = compare_model(df_results, get_last_month_results(client_key=client_key,
+                                                                         channel=channel,
+                                                                         end_date=end_date))
 
     data_report.append({
         "client_key": client_key,
@@ -51,6 +97,7 @@ def add_run(data_report: List,
         "best_model_exponential_count": best_model_counts.get('exponential', 0),
         "best_model_linear_count": best_model_counts.get('linear', 0),
         "runtime_duration": runtime,
+        "model_changes": model_changes,
         "error": error_counter
     })
 
@@ -96,6 +143,7 @@ def add_error_run(data_report: List,
         "best_model_exponential_count": None,
         "best_model_linear_count": None,
         "runtime_duration": None,
+        "model_changes": None,
         "error": error_counter
     })
 

@@ -64,20 +64,22 @@ def run() -> None:
                 logging.info("Processing %s - %s", client_key, channel)
                 start_time = datetime.now()
 
-                df_by_price, _, total_end_date_uid, end_date, df_revenue_uid, total_revenue = preprocessing.read_and_preprocess(
-                    client_key=client_key,
-                    channel=channel,
-                    price_changes=5,
-                    threshold=0.01,
-                    min_days_with_conversions=10,
-                )
+                # df_by_price, _, total_end_date_uid, end_date, df_revenue_uid, total_revenue = preprocessing.read_and_preprocess(
+                #     client_key=client_key,
+                #     channel=channel,
+                #     price_changes=5,
+                #     threshold=0.01,
+                #     min_days_with_conversions=10,
+                # )
 
-                df_by_price.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
-                df_revenue_uid.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
+                # df_by_price.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
+                # df_revenue_uid.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
 
-                # df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
-                # total_end_date_uid = 8074
-                # end_date = '2024-03-01'
+                df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
+                df_revenue_uid = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
+                total_end_date_uid = 8074
+                end_date = '2024-03-01'
+                total_revenue = 4964889
 
                 logging.info("End date: %s", end_date)
                 logging.info("Total number of uid: %s", total_end_date_uid)
@@ -124,6 +126,8 @@ def run() -> None:
 
                 runtime = (datetime.now() - start_time).total_seconds() / 60
 
+
+
                 data_report = report.add_run(data_report=data_report,
                                              client_key=client_key,
                                              channel=channel,
@@ -131,7 +135,8 @@ def run() -> None:
                                              df_results=df_results,
                                              total_revenue=total_revenue,
                                              runtime=runtime,
-                                             error_counter=error_counter.error_count)
+                                             error_counter=error_counter.error_count,
+                                             end_date=end_date)
 
                 write_graphs.save_distribution_graph(client_key=client_key,
                                 channel=channel,

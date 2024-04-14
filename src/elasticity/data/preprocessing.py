@@ -55,7 +55,7 @@ def read_and_preprocess(
     logging.info("start_date: %s", start_date)
     logging.info("end_date: %s", end_date)
 
-    df, total_end_date_uid = progressive_monthly_aggregate(
+    df, total_uid, df_revenue_uid, total_revenue = progressive_monthly_aggregate(
         client_key=client_key,
         channel=channel,
         bucket=bucket,
@@ -79,7 +79,7 @@ def read_and_preprocess(
         quantity_col=quantity_col,
     )
 
-    return df_by_price, df, total_end_date_uid, end_date
+    return df_by_price, df, total_uid, end_date, df_revenue_uid, total_revenue
 
 
 def progressive_monthly_aggregate(
@@ -103,7 +103,7 @@ def progressive_monthly_aggregate(
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
     df_ko = pd.DataFrame()  # Initialize df_ko
-    total_end_date_uid = 0
+    total_uid = 0
     while end_date_dt >= start_date_dt:
         logging.info("reading: %s", end_date_dt.strftime("%Y-%m-%d"))
         df_part = read_data(
@@ -125,9 +125,15 @@ def progressive_monthly_aggregate(
         # Process data
         df_part = process_data(df_part)
 
-        if total_end_date_uid == 0:
-            total_end_date_uid = df_part["uid"].nunique()
-            logging.info("Total uid: %s", total_end_date_uid)
+        if total_uid == 0:
+            df_revenue = df_part.copy()
+            df_revenue["revenue"] = df_revenue["price_merged"] * df_revenue["units"]
+            total_revenue = df_revenue["revenue"].sum()
+            df_revenue_uid = df_revenue.groupby(["uid"])["revenue"].sum().reset_index()
+            df_revenue_uid['revenue_percentage'] = df_revenue_uid["revenue"] / total_revenue
+
+            total_uid = df_part["uid"].nunique()
+            logging.info("Total uid: %s", total_uid)
         df_part = df_part[~df_part["uid"].isin(uid_ok)]
 
         # Concatenate df_part with df_ko
@@ -160,7 +166,7 @@ def progressive_monthly_aggregate(
 
     result_df = pd.concat(df_full_list)
     logging.info("Number of unique user IDs: %s", result_df["uid"].nunique())
-    return result_df, total_end_date_uid
+    return result_df, total_uid, df_revenue_uid, total_revenue
 
 
 def read_data(
@@ -190,7 +196,7 @@ def read_data(
             filters=filters
         )
     except Exception:
-        logging.info("No data for %s_%s}", (str(year_), str(int(month_))))
+        logging.error("No data for %s_%s}", (str(year_), str(int(month_))))
         logging.info(
             "s3://%s/%s/%s/%s/elasticity/%s_%s_full_data.parquet/",
             (bucket, dir_, client_key, channel, year_, int(month_)),

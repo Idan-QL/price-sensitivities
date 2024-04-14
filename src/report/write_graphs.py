@@ -1,3 +1,5 @@
+"""Module of writing graphs."""
+
 from ql_toolkit.s3 import io as s3io
 
 import pandas as pd

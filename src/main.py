@@ -18,8 +18,12 @@ from ql_toolkit.attrs.write import write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
-from report import report, write_graphs
+from report import report, write_graphs, logging_error
 
+# Set up logging
+error_counter = logging_error.ErrorCounter()
+logging.basicConfig(level=logging.INFO)
+logging.getLogger().addHandler(error_counter)
 
 def run() -> None:
     """This function is the entry point for the elasticity job.
@@ -60,20 +64,24 @@ def run() -> None:
                 logging.info("Processing %s - %s", client_key, channel)
                 start_time = datetime.now()
 
-                # df_by_price, _, total_end_date_uid, end_date = preprocessing.read_and_preprocess(
-                #     client_key=client_key,
-                #     channel=channel,
-                #     price_changes=5,
-                #     threshold=0.01,
-                #     min_days_with_conversions=10,
-                # )
+                df_by_price, _, total_end_date_uid, end_date, df_revenue_uid, total_revenue = preprocessing.read_and_preprocess(
+                    client_key=client_key,
+                    channel=channel,
+                    price_changes=5,
+                    threshold=0.01,
+                    min_days_with_conversions=10,
+                )
 
-                df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
-                total_end_date_uid = 8074
-                end_date = '2024-03-01'
+                df_by_price.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
+                df_revenue_uid.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
+
+                # df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
+                # total_end_date_uid = 8074
+                # end_date = '2024-03-01'
 
                 logging.info("End date: %s", end_date)
                 logging.info("Total number of uid: %s", total_end_date_uid)
+                logging.info("total_revenue: %s", total_revenue)
 
                 df_results = run_experiment_for_uids_parallel(
                     df_by_price,
@@ -81,6 +89,9 @@ def run() -> None:
                     quantity_col="units",
                     weights_col="days",
                 )
+
+                df_results = df_results.merge(df_revenue_uid, on='uid', how='left')
+
                 logging.info(
                     "elasticity quality test: %s",
                     df_results.quality_test.value_counts(),
@@ -118,7 +129,9 @@ def run() -> None:
                                              channel=channel,
                                              total_uid=total_end_date_uid,
                                              df_results=df_results,
-                                             runtime=runtime)
+                                             total_revenue=total_revenue,
+                                             runtime=runtime,
+                                             error_counter=error_counter.error_count)
 
                 write_graphs.save_distribution_graph(client_key=client_key,
                                 channel=channel,
@@ -133,7 +146,8 @@ def run() -> None:
                 logging.error("Error processing %s - %s: %s", client_key, channel, e)
                 data_report = report.add_error_run(data_report=data_report,
                                                    client_key=client_key,
-                                                   channel=channel)
+                                                   channel=channel,
+                                                   error_counter=error_counter.error_count)
 
     report_df = pd.DataFrame(data_report)
 

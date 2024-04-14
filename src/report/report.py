@@ -1,3 +1,5 @@
+"""Module of report."""
+
 from typing import List, Dict
 import pandas as pd
 
@@ -7,6 +9,8 @@ def add_run(data_report: List,
                        total_uid: int,
                        df_results: pd.DataFrame,
                        runtime: float,
+                       total_revenue: float,
+                       error_counter: int,
                        max_elasticity=3.8,
                        min_elasticity=-3.8) -> None:
     """
@@ -32,8 +36,10 @@ def add_run(data_report: List,
         "channel": channel,
         "total_uid": total_uid,
         "uid_with_elasticity": len(df_results_quality),
-        "percentage_from_total": round(len(df_results_quality)/total_uid * 100, 1),
-        "percentage_from_total_with_data": round(len(df_results_quality)/len(df_results) * 100, 1),
+        "uids_from_total": round(len(df_results_quality)/total_uid * 100, 1),
+        "revenue_from_total": round(df_results_quality['revenue'].sum()/total_revenue * 100, 1),
+        "uids_from_total_with_data": round(len(df_results_quality)/len(df_results) * 100, 1),
+        "revenue_from_total_with_data": round(df_results_quality['revenue'].sum()/df_results['revenue'].sum() * 100, 1),
         "uid_with_data_for_elasticity": len(df_results),
         "uid_with_elasticity_less_than_minus3.8": len(df_results_quality[df_results_quality.best_model_elasticity < min_elasticity]),
         "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(df_results_quality[(df_results_quality.best_model_elasticity >= min_elasticity) & (df_results_quality.best_model_elasticity < -1)]),
@@ -45,7 +51,7 @@ def add_run(data_report: List,
         "best_model_exponential_count": best_model_counts.get('exponential', 0),
         "best_model_linear_count": best_model_counts.get('linear', 0),
         "runtime_duration": runtime,
-        "error": False
+        "error": error_counter
     })
 
     return data_report
@@ -53,7 +59,8 @@ def add_run(data_report: List,
 
 def add_error_run(data_report: List,
                   client_key: str,
-                  channel: str) -> None:
+                  channel: str,
+                  error_counter: int) -> None:
     """
     Append data to the data report list.
 
@@ -74,6 +81,10 @@ def add_error_run(data_report: List,
         "channel": channel,
         "total_uid": None,
         "uid_with_elasticity":None ,
+        "uids_from_total": None,
+        "revenue_from_total": None,
+        "uids_from_total_with_data": None,
+        "revenue_from_total_with_data": None,
         "uid_with_data_for_elasticity": None,
         "uid_with_elasticity_less_than_minus3.8": None,
         "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": None,
@@ -85,7 +96,7 @@ def add_error_run(data_report: List,
         "best_model_exponential_count": None,
         "best_model_linear_count": None,
         "runtime_duration": None,
-        "error": True
+        "error": error_counter
     })
 
     return data_report

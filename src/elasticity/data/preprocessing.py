@@ -7,7 +7,6 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-
 from elasticity.data.utils import (
     preprocess_by_price,
     round_price_effect,

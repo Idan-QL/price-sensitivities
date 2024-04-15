@@ -64,11 +64,12 @@ extend-select = [
     "TCH",
     "TID"
 ]
-extend-ignore = ["ANN101", "S311"]
+extend-ignore = ["ANN101", "G004", "S311"]
 
 [lint.mccabe]
 # Flag errors (`C901`) whenever the complexity level exceeds 5.
-max-complexity = 8
+max-complexity = 7
 
 [lint.pydocstyle]
 convention = "google"
+

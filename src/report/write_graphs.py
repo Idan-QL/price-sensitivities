@@ -1,18 +1,18 @@
 """Module of writing graphs."""
 
+from io import BytesIO
+
+import matplotlib.pyplot as plt
+import pandas as pd
 from ql_toolkit.s3 import io as s3io
 
-import pandas as pd
-import matplotlib.pyplot as plt
-from io import BytesIO
-import boto3
-from typing import Optional, Dict, Any
 
-
-
-def save_distribution_graph(client_key: str, channel: str, total_uid: int, df_report: pd.DataFrame, end_date:str, s3_dir: str) -> None:
-    """
-    Save a graph representing the distribution of UID with elasticity.
+def save_distribution_graph(client_key: str,
+                            channel: str,
+                            total_uid: int,
+                            df_report: pd.DataFrame,
+                            end_date:str, s3_dir: str) -> None:
+    """Save a graph representing the distribution of UID with elasticity.
 
     Parameters:
         client_key (str): The client key.
@@ -28,7 +28,8 @@ def save_distribution_graph(client_key: str, channel: str, total_uid: int, df_re
     total_uid_with_elasticity = df_report['uid_with_elasticity'].sum()
     total_uid_with_data_for_elasticity =  df_report['uid_with_data_for_elasticity'].sum()
     total_percentage_all = total_uid_with_elasticity / total_uid * 100
-    total_percentage_with_data = total_uid_with_elasticity / total_uid_with_data_for_elasticity * 100
+    total_percentage_with_data = (total_uid_with_elasticity
+                                  / total_uid_with_data_for_elasticity * 100)
 
     # Create a figure and axis
     fig, ax = plt.subplots()
@@ -51,7 +52,10 @@ def save_distribution_graph(client_key: str, channel: str, total_uid: int, df_re
         ax.text(bar.get_x() + bar.get_width() / 2, height, count, ha='center', va='bottom')
 
     # Add title and labels
-    title = f"{client_key} - {channel} - {total_uid} skus\n{total_uid_with_elasticity} skus with elasticity ({total_percentage_all:.1f}% from total skus, {total_percentage_with_data:.1f}% from skus with data)"
+    title = (f"{client_key}-{channel}-{total_uid} skus\n"
+            f"{total_uid_with_elasticity} skus with elasticity "
+            f"({total_percentage_all:.1f}% from total skus, "
+            f"{total_percentage_with_data:.1f}% from skus with data)")
     ax.set_title(title)
     ax.set_xlabel('Elasticity')
     ax.set_ylabel('UID Count')

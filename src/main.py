@@ -4,21 +4,20 @@
 Run with `python src/main.py -d us -c config_qa -p elasticity` from the project root.
 """
 import logging
-from sys import exit as sys_exit
 from datetime import datetime
+from sys import exit as sys_exit
 
+import elasticity.utils.plot_demands as plot_demands
 import pandas as pd
-
 from elasticity.data import preprocessing
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
-import elasticity.utils.plot_demands as plot_demands
 from ql_toolkit.attrs.write import write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
-from report import report, write_graphs, logging_error
+from report import logging_error, report, write_graphs
 
 # Set up logging
 error_counter = logging_error.ErrorCounter()
@@ -64,7 +63,8 @@ def run() -> None:
                 logging.info("Processing %s - %s", client_key, channel)
                 start_time = datetime.now()
 
-                # df_by_price, _, total_end_date_uid, end_date, df_revenue_uid, total_revenue = preprocessing.read_and_preprocess(
+                # (df_by_price, _, total_end_date_uid,
+                # end_date, df_revenue_uid, total_revenue) = preprocessing.read_and_preprocess(
                 #     client_key=client_key,
                 #     channel=channel,
                 #     price_changes=5,
@@ -72,11 +72,15 @@ def run() -> None:
                 #     min_days_with_conversions=10,
                 # )
 
-                # df_by_price.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
-                # df_revenue_uid.to_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
+                # df_by_price.to_csv('/home/alexia/workspace/elasticity/
+                # notebooks/feeluniquecom_test_after_preprocessing.csv')
+                # df_revenue_uid.to_csv('/home/alexia/workspace/elasticity/
+                # notebooks/feeluniquecom_revenue_uid.csv')
 
-                df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_test_after_preprocessing.csv')
-                df_revenue_uid = pd.read_csv('/home/alexia/workspace/elasticity/notebooks/feeluniquecom_revenue_uid.csv')
+                df_by_price = pd.read_csv('/home/alexia/workspace/elasticity/'
+                                          'notebooks/feeluniquecom_test_after_preprocessing.csv')
+                df_revenue_uid = pd.read_csv('/home/alexia/workspace/elasticity/'
+                                             'notebooks/feeluniquecom_revenue_uid.csv')
                 total_end_date_uid = 8074
                 end_date = '2024-03-01'
                 total_revenue = 4964889
@@ -105,12 +109,17 @@ def run() -> None:
                     s3_dir="data_science/eval_results/elasticity/",
                 )
 
-                #save top 10 graphs
-                for uid in df_results[df_results["quality_test"] == True].sort_values('best_mean_relative_error')[:10]['uid'].unique():
-                    buffer = plot_demands.plot_model_and_prices_buffer(df_results, df_by_price, uid)
-                    s3io.upload_to_s3(s3_dir=f"data_science/eval_results/elasticity/graphs/{client_key}/{channel}/",
-                      file_name=f"{uid}_{end_date}",
-                      file_obj=buffer)
+                # plot_demands.run_save_graph_parallel(df_results,
+                #                                      df_by_price,
+                #                                      client_key,
+                #                                      channel,
+                #                                      end_date)
+
+                plot_demands.run_save_graph_top10(df_results,
+                                                  df_by_price,
+                                                  client_key,
+                                                  channel,
+                                                  end_date)
 
                 actions_list = generate_actions_list(df_results, client_key, channel)
 
@@ -125,8 +134,6 @@ def run() -> None:
                 )
 
                 runtime = (datetime.now() - start_time).total_seconds() / 60
-
-
 
                 data_report = report.add_run(data_report=data_report,
                                              client_key=client_key,
@@ -161,7 +168,7 @@ def run() -> None:
         xdf=report_df,
         s3_dir="data_science/eval_results/elasticity/",
     )
-    
+
 
 
 if __name__ == "__main__":

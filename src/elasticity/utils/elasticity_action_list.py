@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Any, List, Tuple
 
 import pandas as pd
-
 from ql_toolkit.attrs.action_list import create_actions_list
 
 

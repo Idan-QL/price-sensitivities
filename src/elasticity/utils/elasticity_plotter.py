@@ -41,7 +41,7 @@ class ElasticityPlotter:
 
     def jointplot_with_median(
         self,
-        df: pd.DataFrame,
+        dfplot: pd.DataFrame,
         median_price: float,
         median_quantity: float,
         title: str = "",
@@ -50,7 +50,7 @@ class ElasticityPlotter:
         """Generate a joint plot with median lines.
 
         Parameters:
-        - df (DataFrame): DataFrame containing the data.
+        - dfplot (DataFrame): DataFrame containing the data.
         - median_price (float): Median value for the price.
         - median_quantity (float): Median value for the quantity.
         - title (str): Title for the plot (default is '').
@@ -59,8 +59,7 @@ class ElasticityPlotter:
         Returns:
         None
         """
-
-        h = sns.jointplot(data=df, x=self.price_col, y=self.quantity_col, color=color)
+        h = sns.jointplot(data=dfplot, x=self.price_col, y=self.quantity_col, color=color)
         h.refline(x=median_price, y=median_quantity, color="red")
         h.figure.suptitle(title)
         h.figure.tight_layout()
@@ -68,7 +67,7 @@ class ElasticityPlotter:
         plt.show()
 
     def plot_curves(
-        self, df: pd.DataFrame, uid: str, print_raw_data: bool = False
+        self, dfplot: pd.DataFrame, uid: str
     ) -> None:
         """Plot various curves for a specific UID.
 
@@ -79,58 +78,42 @@ class ElasticityPlotter:
         Returns:
         None
         """
-        df_uid = df[df[self.uid_col] == uid]
+        df_uid = dfplot[dfplot[self.uid_col] == uid]
         # df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
 
-        if self.median_price_col not in df.columns:
-            df[self.median_price_col] = df[self.price_col].median()
-        if self.median_quantity_col not in df.columns:
-            df[self.median_quantity_col] = df[self.quantity_col].median()
+        if self.median_price_col not in df_uid.columns:
+            df_uid[self.median_price_col] = df_uid[self.price_col].median()
+        if self.median_quantity_col not in df_uid.columns:
+            df_uid[self.median_quantity_col] = df_uid[self.quantity_col].median()
 
 
-        median_price_uid = df[self.median_price_col].iloc[0]
-        median_quantity_uid = df[self.median_quantity_col].iloc[0]
+        median_price_uid = df_uid[self.median_price_col].iloc[0]
+        median_quantity_uid = df_uid[self.median_quantity_col].iloc[0]
 
-        if print_raw_data:
-            self.jointplot_with_median(
-                df_uid,
-                median_price_uid,
-                median_quantity_uid,
-                title="Raw data - UID: " + str(uid),
-                color="green",
-            )
-            self.jointplot_with_median(
-                df,
-                median_price_uid,
-                median_quantity_uid,
-                title="Data by day - UID: " + str(uid),
-                color="blue",
-            )
         self.jointplot_with_median(
-            df,
+            df_uid,
             median_price_uid,
             median_quantity_uid,
             title="Data by price normalized - UID: " + str(uid),
             color="orange",
         )
 
-    def plot_curves_by_price_norm(self, df: pd.DataFrame, uid: str) -> None:
+    def plot_curves_by_price_norm(self, dfplot: pd.DataFrame, uid: str) -> None:
         """Plot curves by price normalization for a specific UID.
 
         Parameters:
-        - df (DataFrame): DataFrame containing the data.
+        - dfplot (DataFrame): DataFrame containing the data.
         - uid (str or int): Unique identifier for the data.
 
         Returns:
         None
         """
+        if self.median_price_col not in dfplot.columns:
+            dfplot[self.median_price_col] = dfplot[self.price_col].median()
+        if self.median_quantity_col not in dfplot.columns:
+            dfplot[self.median_quantity_col] = dfplot[self.quantity_col].median()
 
-        if self.median_price_col not in df.columns:
-            df[self.median_price_col] = df[self.price_col].median()
-        if self.median_quantity_col not in df.columns:
-            df[self.median_quantity_col] = df[self.quantity_col].median()
-
-        df_uid = df[df[self.uid_col] == uid]
+        df_uid = dfplot[dfplot[self.uid_col] == uid]
         # df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
 
 
@@ -146,12 +129,12 @@ class ElasticityPlotter:
         )
 
     def plot_price_and_units_for_uid_one_graph(
-        self, df: pd.DataFrame, uid: str
+        self, dfplot: pd.DataFrame, uid: str
     ) -> None:
         """Plot price and units for a specific UID in one graph.
 
         Parameters:plot_price_and_units_for_uid_one_graph
-        - df (DataFrame): DataFrame containing the data.
+        - dfplot (DataFrame): DataFrame containing the data.
         - uid (str or int): Unique identifier for the data.
 
         Returns:
@@ -159,23 +142,23 @@ class ElasticityPlotter:
         """
         # df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
 
-        df = df[df[self.uid_col] == uid]
+        dfplot = dfplot[dfplot[self.uid_col] == uid]
 
-        df["date"] = pd.to_datetime(df[self.date_col])
+        dfplot["date"] = pd.to_datetime(dfplot[self.date_col])
 
-        df = df.sort_values(by=self.date_col)
+        dfplot = dfplot.sort_values(by=self.date_col)
 
-        if self.median_price_col not in df.columns:
-            df[self.median_price_col] = df[self.price_col].median()
-        if self.median_quantity_col not in df.columns:
-            df[self.median_quantity_col] = df[self.quantity_col].median()
+        if self.median_price_col not in dfplot.columns:
+            dfplot[self.median_price_col] = dfplot[self.price_col].median()
+        if self.median_quantity_col not in dfplot.columns:
+            dfplot[self.median_quantity_col] = dfplot[self.quantity_col].median()
 
-        median_price_uid = df[self.median_price_col].iloc[0]
-        median_quantity_uid = df[self.median_quantity_col].iloc[0]
+        median_price_uid = dfplot[self.median_price_col].iloc[0]
+        median_quantity_uid = dfplot[self.median_quantity_col].iloc[0]
 
         fig, ax1 = plt.subplots()
 
-        sns.lineplot(data=df, x="date", y=self.price_col, ax=ax1)
+        sns.lineplot(data=dfplot, x="date", y=self.price_col, ax=ax1)
         ax1.set_ylabel("Price from Revenue", color="tab:blue")
 
         ax1.axhline(
@@ -185,7 +168,7 @@ class ElasticityPlotter:
         ax2 = ax1.twinx()
 
         sns.lineplot(
-            data=df,
+            data=dfplot,
             x="date",
             y=self.quantity_col,
             ax=ax2,
@@ -193,7 +176,7 @@ class ElasticityPlotter:
         )
         ax2.set_ylabel("Units", color="tab:orange")
 
-        print(df.date.min(), df.date.max())
+        print(dfplot.date.min(), dfplot.date.max())
 
         ax2.axhline(
             y=median_quantity_uid,
@@ -214,12 +197,12 @@ class ElasticityPlotter:
         plt.show()
 
     def plot_price_and_units_for_uid_2_graphs(
-        self, df: pd.DataFrame, uid: Union[str, int]
+        self, dfplot: pd.DataFrame, uid: Union[str, int]
     ) -> None:
         """Plot price and units for a specific UID in two separate graphs.
 
         Parameters:
-        - df (DataFrame): DataFrame containing the data.
+        - dfplot (DataFrame): DataFrame containing the data.
         - uid (str or int): Unique identifier for the data.
 
         Returns:
@@ -227,23 +210,23 @@ class ElasticityPlotter:
         """
         # df_by_day_uid, _ = preprocess_by_day(df[df[self.uid_col] == uid])
 
-        df = df[df[self.uid_col] == uid]
+        df_uid = dfplot[dfplot[self.uid_col] == uid]
 
-        df[self.date_col] = pd.to_datetime(df[self.date_col])
+        df_uid[self.date_col] = pd.to_datetime(df_uid[self.date_col])
 
-        df = df.sort_values(by=self.date_col)
+        df_uid = df_uid.sort_values(by=self.date_col)
 
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-        if self.median_price_col not in df.columns:
-            df[self.median_price_col] = df[self.price_col].median()
-        if self.median_quantity_col not in df.columns:
-            df[self.median_quantity_col] = df[self.quantity_col].median()
+        if self.median_price_col not in df_uid.columns:
+            df_uid[self.median_price_col] = df_uid[self.price_col].median()
+        if self.median_quantity_col not in df_uid.columns:
+            df_uid[self.median_quantity_col] = df_uid[self.quantity_col].median()
 
-        median_price_uid = df[self.median_price_col].iloc[0]
-        median_quantity_uid = df[self.median_quantity_col].iloc[0]
+        median_price_uid = df_uid[self.median_price_col].iloc[0]
+        median_quantity_uid = df_uid[self.median_quantity_col].iloc[0]
 
-        sns.lineplot(data=df, x="price", y=self.price_col, ax=ax1)
+        sns.lineplot(data=df_uid, x="price", y=self.price_col, ax=ax1)
         ax1.set_ylabel("Price from Revenue", color="tab:blue")
 
         ax1.axhline(
@@ -252,7 +235,7 @@ class ElasticityPlotter:
         ax1.legend(loc="upper left")
 
         sns.lineplot(
-            data=df,
+            data=df_uid,
             x="price",
             y=self.quantity_col,
             ax=ax2,

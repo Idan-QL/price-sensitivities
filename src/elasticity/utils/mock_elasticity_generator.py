@@ -22,11 +22,11 @@ class MockElasticityGenerator:
         a_non_linear: float = 500,
         a_power_non_linear: float = 100,
         quantity_noise_std: float = 0,
+        elasticity_tuple_4: tuple[int, int, int, int] = (-5, -2, -1, 0),
         date_col: str = "date",
         price_col: str = "price",
         demand_col: str = "units",
         uid_col: str = "uid",
-        elasticity_list: list[float] = None,
     ) -> None:
         """Initializes the MockElasticityGenerator with default parameters.
 
@@ -54,10 +54,7 @@ class MockElasticityGenerator:
         self.price_col = price_col
         self.demand_col = demand_col
         self.uid_col = uid_col
-
-        if elasticity_list is None:
-            elasticity_list = [-5, -2, -1, 0]
-        self.elasticity_list = elasticity_list
+        self.elasticity_list = list(elasticity_tuple_4)
 
     @staticmethod
     def generate_nonlinear_elasticity(

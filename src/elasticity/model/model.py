@@ -5,7 +5,6 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-
 from elasticity.model.utils import calculate_elasticity_from_parameters
 
 

@@ -1,23 +1,28 @@
 """Module of report."""
 
-from typing import List, Dict
-import pandas as pd
 import logging
+from typing import List
+
+import pandas as pd
 from ql_toolkit.s3 import io as s3io
 
 
 def compare_model(df_results: pd.DataFrame,
                   df_results_last_month: pd.DataFrame) -> int:
-    df_compare = df_results[['uid', 'best_model', 'quality_test']].merge(df_results_last_month[['uid', 'best_model']], on='uid', how='left', suffixes=('', '_last_month'))
+    """Compare the best model from the current month with the best model from the last month."""
+    df_compare = df_results[['uid', 'best_model', 'quality_test']].merge(
+        df_results_last_month[['uid', 'best_model']],
+        on='uid',
+        how='left',
+        suffixes=('', '_last_month'))
     df_compare['model_changes'] = df_compare['best_model'] != df_compare['best_model_last_month']
-    return df_compare[df_compare["quality_test"] == True]['model_changes'].sum()
+    return df_compare[df_compare["quality_test"]]['model_changes'].sum()
 
 
 def get_last_month_results(client_key: str,
                            channel: str,
                            end_date: str) -> pd.DataFrame:
-    """
-    Get the results from the last month.
+    """Get the results from the last month.
 
     Parameters:
         end_date (str): The end date.
@@ -36,11 +41,14 @@ def get_last_month_results(client_key: str,
             s3_dir="data_science/eval_results/elasticity/",
         )
     except FileNotFoundError:
-        logging.error("No results found for last month %s - %s - %s", client_key, channel, last_month_end_date)
+        logging.error("No results found for last month %s - %s - %s",
+                      client_key,
+                      channel,
+                      last_month_end_date)
         return None
 
     return df_results_last_month
-                                                         
+
 
 def add_run(data_report: List,
                        client_key: str,
@@ -51,10 +59,9 @@ def add_run(data_report: List,
                        total_revenue: int,
                        error_counter: int,
                        end_date: str,
-                       max_elasticity=3.8,
-                       min_elasticity=-3.8) -> None:
-    """
-    Append data to the data report list.
+                       max_elasticity: float=3.8,
+                       min_elasticity: float=-3.8) -> None:
+    """Append data to the data report list.
 
     Parameters:
         data_report (List[Dict[str, Any]]): The list to append data to.
@@ -67,8 +74,7 @@ def add_run(data_report: List,
     Returns:
         None
     """
-
-    df_results_quality = df_results[df_results["quality_test"] == True]
+    df_results_quality = df_results[df_results["quality_test"]]
     best_model_counts = df_results_quality['best_model'].value_counts()
 
     model_changes = None
@@ -85,14 +91,27 @@ def add_run(data_report: List,
         "uids_from_total": round(len(df_results_quality)/total_uid * 100, 1),
         "revenue_from_total": round(df_results_quality['revenue'].sum()/total_revenue * 100, 1),
         "uids_from_total_with_data": round(len(df_results_quality)/len(df_results) * 100, 1),
-        "revenue_from_total_with_data": round(df_results_quality['revenue'].sum()/df_results['revenue'].sum() * 100, 1),
+        "revenue_from_total_with_data": round(
+            df_results_quality['revenue'].sum()/df_results['revenue'].sum() * 100, 1),
         "uid_with_data_for_elasticity": len(df_results),
-        "uid_with_elasticity_less_than_minus3.8": len(df_results_quality[df_results_quality.best_model_elasticity < min_elasticity]),
-        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(df_results_quality[(df_results_quality.best_model_elasticity >= min_elasticity) & (df_results_quality.best_model_elasticity < -1)]),
-        "uid_with_elasticity_moreorequal_minus1_less_than_0": len(df_results_quality[(df_results_quality.best_model_elasticity >= -1) & (df_results_quality.best_model_elasticity < 0)]),
-        "uid_with_elasticity_moreorequal_0_less_than_1": len(df_results_quality[(df_results_quality.best_model_elasticity >= 0) & (df_results_quality.best_model_elasticity < 1)]),
-        "uid_with_elasticity_moreorequal_1_less_than_3.8": len(df_results_quality[(df_results_quality.best_model_elasticity >= 1) & (df_results_quality.best_model_elasticity < max_elasticity)]),
-        "uid_with_elasticity_more_than_3.8": len(df_results_quality[df_results_quality.best_model_elasticity > max_elasticity]),
+        "uid_with_elasticity_less_than_minus3.8": len(
+            df_results_quality[df_results_quality.best_model_elasticity < min_elasticity]),
+        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
+            df_results_quality[
+                (df_results_quality.best_model_elasticity >= min_elasticity) &
+                (df_results_quality.best_model_elasticity < -1)]),
+        "uid_with_elasticity_moreorequal_minus1_less_than_0": len(
+            df_results_quality[(df_results_quality.best_model_elasticity >= -1)
+                               & (df_results_quality.best_model_elasticity < 0)]),
+        "uid_with_elasticity_moreorequal_0_less_than_1": len(
+            df_results_quality[
+                (df_results_quality.best_model_elasticity >= 0) &
+                (df_results_quality.best_model_elasticity < 1)]),
+        "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
+            df_results_quality[(df_results_quality.best_model_elasticity >= 1) &
+                               (df_results_quality.best_model_elasticity < max_elasticity)]),
+        "uid_with_elasticity_more_than_3.8": len(
+            df_results_quality[df_results_quality.best_model_elasticity > max_elasticity]),
         "best_model_power_count": best_model_counts.get('power', 0),
         "best_model_exponential_count": best_model_counts.get('exponential', 0),
         "best_model_linear_count": best_model_counts.get('linear', 0),
@@ -108,8 +127,7 @@ def add_error_run(data_report: List,
                   client_key: str,
                   channel: str,
                   error_counter: int) -> None:
-    """
-    Append data to the data report list.
+    """Append data to the data report list.
 
     Parameters:
         data_report (List[Dict[str, Any]]): The list to append data to.
@@ -122,7 +140,6 @@ def add_error_run(data_report: List,
     Returns:
         None
     """
-
     data_report.append({
         "client_key": client_key,
         "channel": channel,

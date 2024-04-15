@@ -94,8 +94,12 @@ def add_run(data_report: List,
         "revenue_from_total_with_data": round(
             df_results_quality['revenue'].sum()/df_results['revenue'].sum() * 100, 1),
         "uid_with_data_for_elasticity": len(df_results),
-        "uid_with_elasticity_less_than_minus3.8": len(
-            df_results_quality[df_results_quality.best_model_elasticity < min_elasticity]),
+        "uid_with_elasticity_less_than_minus6": len(
+            df_results_quality[df_results_quality.best_model_elasticity < -6]),
+        "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8": len(
+            df_results_quality[
+                (df_results_quality.best_model_elasticity >= -6) &
+                (df_results_quality.best_model_elasticity < min_elasticity)]),
         "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
             df_results_quality[
                 (df_results_quality.best_model_elasticity >= min_elasticity) &
@@ -110,8 +114,11 @@ def add_run(data_report: List,
         "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
             df_results_quality[(df_results_quality.best_model_elasticity >= 1) &
                                (df_results_quality.best_model_elasticity < max_elasticity)]),
-        "uid_with_elasticity_more_than_3.8": len(
-            df_results_quality[df_results_quality.best_model_elasticity > max_elasticity]),
+        "uid_with_elasticity_moreorequal_3.8_less_than_6": len(
+            df_results_quality[(df_results_quality.best_model_elasticity >= max_elasticity) &
+                               (df_results_quality.best_model_elasticity < 6)]),
+        "uid_with_elasticity_moreorequal_6": len(
+            df_results_quality[df_results_quality.best_model_elasticity >= 6]),
         "best_model_power_count": best_model_counts.get('power', 0),
         "best_model_exponential_count": best_model_counts.get('exponential', 0),
         "best_model_linear_count": best_model_counts.get('linear', 0),
@@ -150,12 +157,14 @@ def add_error_run(data_report: List,
         "uids_from_total_with_data": None,
         "revenue_from_total_with_data": None,
         "uid_with_data_for_elasticity": None,
-        "uid_with_elasticity_less_than_minus3.8": None,
-        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": None,
-        "uid_with_elasticity_moreorequal_minus1_less_than_0": None,
-        "uid_with_elasticity_moreorequal_0_less_than_1": None,
-        "uid_with_elasticity_moreorequal_1_less_than_3.8": None,
-        "uid_with_elasticity_more_than_3.8": None,
+        "uid_with_elasticity_less_than_minus6": None,
+        "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8": None,
+        'uid_with_elasticity_moreorequal_minus3.8_less_than_minus1': None,
+        'uid_with_elasticity_moreorequal_minus1_less_than_0': None,
+        'uid_with_elasticity_moreorequal_0_less_than_1': None,
+        'uid_with_elasticity_moreorequal_1_less_than_3.8': None,
+        "uid_with_elasticity_moreorequal_3.8_less_than_6": None,
+        "uid_with_elasticity_moreorequal_6": None,
         "best_model_power_count": None,
         "best_model_exponential_count": None,
         "best_model_linear_count": None,

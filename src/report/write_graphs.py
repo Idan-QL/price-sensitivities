@@ -35,12 +35,15 @@ def save_distribution_graph(client_key: str,
     fig, ax = plt.subplots()
 
     # Data
-    columns = ['uid_with_elasticity_less_than_minus3.8',
+    columns = ["uid_with_elasticity_less_than_minus6",
+               "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8",
                'uid_with_elasticity_moreorequal_minus3.8_less_than_minus1',
                'uid_with_elasticity_moreorequal_minus1_less_than_0',
                'uid_with_elasticity_moreorequal_0_less_than_1',
-               'uid_with_elasticity_moreorequal_1_less_than_3.8']
-    labels = ['< -3.8', '[-3.8, -1)', '[-1, 0)', '[0, 1)', '[1, 3.8)']
+               'uid_with_elasticity_moreorequal_1_less_than_3.8',
+               "uid_with_elasticity_moreorequal_3.8_less_than_6",
+               "uid_with_elasticity_moreorequal_6"]
+    labels = ["<-6", "[-6;-3.8[", "[-3.8;-1[", "[-1;0[", "[0;1[", "[1;3.8[", "[3.8;6[", "6+"]
     counts = [df_report[column].sum() for column in columns]
 
     # Plot

@@ -2,6 +2,7 @@ FROM python:3.11.6-slim-bookworm
 
 COPY src/ql_toolkit/ /usr/bin/ql_toolkit
 COPY src/elasticity/ /usr/bin/elasticity
+COPY src/report/ /usr/bin/report
 COPY src/requirements.txt /usr/bin/elasticity/
 COPY src/main.py /usr/bin/train
 

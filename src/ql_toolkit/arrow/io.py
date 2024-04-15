@@ -1,4 +1,4 @@
-"""This module provides functions for reading and writing Arrow tables using Polars DataFrames."""
+"""This module contains functions for reading and writing Arrow tables using Polars DataFrames."""
 
 import logging
 from typing import Optional
@@ -15,8 +15,8 @@ from ql_toolkit.s3 import io as s3io
 def get_arrow_table(
     path_or_paths: str | list[str],
     s3_fs: s3fs.S3FileSystem = None,
-    columns: list[str] = None,
-    filters: list[tuple] = None,
+    columns: Optional[list[str]] = None,
+    filters: Optional[list[tuple]] = None,
 ) -> Table:
     """Retrieves an Arrow table from a Parquet file located at the specified path or paths.
 
@@ -51,17 +51,13 @@ def get_arrow_table(
     else:
         path_or_paths = f"{app_state.bucket_name}/{path_or_paths}"
     try:
-        pq_ds = pq.ParquetDataset(
-            path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters
-        )
+        pq_ds = pq.ParquetDataset(path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters)
         table = pq_ds.read(columns=columns)
     except ValueError as err:
         if isinstance(path_or_paths, list):
             logging.error("ValueError caught: %s for the paths list", err)
         else:
-            logging.error(
-                "ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1]
-            )
+            logging.error("ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1])
     except Exception as err:
         logging.error("Err caught: %s", err)
     return table
@@ -71,8 +67,8 @@ def get_xf_from_arrow_table(
     path_or_paths: str | list[str],
     is_lazy: bool,
     s3_fs: s3fs.S3FileSystem = None,
-    columns: list[str] = None,
-    filters: list[tuple] = None,
+    columns: Optional[list[str]] = None,
+    filters: Optional[list[tuple]] = None,
 ) -> Optional[pl.DataFrame | pl.LazyFrame]:
     """Get a Polars DataFrame or LazyFrame from an Arrow table obtained from Parquet file(s).
 
@@ -119,8 +115,8 @@ def get_xf_from_arrow_table(
 def load_xf_from_list_of_parquet_files(
     s3_files_list: list[str],
     is_lazy: bool,
-    columns: list[str] = None,
-    filters: list[tuple] = None,
+    columns: Optional[list[str]] = None,
+    filters: Optional[list[tuple]] = None,
 ) -> Optional[pl.DataFrame | pl.LazyFrame]:
     """Loads a Polars DataFrame or LazyFrame from a list of Parquet files located at the `paths`.
 
@@ -174,7 +170,7 @@ def load_xf_from_list_of_parquet_files(
 def write_xf_to_s3(
     xf: pl.DataFrame | pl.DataFrame,
     path: str,
-    backup_path: str = None,
+    backup_path: Optional[str] = None,
     rename_old: bool = True,
 ) -> None:
     """Writes a Polars DataFrame or LazyFrame to a Parquet file located at the specified path.

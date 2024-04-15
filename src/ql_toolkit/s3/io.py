@@ -98,38 +98,33 @@ def get_s3_file_contents(
                 buffer.seek(0)
                 return buffer.read().decode("utf-8")
             except UnicodeDecodeError as err:
-                logging.warning(
-                    "[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err
-                )
+                logging.warning("[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err)
                 # Return as binary if UTF-8 decoding fails
                 buffer.seek(0)
         return buffer
     except ClientError as err:
-        logging.warning(
-            "[- S3 I/O -] Error caught while downloading %s: %s", file_name, err
-        )
+        logging.warning("[- S3 I/O -] Error caught while downloading %s: %s", file_name, err)
         return None
 
 
-def maybe_get_python_objects_from_file(s3_dir: str, file_name: str) -> dict:
-    """Get a dictionary of python objects from a python (.py) file.
-
-    Args:
-        s3_dir (str): The S3 directory that should hold the file
-                      (For example: "data_science/sagemaker/clients_mappings/")
-        file_name (str): The name of the file
-                         (For example: "clients_dict.py")
-
-    Returns:
-        (dict) The file contents
-    """
-    file_content = get_s3_file_contents(
-        s3_dir=s3_dir, file_name=file_name, decode_utf8=True
-    )
-    py_objects_map = {}
-    if file_content is not None:
-        exec(file_content, py_objects_map)
-    return py_objects_map
+# Deprecated function, usage is unsafe
+# def maybe_get_python_objects_from_file(s3_dir: str, file_name: str) -> dict:
+#     """Get a dictionary of python objects from a python (.py) file.
+#
+#     Args:
+#         s3_dir (str): The S3 directory that should hold the file
+#                       (For example: "data_science/sagemaker/clients_mappings/")
+#         file_name (str): The name of the file
+#                          (For example: "clients_dict.py")
+#
+#     Returns:
+#         (dict) The file contents
+#     """
+#     file_content = get_s3_file_contents(s3_dir=s3_dir, file_name=file_name, decode_utf8=True)
+#     py_objects_map = {}
+#     if file_content is not None:
+#         exec(file_content, py_objects_map)
+#     return py_objects_map
 
 
 def maybe_get_json_file(
@@ -235,9 +230,7 @@ def maybe_get_txt_file(
 
     if file_content and isinstance(file_content, str):
         return file_content
-    logging.error(
-        "[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name
-    )
+    logging.error("[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name)
 
     return ""
 
@@ -319,31 +312,28 @@ def maybe_get_pd_parquet_file(
         return pd.DataFrame()
 
     try:
-        df_input = pd.read_parquet(BytesIO(buffer.getvalue()))
+        s3_data_df = pd.read_parquet(BytesIO(buffer.getvalue()))
     except Exception as err:
         logging.error("[- S3 I/O -] Error reading parquet file %s: %s", file_name, err)
         return pd.DataFrame()
 
-    if validate_datetime_index:
-        if not isinstance(df_input.index, pd.DatetimeIndex):
-            if "date" in df_input.columns:
-                try:
-                    df_input = df_input.set_index(
-                        pd.to_datetime(df_input["date"]), drop=True
-                    )
-                except Exception as err:
-                    logging.warning(
-                        "[- S3 I/O -] Failed to convert 'date' column to "
-                        "datetime index in %s: %s",
-                        file_name,
-                        err,
-                    )
-            else:
+    if validate_datetime_index and not isinstance(s3_data_df.index, pd.DatetimeIndex):
+        if "date" in s3_data_df.columns:
+            try:
+                s3_data_df = s3_data_df.set_index(pd.to_datetime(s3_data_df["date"]), drop=True)
+            except Exception as err:
                 logging.warning(
-                    "[- S3 I/O -] 'date' column not found in %s to set as datetime index.",
+                    "[- S3 I/O -] Failed to convert 'date' column to "
+                    "datetime index in %s: %s",
                     file_name,
+                    err,
                 )
-    return df_input
+        else:
+            logging.warning(
+                "[- S3 I/O -] 'date' column not found in %s to set as datetime index.",
+                file_name,
+            )
+    return s3_data_df
 
 
 def write_dataframe_to_s3(
@@ -371,31 +361,15 @@ def write_dataframe_to_s3(
     Returns:
         None
     """
-    if isinstance(xdf, pl.DataFrame):
-        if xdf.is_empty():
-            logging.warning(
-                "[- S3 I/O -] Provided DataFrame is empty. Aborting write operation."
-            )
-            return
-    else:
-        if xdf.empty:
-            logging.warning(
-                "[- S3 I/O -] Provided DataFrame is empty. Aborting write operation."
-            )
-            return
-
-    if not file_name.endswith((".parquet", ".csv")):
-        logging.error("[- S3 I/O -] File extension must be .parquet or .csv")
-        return
-
     s3_client = get_s3_client()
     bucket_name = app_state.bucket_name
     file_path = _get_file_path(file_name=file_name, s3_dir=s3_dir)
 
+    if not validate_request(xdf=xdf, file_name=file_name):
+        return
+
     # Backup existing file
-    if rename_old and is_file_exists(
-        s3_dir=s3_dir, file_name=file_name, s3_client=s3_client
-    ):
+    if rename_old and is_file_exists(s3_dir=s3_dir, file_name=file_name, s3_client=s3_client):
         _create_backup(
             backup_path=backup_path,
             bucket_name=bucket_name,
@@ -422,10 +396,40 @@ def write_dataframe_to_s3(
     except ArrowInvalid as err:
         logging.error("[- S3 I/O -] ArrowInvalid error caught: %s", err)
     except Exception as err:  # Catch more general exception for robustness
-        logging.error(
-            "[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err
-        )
+        logging.error("[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err)
         return
+
+
+def validate_request(xdf: pl.DataFrame | pd.DataFrame, file_name: str) -> bool:
+    """Validate the DataFrame and file name before writing to S3.
+
+    Args:
+        xdf (pl.DataFrame | pd.DataFrame): The DataFrame to write to S3.
+        file_name (str): The name of the file to write to S3.
+
+    Returns:
+        bool: True if the DataFrame and file name are valid, False otherwise.
+    """
+    if check_df_is_empty(xdf):
+        logging.warning("[- S3 I/O -] Provided DataFrame is empty. Aborting write operation.")
+        return False
+
+    if not file_name.endswith((".parquet", ".csv")):
+        logging.error("[- S3 I/O -] File extension must be .parquet or .csv")
+        return False
+    return True
+
+
+def check_df_is_empty(xdf: pl.DataFrame | pd.DataFrame) -> bool:
+    """Check if the DataFrame is empty.
+
+    Args:
+        xdf (pl.DataFrame | pd.DataFrame): The DataFrame to check.
+
+    Returns:
+        bool: True if the DataFrame is empty, False otherwise.
+    """
+    return xdf.is_empty() if isinstance(xdf, pl.DataFrame) else xdf.empty
 
 
 def _get_file_path(file_name: str, s3_dir: Optional[str]) -> str:
@@ -562,9 +566,7 @@ def upload_to_s3(
                 ExtraArgs=extra_args,
             )
 
-        logging.info(
-            "[- S3 I/O -] Object uploaded to: s3://%s/%s", bucket_name, file_path
-        )
+        logging.info("[- S3 I/O -] Object uploaded to: s3://%s/%s", bucket_name, file_path)
         return True
     except Exception as err:
         logging.error("[- S3 I/O -] Error occurred while uploading to S3: %s", err)

@@ -32,7 +32,7 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
             )
         try:
             with open(conf_file, "r") as file_stream:
-                config = yaml.load(stream=file_stream, Loader=yaml.FullLoader)
+                config = yaml.safe_load(stream=file_stream)
         except FileNotFoundError:
             sys_exit(
                 f"Config file {conf_file} not found. "

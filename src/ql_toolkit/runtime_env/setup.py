@@ -10,7 +10,14 @@ from ql_toolkit.s3.utils import set_aws_access
 
 
 def run_setup(args_dict: dict) -> tuple[dict, dict]:
-    """This function sets up the runtime environment for the job."""
+    """Set up the runtime environment.
+
+    Args:
+        args_dict (dict): The CLI arguments
+
+    Returns:
+        tuple[dict, dict]: The CLI arguments and the S3 configuration
+    """
     print("Setting up runtime environment...")
     parser = cli.Parser(kv=args_dict)
     parser.set_args_dict()
@@ -40,9 +47,7 @@ def run_setup(args_dict: dict) -> tuple[dict, dict]:
     )
 
     # Get the run configuration
-    s3_config = external_config.get_args_dict(
-        is_local=False, conf_file=args_dict["config"]
-    )
+    s3_config = external_config.get_args_dict(is_local=False, conf_file=args_dict["config"])
     if s3_config is None:
         sys_exit(f"Config file {args_dict['config']} not found.\nExiting!")
     # parse_config.print_config(config)

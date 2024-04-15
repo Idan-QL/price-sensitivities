@@ -1,7 +1,7 @@
-"""This module contains the AppState class that holds the state of the application."""
+"""This module contains the Singleton AppState class that holds the state of the application."""
 
 from os import path
-from typing import Optional
+from typing import ClassVar, Optional
 
 
 class SingletonMeta(type):
@@ -13,9 +13,9 @@ class SingletonMeta(type):
     If it already exists, the stored instance is returned.
     """
 
-    _instances = {}
+    _instances: ClassVar[dict] = {}
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: list, **kwargs: dict) -> object:
         """This method is called when a class instance is requested.
 
         It checks if the class instance already exists in the dictionary.
@@ -49,9 +49,7 @@ class AppState(metaclass=SingletonMeta):
         self.s3_res_redis_dir = path.join(self.s3_res_dir, "redis_data")
         self.s3_res_bi_ingest_dir = path.join(self.s3_ds_dir, "ingest", "bi_service")
         self.s3_res_attrs_dir = "spark/output/actions/"
-        self.s3_python_clients_map_dir = path.join(
-            self.s3_sgmkr_dir, "clients_mappings/"
-        )
+        self.s3_python_clients_map_dir = path.join(self.s3_sgmkr_dir, "clients_mappings/")
         self.s3_raw_events_dir = "raw_events/production/product_event/"
         self.analytics_cols = [
             "uid",
@@ -136,6 +134,7 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join(self.s3_sgmkr_dir, "job_artifacts", self.project_name)
 
+    @property
     def s3_monitoring_dir(
         self, client_key: Optional[str] = None, channel: Optional[str] = None
     ) -> str:
@@ -149,9 +148,7 @@ class AppState(metaclass=SingletonMeta):
             (str): The S3 monitoring directory path.
         """
         if client_key is None or channel is None:
-            return path.join(
-                self.s3_sgmkr_dir, "services_monitoring", self.project_name
-            )
+            return path.join(self.s3_sgmkr_dir, "services_monitoring", self.project_name)
         if client_key is not None and channel is not None:
             return path.join(
                 self.s3_sgmkr_dir,
@@ -180,7 +177,9 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join("delivery", self.project_name)
 
-    def s3_datasets_dir(self, client_key: str = None, channel: str = None) -> str:
+    def s3_datasets_dir(
+        self, client_key: Optional[str] = None, channel: Optional[str] = None
+    ) -> str:
         """Property that gets the S3 datasets directory path.
 
         Args:
@@ -192,11 +191,7 @@ class AppState(metaclass=SingletonMeta):
         """
         if not client_key or not channel:
             return str(path.join(self.s3_ds_dir, "datasets"))
-        return str(
-            path.join(
-                self.s3_ds_dir, "datasets", client_key, channel, self.project_name
-            )
-        )
+        return str(path.join(self.s3_ds_dir, "datasets", client_key, channel, self.project_name))
 
 
 app_state = AppState()

@@ -41,7 +41,12 @@ class CliArgsParser:
     """Factory class for argparse.ArgumentParser."""
 
     def __init__(self, kv: dict[str, dict], parser_name: str = "") -> None:
-        """This function initializes the class."""
+        """Constructor for the CliArgsParser class.
+
+        Args:
+            kv (dict[str, dict]): The key-value pairs of the arguments
+            parser_name (str): The name of the parser. Defaults to "".
+        """
         self.kv = kv
         self.parser_name = parser_name
         self.parser = None
@@ -54,9 +59,7 @@ class CliArgsParser:
         """
         for arg_name, arg_vals in self.kv.items():
             args = [f"--{arg_name}", arg_vals["flag"]]
-            kwargs = {
-                key: arg_vals[key] for key in ["default", "help", "type", "required"]
-            }
+            kwargs = {key: arg_vals[key] for key in ["default", "help", "type", "required"]}
             self.parser.add_argument(*args, **kwargs)
 
     def set_parser(self) -> None:
@@ -88,7 +91,14 @@ class Parser(CliArgsParser):
         parser_name: str = "",
         cli_args_conf_path: str = "run_files",
     ) -> None:
-        """This function initializes the class."""
+        """Constructor for the Parser class.
+
+        Args:
+            kv (dict[str, dict]): The key-value pairs of the arguments
+            parser_name (str): The name of the parser. Defaults to "".
+            cli_args_conf_path (str, default "run_files"): The path to the CLI arguments
+                configuration file.
+        """
         super().__init__(kv, parser_name)
         # Notice that for Sagemaker, the cli args are given as a json file
         self.cli_args_conf_path = cli_args_conf_path
@@ -98,11 +108,11 @@ class Parser(CliArgsParser):
         """This function gets the arguments dictionary."""
         return self.args_dict
 
-    def set_args_dict(self, args_dict: dict = None) -> None:
+    def set_args_dict(self, args_dict: Optional[dict] = None) -> None:
         """This function sets the arguments dictionary.
 
         Args:
-            args_dict (dict): The arguments' dictionary. Defaults to None.
+            args_dict (Optional[dict]): The arguments' dictionary. Defaults to None.
 
         Returns:
             None
@@ -116,20 +126,14 @@ class Parser(CliArgsParser):
             else:
                 # Set reading arguments from an Estimator container
                 if path.exists("/opt/ml"):
-                    print(
-                        "Reading arguments from /opt/ml/input/config (inside container)"
-                    )
+                    print("Reading arguments from /opt/ml/input/config (inside container)")
                     # The config folder contains the "cli args" in json format
                     self.cli_args_conf_path = "/opt/ml/input/config"
                 # Allow reading arguments from an Estimator container in 'local' mode
                 elif path.exists(self.cli_args_conf_path):
-                    print(
-                        f"Reading arguments from {self.cli_args_conf_path} (on local machine)"
-                    )
+                    print(f"Reading arguments from {self.cli_args_conf_path} (on local machine)")
                 try:
-                    with open(
-                        path.join(self.cli_args_conf_path, "hyperparameters.json")
-                    ) as f:
+                    with open(path.join(self.cli_args_conf_path, "hyperparameters.json")) as f:
                         self.args_dict = json.load(f)
                 except FileNotFoundError as err:
                     logging.error("Error caught: %s", err)
@@ -168,9 +172,7 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = int(self.args_dict[key])
             except ValueError as err:
-                sys_exit(
-                    f"ValueError caught when trying to set up an int argument: {err}"
-                )
+                sys_exit(f"ValueError caught when trying to set up an int argument: {err}")
 
     def set_float_arg(self, key: str) -> None:
         """This function sets up a float argument.
@@ -185,9 +187,7 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = float(self.args_dict[key])
             except ValueError as err:
-                sys_exit(
-                    f"ValueError caught when trying to set up an float argument: {err}"
-                )
+                sys_exit(f"ValueError caught when trying to set up an float argument: {err}")
 
     def validate_args(self) -> None:
         """This function validates the arguments given in the hyperparameters.json file.

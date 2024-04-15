@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import datetime
-from os import path
+from os import makedirs, path
 from typing import Optional
 
 from ql_toolkit.attrs import action_list as al
@@ -79,7 +79,6 @@ def write_actions_list(
     if filename_prefix is None:
         filename_prefix = f"{app_state.project_name}_actions"
     logging.info("Writing %s actions to file...", len(actions_list))
-    monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
 
     for i in range(0, len(actions_list), chunk_size):
         chunk = actions_list[i : i + chunk_size]
@@ -87,7 +86,10 @@ def write_actions_list(
         file_name = f"{filename_prefix}_{client_key}_{channel}_{i}_{datetime.now().isoformat()}.txt"
         if is_local:
             logging.info("[- attrs -] Writing files to local folder...")
-            with open(path.join("../artifacts/actions/", file_name), "w") as file:
+            directory = "../artifacts/actions/"
+            if not path.exists(directory):
+                makedirs(directory)
+            with open(path.join(directory, file_name), "w") as file:
                 file.write(actions_str)
         else:
             s3_attrs_dir = (
@@ -98,5 +100,6 @@ def write_actions_list(
             logging.info("[- attrs -] Writing files to S3: %s", s3_attrs_dir)
             s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)
             if not qa_run and not is_local:
+                monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
                 file_name = "_".join(file_name.split("_")[:-1]) + ".txt"
                 s3io.upload_to_s3(s3_dir=monitor_run_dir, file_name=file_name, file_obj=actions_str)

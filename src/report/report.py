@@ -1,6 +1,7 @@
 """Module of report."""
 
 import logging
+import traceback
 from typing import List
 
 import pandas as pd
@@ -40,13 +41,13 @@ def get_last_month_results(client_key: str,
             file_name=f"elasticity_{client_key}_{channel}_{last_month_end_date}.csv",
             s3_dir="data_science/eval_results/elasticity/",
         )
-    except FileNotFoundError:
+    except Exception as e:
+        logging.error(traceback.format_exc())
         logging.error("No results found for last month %s - %s - %s",
                       client_key,
                       channel,
                       last_month_end_date)
-        return None
-
+        df_results_last_month = pd.DataFrame()
     return df_results_last_month
 
 
@@ -78,10 +79,9 @@ def add_run(data_report: List,
     best_model_counts = df_results_quality['best_model'].value_counts()
 
     model_changes = None
-    if get_last_month_results(client_key, channel, end_date) is not None:
-        model_changes = compare_model(df_results, get_last_month_results(client_key=client_key,
-                                                                         channel=channel,
-                                                                         end_date=end_date))
+    df_lastmonth = get_last_month_results(client_key, channel, end_date)
+    if not df_lastmonth.empty:
+        model_changes = compare_model(df_results, df_lastmonth)
 
     data_report.append({
         "client_key": client_key,

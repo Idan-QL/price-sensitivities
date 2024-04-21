@@ -206,7 +206,11 @@ def read_data(
 
 
 def process_data(df_full: pd.DataFrame) -> pd.DataFrame:
-    """Calculate additional columns based on the read monthly data."""
+    """Calculate additional columns based on the read monthly data.
+    if conversion price is available, use conversion price,
+    else if view price is avaialable, use views price
+    else use price recommendations
+    return price round"""
     df_full["price_merged"] = np.where(
         ~df_full.conversions_most_common_shelf_price.isna(),
         df_full.conversions_most_common_shelf_price,

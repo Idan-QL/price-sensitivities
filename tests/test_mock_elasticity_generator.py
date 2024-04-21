@@ -1,26 +1,28 @@
 """Test module of mock_elasticity_generator.generate_mock_elasticity_data()."""
 
-import unittest
+from datetime import datetime
+import pandas as pd
 from sys import path as sys_path
 
-import pandas as pd
+import pytest
 
 sys_path.append("../src")
 from elasticity.utils.mock_elasticity_generator import MockElasticityGenerator
 
+@pytest.fixture
+def mock_elasticity_generator():
+    return MockElasticityGenerator()
 
-class TestMockElasticityGenerator(unittest.TestCase):
-    """Test case class for testing the generate_mock_elasticity_data function."""
+def test_generate_nonlinear_elasticity(mock_elasticity_generator):
+    """Test the generate_nonlinear_elasticity function to ensure it returns a DataFrame."""
 
-    def test_generate_mock_elasticity_data(self) -> None:
-        """Test the generate_mock_elasticity_data function to ensure it returns a DataFrame."""
-        mock_elasticity_generator = MockElasticityGenerator()
-        mock_data = mock_elasticity_generator.generate_mock_elasticity_data()
-        self.assertIsInstance(mock_data, pd.DataFrame)
+    mock_data = mock_elasticity_generator.generate_nonlinear_elasticity()
 
-        # Additional checks if needed
-        # For example, you can check if the DataFrame has the expected columns, etc.
-        # self.assertIn('column_name', mock_data.columns)
+    assert isinstance(mock_data, pd.DataFrame)
+    # Check the length of the DataFrame
+    assert len(mock_data) == 92 
+    # Check if the DataFrame has the expected columns
+    assert set(mock_data.columns) == {"date", "price", "uid", "units"} 
 
 if __name__ == '__main__':
-    unittest.main()
+    pytest.main()

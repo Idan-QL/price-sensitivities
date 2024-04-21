@@ -26,7 +26,7 @@ def read_and_preprocess(
     dir_: str = "data_science/datasets",
     price_changes: int = 5,
     threshold: float = 0.01,
-    min_days_with_conversions: int = 15,
+    min_days_with_conversions: int = 10,
     uid_col: str = "uid",
     price_col: str = "round_price",
     quantity_col: str = "units",

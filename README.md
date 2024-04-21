@@ -42,6 +42,7 @@ data_science/eval_results/elasticity/ as elasticity_report_{end_date}.csv.
 - report/: Module for generating reports and logging errors.
 - elasticity/: Contains modules for elasticity analysis and model execution.
 - ql_toolkit/: Toolkit for various utility functions and interactions with the environment.
+- notebooks/: Notebooks. Step by step in elasticity_run.ipynb
 - requirements.txt: Specifies project dependencies.
 
 ## Usage

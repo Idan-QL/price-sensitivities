@@ -18,3 +18,5 @@ tests/logs
 **.csv
 dist/
 test_job.ipynb
+test_job_eu.ipynb
+test_job_us.ipynb

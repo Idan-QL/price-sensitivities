@@ -33,7 +33,7 @@ def run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity = estimate_coefficients(
+        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation = estimate_coefficients(
             data,
             model_type,
             price_col=price_col,
@@ -51,6 +51,7 @@ def run_model_type(
         results[model_type + "_pvalue"] = pvalue
         results[model_type + "_r2"] = r_squared
         results[model_type + "_elasticity"] = elasticity
+        results[model_type + "_elasticity_error_propagation"] = elasticity_error_propagation
     except Exception as e:
         logging.info("Error in run_model_type: %s", e)
         # Set all the results to np.nan
@@ -64,6 +65,7 @@ def run_model_type(
         results[model_type + "_pvalue"] = np.nan
         results[model_type + "_r2"] = np.nan
         results[model_type + "_elasticity"] = np.nan
+        results[model_type + "_elasticity_error_propagation"] = np.nan
     return results, median_quantity, median_price
 
 
@@ -99,6 +101,7 @@ def run_experiment(
         results["best_model_r2"] = np.nan
         results["best_mean_relative_error"] = np.nan
         results["best_model_elasticity"] = np.nan
+        results["best_model_elasticity_error_propagation"] = np.nan
         results["median_quantity"] = np.nan
         results["median_price"] = np.nan
     else:
@@ -111,6 +114,7 @@ def run_experiment(
             best_model + "_mean_relative_error"
         ]
         results["best_model_elasticity"] = results[best_model + "_elasticity"]
+        results["best_model_elasticity_error_propagation"] = results[best_model + "_elasticity_error_propagation"]
         results["median_quantity"] = median_quantity
         results["median_price"] = median_price
         results["quality_test"] = np.where(
@@ -166,6 +170,7 @@ def run_experiment_for_uid(
             "linear_pvalue",
             "linear_r2",
             "linear_elasticity",
+            "linear_elasticity_error_propagation",
             "power_mean_relative_error",
             "power_mean_a",
             "power_mean_b",
@@ -176,6 +181,7 @@ def run_experiment_for_uid(
             "power_pvalue",
             "power_r2",
             "power_elasticity",
+            "power_elasticity_error_propagation",
             "exponential_mean_relative_error",
             "exponential_mean_a",
             "exponential_mean_b",
@@ -186,12 +192,14 @@ def run_experiment_for_uid(
             "exponential_pvalue",
             "exponential_r2",
             "exponential_elasticity",
+            "exponential_elasticity_error_propagation",
             "best_model",
             "best_model_a",
             "best_model_b",
             "best_model_r2",
             "best_mean_relative_error",
             "best_model_elasticity",
+            "best_model_elasticity_error_propagation",
             "median_quantity",
             "median_price",
             "quality_test",

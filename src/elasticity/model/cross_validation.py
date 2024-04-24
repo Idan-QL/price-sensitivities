@@ -28,7 +28,7 @@ def cross_validation(
         data_train, data_test = train_test_split(
             data, test_size=test_size, random_state=42 + i
         )
-        a, b, _, r_squared, elasticity = estimate_coefficients(
+        a, b, _, r_squared, elasticity, _ = estimate_coefficients(
             data_train,
             model_type,
             price_col=price_col,

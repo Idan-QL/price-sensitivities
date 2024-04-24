@@ -16,7 +16,7 @@ def test_estimate_coefficients_linear(sample_data: pd.DataFrame) -> None:
     Expected result is a tuple of 5 floats.
     a, b, pvalue, r_squared, elasticity"""
     model_type = "linear"
-    expected_result = (120.0, -2.0, 0.0, 1.0, -1.0)
+    expected_result = (120.0, -2.0, 0.0, 1.0, -1.0, 0.0)
     result = estimate_coefficients(sample_data, model_type)
     rounded_result = round_tuple_values(result)
     print("linear", rounded_result)
@@ -27,7 +27,7 @@ def test_estimate_coefficients_power(sample_data: pd.DataFrame) -> None:
     Expected result is a tuple of 5 floats.
     a, b, pvalue, r_squared, elasticity"""
     model_type = "power"
-    expected_result = (7.7, -1.1, 0.0, 0.8, -1.1)
+    expected_result = (7.7, -1.1, 0.0, 0.8, -1.1, 0.3)
     result = estimate_coefficients(sample_data, model_type)
     rounded_result = round_tuple_values(result)
     print("power", rounded_result)
@@ -38,7 +38,7 @@ def test_estimate_coefficients_exponential(sample_data: pd.DataFrame) -> None:
     Expected result is a tuple of 5 floats.
     a, b, pvalue, r_squared, elasticity"""
     model_type = "exponential"
-    expected_result = (5.3, -0.0, 0.0, 0.9, -1.3)
+    expected_result = (5.3, -0.0, 0.0, 0.9, -1.3, 0.2)
     result = estimate_coefficients(sample_data, model_type)
     rounded_result = round_tuple_values(result)
     print("exponential", rounded_result)

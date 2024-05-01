@@ -37,7 +37,7 @@ def generate_actions_list(
         "qlia_elasticity_calc_date",
     ]
     res_list = [tuple(row) for row in df_actions.to_numpy()]
-    logging.info("len of res_list: %s", len(res_list))
+    logging.info(f"len of res_list: {len(res_list)}")
 
     return create_actions_list(
         res_list=res_list, client_key=client_key, channel=channel, attr_names=attr_names

@@ -56,9 +56,9 @@ def run_model_type(
         results[model_type + "_elasticity_error_propagation"] = (
             elasticity_error_propagation
         )
-        results[model_type + "aic"] = aic
+        results[model_type + "_aic"] = aic
     except Exception as e:
-        logging.info("Error in run_model_type: %s", e)
+        logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
         results[model_type + "_mean_relative_error"] = np.nan
         results[model_type + "_mean_a"] = np.nan
@@ -168,7 +168,7 @@ def run_experiment_for_uid(
             weights_col=weights_col,
         )
     except Exception as e:
-        logging.info("Error for user ID %s: %s", uid, e)
+        logging.info(f"Error for user ID {uid}: {e}")
         columns = [
             "linear_mean_relative_error",
             "linear_mean_a",

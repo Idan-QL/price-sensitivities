@@ -19,10 +19,7 @@ from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
 from report import logging_error, report, write_graphs
 
-# Set up logging
-error_counter = logging_error.ErrorCounter()
 logging.basicConfig(level=logging.INFO)
-logging.getLogger().addHandler(error_counter)
 
 
 def run() -> None:
@@ -33,21 +30,20 @@ def run() -> None:
     """
     # Env Setup
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
-    print(2222, args_dict["config"])
-    logging.info("args_dict: %s", args_dict)
+    logging.info("args_dict: ()", args_dict)
     logging.info("config: %s", config)
     client_keys_map = config["client_keys"]
     # End of setup
-    logging.info("bucket_name: %s", app_state.bucket_name)
-    logging.info("client_keys_map: %s", client_keys_map)
+    logging.info(f"bucket_name: {app_state.bucket_name}")
+    logging.info(f"client_keys_map: {client_keys_map}")
 
     try:
         is_local = args_dict["local"]
         # Check if there is a "qa_run" key in the config
         # and if it is "true" or "True", set qa_run to True
-        is_qa_run = config["qa_run"] if "qa_run" in config.keys() else False
+        is_qa_run = config.get("qa_run", False)
     except KeyError as err:
-        logging.error("KeyError: s", err)
+        logging.error(f"KeyError: {err}")
         sys_exit("Exiting!")
 
     if is_local:
@@ -61,8 +57,10 @@ def run() -> None:
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
         for channel in channels_list:
+            error_counter = logging_error.ErrorCounter()
+            logging.getLogger().addHandler(error_counter)
             try:
-                logging.info("Processing %s - %s", client_key, channel)
+                logging.info(f"Processing {client_key} - {channel}")
                 start_time = datetime.now()
 
                 (
@@ -80,9 +78,9 @@ def run() -> None:
                     min_days_with_conversions=10,
                 )
 
-                logging.info("End date: %s", end_date)
-                logging.info("Total number of uid: %s", total_end_date_uid)
-                logging.info("total_revenue: %s", total_revenue)
+                logging.info(f"End date: {end_date}")
+                logging.info(f"Total number of uid: {total_end_date_uid}")
+                logging.info(f"total_revenue: {total_revenue}")
 
                 df_results = run_experiment_for_uids_parallel(
                     df_by_price,
@@ -94,9 +92,7 @@ def run() -> None:
                 df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
                 logging.info(
-                    "elasticity quality test: %s",
-                    df_results.quality_test.value_counts(),
-                )
+                    f"elasticity quality test: {df_results.quality_test.value_counts()}")
 
                 s3io.write_dataframe_to_s3(
                     file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
@@ -149,10 +145,10 @@ def run() -> None:
                     s3_dir="data_science/eval_results/elasticity/graphs/",
                 )
 
-                logging.info("Finished processing %s - %s", client_key, channel)
+                logging.info(f"Finished processing {client_key} - {channel}")
 
             except Exception as e:
-                logging.error("Error processing %s - %s: %s", client_key, channel, e)
+                logging.error(f"Error processing {client_key} - {client_key}: {e}")
                 data_report = report.add_error_run(
                     data_report=data_report,
                     client_key=client_key,

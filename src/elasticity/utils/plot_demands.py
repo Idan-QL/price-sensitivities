@@ -209,10 +209,12 @@ def plot_model_type(
     a_linear: float,
     b_linear: float,
     model_type: str,
-    prices: np.ndarray = np.linspace(50, 100, 100),
+    prices: np.ndarray| None = None,
     title: str = "",
 ) -> None:
     """plot_demand_curves."""
+    if prices is None:
+        prices = np.ndarray = np.linspace(50, 100, 100)
     if model_type == "power":
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Power Demand Curve"
@@ -242,9 +244,11 @@ def plot_demand_curves(
     b_exponential: float = -0.03,
     a_power: float = 1000000,
     b_power: float = -3,
-    prices: np.ndarray = np.linspace(50, 100, 100),
+    prices: np.ndarray| None = None,
 ) -> None:
     """plot_demand_curves."""
+    if prices is None:
+        prices = np.ndarray = np.linspace(50, 100, 100)
     # Calculate quantity demanded for each price
     quantities_linear = linear_demand_equation(prices, a_linear, b_linear)
     quantities_exponential = exponential_demand_equation(

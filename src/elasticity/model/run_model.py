@@ -33,12 +33,14 @@ def run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic = estimate_coefficients(
-            data,
-            model_type,
-            price_col=price_col,
-            quantity_col=quantity_col,
-            weights_col=weights_col,
+        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic = (
+            estimate_coefficients(
+                data,
+                model_type,
+                price_col=price_col,
+                quantity_col=quantity_col,
+                weights_col=weights_col,
+            )
         )
         # Store the results in a dictionary
         results[model_type + "_mean_relative_error"] = cv_mean_relative_error
@@ -51,7 +53,9 @@ def run_model_type(
         results[model_type + "_pvalue"] = pvalue
         results[model_type + "_r2"] = r_squared
         results[model_type + "_elasticity"] = elasticity
-        results[model_type + "_elasticity_error_propagation"] = elasticity_error_propagation
+        results[model_type + "_elasticity_error_propagation"] = (
+            elasticity_error_propagation
+        )
         results[model_type + "aic"] = aic
     except Exception as e:
         logging.info("Error in run_model_type: %s", e)
@@ -117,7 +121,9 @@ def run_experiment(
             best_model + "_mean_relative_error"
         ]
         results["best_model_elasticity"] = results[best_model + "_elasticity"]
-        results["best_model_elasticity_error_propagation"] = results[best_model + "_elasticity_error_propagation"]
+        results["best_model_elasticity_error_propagation"] = results[
+            best_model + "_elasticity_error_propagation"
+        ]
         results["best_model_aic"] = results[best_model + "_aic"]
         results["median_quantity"] = median_quantity
         results["median_price"] = median_price

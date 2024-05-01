@@ -14,7 +14,6 @@ import yaml
 from botocore.exceptions import ClientError
 from joblib import dump
 from pyarrow.lib import ArrowInvalid
-
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3.ls import is_file_exists
 from ql_toolkit.s3.utils import get_s3_client, get_s3_resource
@@ -98,12 +97,16 @@ def get_s3_file_contents(
                 buffer.seek(0)
                 return buffer.read().decode("utf-8")
             except UnicodeDecodeError as err:
-                logging.warning("[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err)
+                logging.warning(
+                    "[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err
+                )
                 # Return as binary if UTF-8 decoding fails
                 buffer.seek(0)
         return buffer
     except ClientError as err:
-        logging.warning("[- S3 I/O -] Error caught while downloading %s: %s", file_name, err)
+        logging.warning(
+            "[- S3 I/O -] Error caught while downloading %s: %s", file_name, err
+        )
         return None
 
 
@@ -230,7 +233,9 @@ def maybe_get_txt_file(
 
     if file_content and isinstance(file_content, str):
         return file_content
-    logging.error("[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name)
+    logging.error(
+        "[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name
+    )
 
     return ""
 
@@ -320,7 +325,9 @@ def maybe_get_pd_parquet_file(
     if validate_datetime_index and not isinstance(s3_data_df.index, pd.DatetimeIndex):
         if "date" in s3_data_df.columns:
             try:
-                s3_data_df = s3_data_df.set_index(pd.to_datetime(s3_data_df["date"]), drop=True)
+                s3_data_df = s3_data_df.set_index(
+                    pd.to_datetime(s3_data_df["date"]), drop=True
+                )
             except Exception as err:
                 logging.warning(
                     "[- S3 I/O -] Failed to convert 'date' column to "
@@ -369,7 +376,9 @@ def write_dataframe_to_s3(
         return
 
     # Backup existing file
-    if rename_old and is_file_exists(s3_dir=s3_dir, file_name=file_name, s3_client=s3_client):
+    if rename_old and is_file_exists(
+        s3_dir=s3_dir, file_name=file_name, s3_client=s3_client
+    ):
         _create_backup(
             backup_path=backup_path,
             bucket_name=bucket_name,
@@ -396,7 +405,9 @@ def write_dataframe_to_s3(
     except ArrowInvalid as err:
         logging.error("[- S3 I/O -] ArrowInvalid error caught: %s", err)
     except Exception as err:  # Catch more general exception for robustness
-        logging.error("[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err)
+        logging.error(
+            "[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err
+        )
         return
 
 
@@ -411,7 +422,9 @@ def validate_request(xdf: pl.DataFrame | pd.DataFrame, file_name: str) -> bool:
         bool: True if the DataFrame and file name are valid, False otherwise.
     """
     if check_df_is_empty(xdf):
-        logging.warning("[- S3 I/O -] Provided DataFrame is empty. Aborting write operation.")
+        logging.warning(
+            "[- S3 I/O -] Provided DataFrame is empty. Aborting write operation."
+        )
         return False
 
     if not file_name.endswith((".parquet", ".csv")):
@@ -566,7 +579,9 @@ def upload_to_s3(
                 ExtraArgs=extra_args,
             )
 
-        logging.info("[- S3 I/O -] Object uploaded to: s3://%s/%s", bucket_name, file_path)
+        logging.info(
+            "[- S3 I/O -] Object uploaded to: s3://%s/%s", bucket_name, file_path
+        )
         return True
     except Exception as err:
         logging.error("[- S3 I/O -] Error occurred while uploading to S3: %s", err)

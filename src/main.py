@@ -24,6 +24,7 @@ error_counter = logging_error.ErrorCounter()
 logging.basicConfig(level=logging.INFO)
 logging.getLogger().addHandler(error_counter)
 
+
 def run() -> None:
     """This function is the entry point for the elasticity job.
 
@@ -32,7 +33,7 @@ def run() -> None:
     """
     # Env Setup
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
-    print(2222, args_dict['config'])
+    print(2222, args_dict["config"])
     logging.info("args_dict: %s", args_dict)
     logging.info("config: %s", config)
     client_keys_map = config["client_keys"]
@@ -64,8 +65,14 @@ def run() -> None:
                 logging.info("Processing %s - %s", client_key, channel)
                 start_time = datetime.now()
 
-                (df_by_price, _, total_end_date_uid,
-                end_date, df_revenue_uid, total_revenue) = preprocessing.read_and_preprocess(
+                (
+                    df_by_price,
+                    _,
+                    total_end_date_uid,
+                    end_date,
+                    df_revenue_uid,
+                    total_revenue,
+                ) = preprocessing.read_and_preprocess(
                     client_key=client_key,
                     channel=channel,
                     price_changes=5,
@@ -84,7 +91,7 @@ def run() -> None:
                     weights_col="days",
                 )
 
-                df_results = df_results.merge(df_revenue_uid, on='uid', how='left')
+                df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
                 logging.info(
                     "elasticity quality test: %s",
@@ -103,11 +110,9 @@ def run() -> None:
                 #                                      channel,
                 #                                      end_date)
 
-                plot_demands.run_save_graph_top10(df_results,
-                                                  df_by_price,
-                                                  client_key,
-                                                  channel,
-                                                  end_date)
+                plot_demands.run_save_graph_top10(
+                    df_results, df_by_price, client_key, channel, end_date
+                )
 
                 actions_list = generate_actions_list(df_results, client_key, channel)
 
@@ -123,31 +128,37 @@ def run() -> None:
 
                 runtime = (datetime.now() - start_time).total_seconds() / 60
 
-                data_report = report.add_run(data_report=data_report,
-                                             client_key=client_key,
-                                             channel=channel,
-                                             total_uid=total_end_date_uid,
-                                             df_results=df_results,
-                                             total_revenue=total_revenue,
-                                             runtime=runtime,
-                                             error_counter=error_counter.error_count,
-                                             end_date=end_date)
+                data_report = report.add_run(
+                    data_report=data_report,
+                    client_key=client_key,
+                    channel=channel,
+                    total_uid=total_end_date_uid,
+                    df_results=df_results,
+                    total_revenue=total_revenue,
+                    runtime=runtime,
+                    error_counter=error_counter.error_count,
+                    end_date=end_date,
+                )
 
-                write_graphs.save_distribution_graph(client_key=client_key,
-                                channel=channel,
-                                total_uid=total_end_date_uid,
-                                df_report=pd.DataFrame([data_report[-1]]),
-                                end_date=end_date,
-                                s3_dir="data_science/eval_results/elasticity/graphs/")
+                write_graphs.save_distribution_graph(
+                    client_key=client_key,
+                    channel=channel,
+                    total_uid=total_end_date_uid,
+                    df_report=pd.DataFrame([data_report[-1]]),
+                    end_date=end_date,
+                    s3_dir="data_science/eval_results/elasticity/graphs/",
+                )
 
                 logging.info("Finished processing %s - %s", client_key, channel)
 
             except Exception as e:
                 logging.error("Error processing %s - %s: %s", client_key, channel, e)
-                data_report = report.add_error_run(data_report=data_report,
-                                                   client_key=client_key,
-                                                   channel=channel,
-                                                   error_counter=error_counter.error_count)
+                data_report = report.add_error_run(
+                    data_report=data_report,
+                    client_key=client_key,
+                    channel=channel,
+                    error_counter=error_counter.error_count,
+                )
 
     report_df = pd.DataFrame(data_report)
 
@@ -156,7 +167,6 @@ def run() -> None:
         xdf=report_df,
         s3_dir="data_science/eval_results/elasticity/",
     )
-
 
 
 if __name__ == "__main__":

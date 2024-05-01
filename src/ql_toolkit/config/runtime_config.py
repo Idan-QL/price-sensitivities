@@ -49,7 +49,9 @@ class AppState(metaclass=SingletonMeta):
         self.s3_res_redis_dir = path.join(self.s3_res_dir, "redis_data")
         self.s3_res_bi_ingest_dir = path.join(self.s3_ds_dir, "ingest", "bi_service")
         self.s3_res_attrs_dir = "spark/output/actions/"
-        self.s3_python_clients_map_dir = path.join(self.s3_sgmkr_dir, "clients_mappings/")
+        self.s3_python_clients_map_dir = path.join(
+            self.s3_sgmkr_dir, "clients_mappings/"
+        )
         self.s3_raw_events_dir = "raw_events/production/product_event/"
         self.analytics_cols = [
             "uid",
@@ -148,7 +150,9 @@ class AppState(metaclass=SingletonMeta):
             (str): The S3 monitoring directory path.
         """
         if client_key is None or channel is None:
-            return path.join(self.s3_sgmkr_dir, "services_monitoring", self.project_name)
+            return path.join(
+                self.s3_sgmkr_dir, "services_monitoring", self.project_name
+            )
         if client_key is not None and channel is not None:
             return path.join(
                 self.s3_sgmkr_dir,
@@ -191,7 +195,11 @@ class AppState(metaclass=SingletonMeta):
         """
         if not client_key or not channel:
             return str(path.join(self.s3_ds_dir, "datasets"))
-        return str(path.join(self.s3_ds_dir, "datasets", client_key, channel, self.project_name))
+        return str(
+            path.join(
+                self.s3_ds_dir, "datasets", client_key, channel, self.project_name
+            )
+        )
 
 
 app_state = AppState()

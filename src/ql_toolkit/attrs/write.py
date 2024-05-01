@@ -38,7 +38,9 @@ def write_attributes(
     actions_list = al.create_actions_list(
         res_list=res_list, client_key=client_key, channel=channel, attr_names=attr_names
     )
-    logging.info("[- attrs -] Attributes created as an actions list. Writing to file...")
+    logging.info(
+        "[- attrs -] Attributes created as an actions list. Writing to file..."
+    )
     write_actions_list(
         actions_list=actions_list,
         client_key=client_key,
@@ -98,8 +100,14 @@ def write_actions_list(
                 else app_state.res_attrs_dir
             )
             logging.info("[- attrs -] Writing files to S3: %s", s3_attrs_dir)
-            s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)
+            s3io.upload_to_s3(
+                s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str
+            )
             if not qa_run and not is_local:
-                monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
+                monitor_run_dir = app_state.s3_monitoring_dir(
+                    client_key=client_key, channel=channel
+                )
                 file_name = "_".join(file_name.split("_")[:-1]) + ".txt"
-                s3io.upload_to_s3(s3_dir=monitor_run_dir, file_name=file_name, file_obj=actions_str)
+                s3io.upload_to_s3(
+                    s3_dir=monitor_run_dir, file_name=file_name, file_obj=actions_str
+                )

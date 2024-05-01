@@ -24,7 +24,9 @@ common_kwargs = [
 ]
 
 
-def validate_inputs(ptype: str, df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str) -> None:
+def validate_inputs(
+    ptype: str, df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str
+) -> None:
     """Validate the inputs for the plot.
 
     Args:
@@ -61,7 +63,9 @@ def convert_df(plot_df: pd.DataFrame | pl.DataFrame | pl.LazyFrame) -> pd.DataFr
     return plot_df
 
 
-def set_defaults(kwargs: dict[str, any], df: pd.DataFrame, x_col: str) -> dict[str, any]:
+def set_defaults(
+    kwargs: dict[str, any], df: pd.DataFrame, x_col: str
+) -> dict[str, any]:
     """Set default values for kwargs.
 
     Args:
@@ -96,7 +100,10 @@ def set_defaults(kwargs: dict[str, any], df: pd.DataFrame, x_col: str) -> dict[s
 
 
 def universal_plot_args(
-        ptype: str, pd_df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str, **kwargs: dict
+    ptype: str,
+    pd_df: pd.DataFrame | pl.DataFrame | pl.LazyFrame,
+    x_col: str,
+    **kwargs: dict,
 ) -> dict:
     """Prepare args for various types of plots, simplifying input validation and setting defaults.
 
@@ -241,9 +248,9 @@ def plot_bar(**kwargs: dict) -> None:
     Returns:
         None
     """
-    return sns.barplot(data=kwargs["df"], x=kwargs["x_col"], y=kwargs["y_col"]).set_title(
-        kwargs["title"], fontsize=kwargs["title_font_size"]
-    )
+    return sns.barplot(
+        data=kwargs["df"], x=kwargs["x_col"], y=kwargs["y_col"]
+    ).set_title(kwargs["title"], fontsize=kwargs["title_font_size"])
 
 
 def plot_count(**kwargs: dict) -> None:
@@ -256,13 +263,16 @@ def plot_count(**kwargs: dict) -> None:
     Returns:
         None
     """
-    return sns.countplot(data=kwargs["df"], x=kwargs["x_col"], hue=kwargs["hue"]).set_title(
-        kwargs["title"]
-    )
+    return sns.countplot(
+        data=kwargs["df"], x=kwargs["x_col"], hue=kwargs["hue"]
+    ).set_title(kwargs["title"])
 
 
 def plot(
-    ptype: str, df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str, **kwargs: dict
+    ptype: str,
+    df: pd.DataFrame | pl.DataFrame | pl.LazyFrame,
+    x_col: str,
+    **kwargs: dict,
 ) -> None:
     """Plot method for creating various types of plots.
 
@@ -359,7 +369,9 @@ def plot(
     if kwargs.get("save_fig", False):
         file_name = kwargs.get("file_name")
         if not file_name:
-            raise ValueError("The value of 'file_name' is required when 'save_fig' is True")
+            raise ValueError(
+                "The value of 'file_name' is required when 'save_fig' is True"
+            )
         plt.tight_layout()
         fig_plot.get_figure().savefig(kwargs["file_name"], bbox_inches="tight", dpi=300)
 
@@ -422,10 +434,14 @@ def get_numeric_cols_list(df: pd.DataFrame, drop_cols: Optional[list] = None) ->
     """
     if drop_cols is None:
         drop_cols = []
-    return df.drop(columns=drop_cols).select_dtypes(include=[np.number]).columns.tolist()
+    return (
+        df.drop(columns=drop_cols).select_dtypes(include=[np.number]).columns.tolist()
+    )
 
 
-def get_categorical_cols_list(df: pd.DataFrame, drop_cols: Optional[list] = None) -> list:
+def get_categorical_cols_list(
+    df: pd.DataFrame, drop_cols: Optional[list] = None
+) -> list:
     """Get a list of categorical columns from a DataFrame.
 
     Args:

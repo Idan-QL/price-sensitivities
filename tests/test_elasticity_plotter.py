@@ -1,4 +1,4 @@
-# """Test module of elasticity_plotter."""
+"""Test module of elasticity_plotter."""
 
 # import unittest
 # from sys import path as sys_path

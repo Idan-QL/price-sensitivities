@@ -7,7 +7,6 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from pandas import DataFrame
 
 
 class MockElasticityGenerator:
@@ -28,7 +27,6 @@ class MockElasticityGenerator:
         demand_col: str = "units",
         uid_col: str = "uid",
     ) -> None:
-
         """Initializes the MockElasticityGenerator with default parameters.
 
         Parameters:

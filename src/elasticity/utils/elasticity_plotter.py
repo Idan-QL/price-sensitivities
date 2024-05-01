@@ -59,16 +59,16 @@ class ElasticityPlotter:
         Returns:
         None
         """
-        h = sns.jointplot(data=dfplot, x=self.price_col, y=self.quantity_col, color=color)
+        h = sns.jointplot(
+            data=dfplot, x=self.price_col, y=self.quantity_col, color=color
+        )
         h.refline(x=median_price, y=median_quantity, color="red")
         h.figure.suptitle(title)
         h.figure.tight_layout()
         h.figure.subplots_adjust(top=0.95)  # Reduce plot to make room
         plt.show()
 
-    def plot_curves(
-        self, dfplot: pd.DataFrame, uid: str
-    ) -> None:
+    def plot_curves(self, dfplot: pd.DataFrame, uid: str) -> None:
         """Plot various curves for a specific UID.
 
         Parameters:
@@ -85,7 +85,6 @@ class ElasticityPlotter:
             df_uid[self.median_price_col] = df_uid[self.price_col].median()
         if self.median_quantity_col not in df_uid.columns:
             df_uid[self.median_quantity_col] = df_uid[self.quantity_col].median()
-
 
         median_price_uid = df_uid[self.median_price_col].iloc[0]
         median_quantity_uid = df_uid[self.median_quantity_col].iloc[0]
@@ -115,7 +114,6 @@ class ElasticityPlotter:
 
         df_uid = dfplot[dfplot[self.uid_col] == uid]
         # df_by_day_uid, df_by_price_norm_uid = preprocess_by_day(df_uid)
-
 
         median_price_uid = df_uid[self.median_price_col].iloc[0]
         median_quantity_uid = df_uid[self.median_quantity_col].iloc[0]

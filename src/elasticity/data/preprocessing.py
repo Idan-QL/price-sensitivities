@@ -7,7 +7,6 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-from datetime import datetime, timedelta
 from elasticity.data.utils import (
     preprocess_by_price,
     round_price_effect,
@@ -41,7 +40,9 @@ def read_and_preprocess(
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
     if end_date is None:
-        end_date = (datetime.now() - timedelta(days=2)).replace(day=1) - relativedelta(months=1)
+        end_date = (datetime.now() - timedelta(days=2)).replace(day=1) - relativedelta(
+            months=1
+        )
         end_date = end_date.strftime("%Y-%m-%d")
 
     if start_date is None:
@@ -88,7 +89,7 @@ def progressive_monthly_aggregate(
     bucket: str,
     start_date: str,
     end_date: str,
-    uids_to_filter: Optional[str]  = None,
+    uids_to_filter: Optional[str] = None,
     dir_: str = "data_science/datasets",
     price_changes: int = 4,
     threshold: float = 0.01,
@@ -130,7 +131,9 @@ def progressive_monthly_aggregate(
             df_revenue["revenue"] = df_revenue["price_merged"] * df_revenue["units"]
             total_revenue = df_revenue["revenue"].sum()
             df_revenue_uid = df_revenue.groupby(["uid"])["revenue"].sum().reset_index()
-            df_revenue_uid['revenue_percentage'] = df_revenue_uid["revenue"] / total_revenue
+            df_revenue_uid["revenue_percentage"] = (
+                df_revenue_uid["revenue"] / total_revenue
+            )
 
             total_uid = df_part["uid"].nunique()
             logging.info("Total uid: %s", total_uid)
@@ -173,7 +176,7 @@ def read_data(
     client_key: str,
     channel: str,
     bucket: str,
-    uids_to_filter: Optional[str]  = None,
+    uids_to_filter: Optional[str] = None,
     date: str = "2024-02-01",
     dir_: str = "data_science/datasets",
 ) -> pd.DataFrame:
@@ -189,11 +192,13 @@ def read_data(
         "inventory",
     ]
     try:
-        filters = [('uid', 'in', uids_to_filter)] if uids_to_filter is not None else None
+        filters = (
+            [("uid", "in", uids_to_filter)] if uids_to_filter is not None else None
+        )
         df_read = pd.read_parquet(
             f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/",
             columns=cs,
-            filters=filters
+            filters=filters,
         )
     except Exception:
         logging.error("No data for %s_%s}", (str(year_), str(int(month_))))
@@ -208,10 +213,12 @@ def read_data(
 
 def process_data(df_full: pd.DataFrame) -> pd.DataFrame:
     """Calculate additional columns based on the read monthly data.
+
     if conversion price is available, use conversion price,
     else if view price is avaialable, use views price
     else use price recommendations
-    return price round"""
+    return price round
+    """
     df_full["price_merged"] = np.where(
         ~df_full.conversions_most_common_shelf_price.isna(),
         df_full.conversions_most_common_shelf_price,

@@ -5,7 +5,10 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from elasticity.model.utils import calculate_elasticity_from_parameters, calculate_elasticity_error_propagation
+from elasticity.model.utils import (
+    calculate_elasticity_error_propagation,
+    calculate_elasticity_from_parameters,
+)
 
 
 def estimate_coefficients(
@@ -32,11 +35,8 @@ def estimate_coefficients(
     cov_matrix = model.cov_params()
     median_price = data[price_col].median()
     elasticity_error_propagation = calculate_elasticity_error_propagation(
-        model_type,
-        model.params.iloc[0],
-        model.params.iloc[1],
-        cov_matrix,
-        median_price)
+        model_type, model.params.iloc[0], model.params.iloc[1], cov_matrix, median_price
+    )
     a, b = model.params.iloc[0], model.params.iloc[1]
     aic = model.aic
     # print(model.summary())

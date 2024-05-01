@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from ql_toolkit.s3 import io as s3io
+from elasticity.model.model import estimate_coefficients
 
 
 def linear_demand_equation(price: float, a: float, b: float) -> float:
@@ -22,6 +23,120 @@ def power_demand_equation(price: float, a: float, b: float) -> float:
     """Power demand model: Q = a * P^(-b)."""
     return a * (price ** (b))
 
+
+
+def generate_data(price_points: int = 5,
+                  start_price: float = 20,
+                  stop_price: float = 50,
+                  model_type: str = "linear",
+                  a: float = 300,
+                  b: float = -2,
+                  error: float = None,
+                  random_state: int = 10) -> pd.DataFrame:
+    """
+    Generate synthetic data for price and quantity
+    based on specified parameters with option to
+    add error relative to the weights.
+
+    Parameters:
+    - price_points (int): Number of price points.
+    - start_price (float): Starting price.
+    - stop_price (float): Ending price.
+    - model_type (str): Type of demand model
+    ("linear", "power", or "exponential").
+    - a (float): Parameter 'a' for demand model equations.
+    - b (float): Parameter 'b' for demand model equations.
+    - error (float): Standard deviation of the error
+    term to be added to quantity.
+    - random_state (int): Random seed for reproducibility.
+
+    Returns:
+    - DataFrame: Pandas DataFrame containing generated data
+    with columns 'price', 'quantity', and 'days'.
+    """
+    
+    np.random.seed(random_state)
+
+    price_range = np.linspace(start=start_price,
+                              stop=stop_price,
+                              num=price_points)
+
+    # Generate random integers for days following a normal distribution
+    weights = np.random.normal(loc=3,
+                            scale=1,
+                            size=len(price_range)).astype(int)
+
+    if model_type == "linear":
+        quantity = linear_demand_equation(price_range, a, b)
+    elif model_type == "power":
+        quantity = power_demand_equation(price_range, a, b)
+    elif model_type == 'exponential':
+        quantity = exponential_demand_equation(price_range, a, b)
+
+    # add error to quantity relative to the weights
+    if error is not None:
+        max_weight = np.max(weights)
+        scaled_weights = weights / max_weight
+        error_factor = np.random.normal(loc=1, scale=error, size=len(quantity))
+        quantity *= error_factor * scaled_weights
+
+    # Clip quantity to be 0.001 to avoid negative values
+    print('before clip', quantity)
+    quantity = np.clip(quantity, 0.001, None)
+    print('after clip', quantity)
+    return pd.DataFrame({
+        "price": price_range,
+        "quantity": quantity,
+        "days": weights})
+
+def plot_model_and_prices_from_df(df: pd.DataFrame,
+                                  model_type: str='linear',
+                                  title: str='',
+                                  quantity_col='quantity',
+                                  price_col='price',
+                                  days_col='days')-> None:
+    """plot_demand_curves from model result and actual data."""
+    a_linear, b_linear, _, _, elasticity, elasticity_error_propagation = estimate_coefficients(
+        data=df,
+        model_type=model_type,
+        price_col=price_col,
+        quantity_col=quantity_col,
+        weights_col=days_col)
+    
+    prices = df[price_col]
+
+
+    if model_type == "power":
+        quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Power Demand Curve'
+    elif model_type == "exponential":
+        quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
+        label = 'Exponential Demand Curve'
+    elif model_type == "linear":
+        quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
+        label = 'Linear Demand Curve'
+    else:
+        print('typo in model type, power, exponential or linear')
+
+    plt.plot(quantities, prices, color="blue", label='Quicklizard Model')
+    plt.scatter(
+        df[quantity_col],
+        df[price_col],
+        s=df[days_col]*10,
+        marker='+',
+        color="red",
+        label=('Actual Data (Avg units sold, size is prop. to '
+               'the nb. of days at this price'))
+
+    plt.xlabel("Quantity")
+    plt.ylabel("Price")
+    plt.title(title + label + "= elasticity: " + str(elasticity) + " +/- " + str(round(elasticity_error_propagation,2)))
+    plt.grid(True)
+        # Place legend outside the plot at the bottom
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
+
+    plt.show()
+
 def plot_model_and_prices(df_results: pd.DataFrame,
                           df_data: pd.DataFrame,
                           uid: str,
@@ -34,6 +149,8 @@ def plot_model_and_prices(df_results: pd.DataFrame,
     a_linear=df_results_uid['best_model_a'].iloc[0]
     b_linear=df_results_uid['best_model_b'].iloc[0]
     model_type=df_results_uid['best_model'].iloc[0]
+    elasticity=df_results_uid['best_model_elasticity'].iloc[0]
+    error=df_results_uid['best_model_elasticity_error_propagation'].iloc[0]
     prices = np.linspace(df_uid[price_col].min(), df_uid[price_col].max(), 100)
 
 
@@ -61,7 +178,7 @@ def plot_model_and_prices(df_results: pd.DataFrame,
 
     plt.xlabel("Quantity")
     plt.ylabel("Price")
-    plt.title(title + label)
+    plt.title(title + label + "= elasticity: " + str(elasticity) + " +/- " + str(round(error,2)))
     plt.grid(True)
         # Place legend outside the plot at the bottom
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
@@ -156,6 +273,8 @@ def plot_model_and_prices_buffer(df_results: pd.DataFrame,
     a_linear=df_results_uid['best_model_a'].iloc[0]
     b_linear=df_results_uid['best_model_b'].iloc[0]
     model_type=df_results_uid['best_model'].iloc[0]
+    elasticity=df_results_uid['best_model_elasticity'].iloc[0]
+    error=df_results_uid['best_model_elasticity_error_propagation'].iloc[0]
     prices = np.linspace(df_uid['round_price'].min(), df_uid['round_price'].max(), 100)
 
     fig, ax = plt.subplots()
@@ -191,7 +310,7 @@ def plot_model_and_prices_buffer(df_results: pd.DataFrame,
 
     plt.xlabel("Quantity")
     plt.ylabel("Price")
-    plt.title(title + label)
+    plt.title(title + label + "= elasticity: " + str(elasticity) + " +/- " + str(round(error,2)))
     plt.grid(True)
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
 

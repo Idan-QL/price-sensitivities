@@ -1,12 +1,13 @@
 """Module of preprocessing."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+from datetime import datetime, timedelta
 from elasticity.data.utils import (
     preprocess_by_price,
     round_price_effect,
@@ -40,7 +41,7 @@ def read_and_preprocess(
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
     if end_date is None:
-        end_date = datetime.now().replace(day=1) - relativedelta(months=1)
+        end_date = (datetime.now() - timedelta(days=2)).replace(day=1) - relativedelta(months=1)
         end_date = end_date.strftime("%Y-%m-%d")
 
     if start_date is None:

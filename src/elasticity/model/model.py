@@ -38,5 +38,7 @@ def estimate_coefficients(
         cov_matrix,
         median_price)
     a, b = model.params.iloc[0], model.params.iloc[1]
+    aic = model.aic
+    # print(model.summary())
     elasticity = calculate_elasticity_from_parameters(model_type, a, b, median_price)
-    return a, b, pvalue, r_squared, elasticity, elasticity_error_propagation
+    return a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic

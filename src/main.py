@@ -32,6 +32,7 @@ def run() -> None:
     """
     # Env Setup
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
+    print(2222, args_dict['config'])
     logging.info("args_dict: %s", args_dict)
     logging.info("config: %s", config)
     client_keys_map = config["client_keys"]
@@ -151,7 +152,7 @@ def run() -> None:
     report_df = pd.DataFrame(data_report)
 
     s3io.write_dataframe_to_s3(
-        file_name=f"elasticity_report_{end_date}.csv",
+        file_name=f"elasticity_report_{args_dict['config']}_{end_date}.csv",
         xdf=report_df,
         s3_dir="data_science/eval_results/elasticity/",
     )

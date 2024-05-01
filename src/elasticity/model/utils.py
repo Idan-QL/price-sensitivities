@@ -86,7 +86,7 @@ def calculate_elasticity_error_propagation(model_type: str,
     if model_type == "linear":
         return elasticity_error_propagation_linear(a, b, cov_matrix, p)
     elif model_type == "exponential":
-        return elasticity_error_propagation_exponential(cov_matrix, b)
+        return elasticity_error_propagation_exponential(cov_matrix, p)
     elif model_type == "power":
         return elasticity_error_propagation_power(cov_matrix)
 
@@ -125,20 +125,20 @@ def elasticity_error_propagation_linear(a: float,
 
 
 def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, 
-                                             b: float) -> float:
+                                             p: float) -> float:
     """
     Calculate the standard errors of the elasticity function for an exponential model.
 
     Parameters:
     - cov_matrix: Covariance matrix of the parameter estimates
-    - b: b coefficient
+    - p: price
 
     Returns:
     - std_errors_elasticity: Standard errors of the elasticity function at price p
     """
 
     b_label = cov_matrix.columns[1]
-    return np.sqrt((b**2) * cov_matrix[b_label][b_label])
+    return np.sqrt((p**2) * cov_matrix[b_label][b_label])
 
 
 def elasticity_error_propagation_power(cov_matrix: np.ndarray) -> float:

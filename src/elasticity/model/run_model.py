@@ -81,6 +81,8 @@ def run_experiment(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    min_r2: float = 0.3,
+    quality_test_factor: float=2.0
 ) -> pd.DataFrame:
     """Run experiment."""
     results = {}
@@ -92,7 +94,9 @@ def run_experiment(
         )
 
         # Check if this model has the lowest mean relative error so far
-        if model_results[model_type + "_mean_relative_error"] < best_error:
+        # if r2>=min_r2
+        if ((model_results[model_type + "_mean_relative_error"] < best_error) &
+            (model_results[model_type + "_r2"] >= min_r2)):
             best_error = model_results[model_type + "_mean_relative_error"]
             best_model = model_type
 
@@ -129,16 +133,16 @@ def run_experiment(
         results["median_price"] = median_price
         results["quality_test"] = np.where(
             (results["median_quantity"] < 20)
-            & (results["best_mean_relative_error"] <= 25),
+            & (results["best_mean_relative_error"] <= 25*quality_test_factor),
             True,
             np.where(
                 (results["median_quantity"] >= 20)
                 & (results["median_quantity"] < 100)
-                & (results["best_mean_relative_error"] <= 20),
+                & (results["best_mean_relative_error"] <= 20*quality_test_factor),
                 True,
                 np.where(
                     (results["median_quantity"] >= 100)
-                    & (results["best_mean_relative_error"] <= 15),
+                    & (results["best_mean_relative_error"] <= 15*quality_test_factor),
                     True,
                     False,
                 ),

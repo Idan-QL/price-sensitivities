@@ -199,7 +199,7 @@ def read_data(
             filters=filters,
         )
     except Exception:
-        logging.error(f"No data for {str(year_)}_{str(int(month_))}")
+        logging.error(f"No data for {year_!s}_{int(month_)!s}")
         logging.info(
             f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/")
         df_read = pd.DataFrame(columns=cs)

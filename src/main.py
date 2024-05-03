@@ -92,7 +92,8 @@ def run() -> None:
                 df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
                 logging.info(
-                    f"elasticity quality test: {df_results.quality_test.value_counts()}")
+                    f"elasticity quality test: {df_results.quality_test.value_counts()}"
+                )
 
                 s3io.write_dataframe_to_s3(
                     file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",

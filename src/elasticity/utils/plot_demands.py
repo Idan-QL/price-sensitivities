@@ -209,7 +209,7 @@ def plot_model_type(
     a_linear: float,
     b_linear: float,
     model_type: str,
-    prices: np.ndarray| None = None,
+    prices: np.ndarray | None = None,
     title: str = "",
 ) -> None:
     """plot_demand_curves."""
@@ -244,7 +244,7 @@ def plot_demand_curves(
     b_exponential: float = -0.03,
     a_power: float = 1000000,
     b_power: float = -3,
-    prices: np.ndarray| None = None,
+    prices: np.ndarray | None = None,
 ) -> None:
     """plot_demand_curves."""
     if prices is None:

@@ -40,7 +40,9 @@ def cross_validation(
             for p in data_test[price_col]
         ]
         absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
-        relative_absolute_error = np.mean(absolute_errors / data_test[quantity_col]) * 100
+        relative_absolute_error = (
+            np.mean(absolute_errors / data_test[quantity_col]) * 100
+        )
         relative_absolute_errors.append(relative_absolute_error)
         a_lists.append(a)
         b_lists.append(b)

@@ -118,7 +118,8 @@ def progressive_monthly_aggregate(
 
         # delete uid where inventory is 0
         logging.info(
-            f'Number of inventory less or equal to 0: {len(df_part[df_part["inventory"] <= 0])}')
+            f'Number of inventory less or equal to 0: {len(df_part[df_part["inventory"] <= 0])}'
+        )
         df_part = df_part[df_part["inventory"] > 0]
         del df_part["inventory"]
         # Process data
@@ -201,7 +202,8 @@ def read_data(
     except Exception:
         logging.error(f"No data for {year_!s}_{int(month_)!s}")
         logging.info(
-            f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/")
+            f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/"
+        )
         df_read = pd.DataFrame(columns=cs)
         pass
     return df_read

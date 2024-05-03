@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 
 import numpy as np
+
 from ql_toolkit.config.runtime_config import app_state
 
 

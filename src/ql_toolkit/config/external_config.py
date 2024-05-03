@@ -5,6 +5,7 @@ from os import path
 from sys import exit as sys_exit
 
 import yaml
+
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3 import io as s3io
 

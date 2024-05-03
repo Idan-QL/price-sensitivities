@@ -7,6 +7,7 @@ import polars as pl
 import pyarrow.parquet as pq
 import s3fs
 from pyarrow import Table
+
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3 import io as s3io
 

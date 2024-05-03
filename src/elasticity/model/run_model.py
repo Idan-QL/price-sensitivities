@@ -5,6 +5,7 @@ import multiprocessing
 
 import numpy as np
 import pandas as pd
+
 from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
 

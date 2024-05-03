@@ -7,6 +7,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
 from elasticity.model.model import estimate_coefficients
 from ql_toolkit.s3 import io as s3io
 

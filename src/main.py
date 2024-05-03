@@ -7,8 +7,9 @@ import logging
 from datetime import datetime
 from sys import exit as sys_exit
 
-import elasticity.utils.plot_demands as plot_demands
 import pandas as pd
+
+import elasticity.utils.plot_demands as plot_demands
 from elasticity.data import preprocessing
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args

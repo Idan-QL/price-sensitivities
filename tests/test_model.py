@@ -7,7 +7,6 @@ import pandas as pd
 sys_path.append("../src")
 
 from elasticity.model.model import estimate_coefficients
-
 from tests.utils import round_tuple_values
 
 

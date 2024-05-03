@@ -6,6 +6,7 @@ from os import path
 import boto3
 from botocore.exceptions import ClientError
 from botocore.paginate import PageIterator
+
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3.utils import get_s3_client
 

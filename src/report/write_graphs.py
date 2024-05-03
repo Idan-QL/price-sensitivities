@@ -4,6 +4,7 @@ from io import BytesIO
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
 from ql_toolkit.s3 import io as s3io
 
 

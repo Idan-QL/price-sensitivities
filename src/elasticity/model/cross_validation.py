@@ -4,9 +4,10 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
+
 from elasticity.model.model import estimate_coefficients
 from elasticity.model.utils import calculate_quantity_from_price
-from sklearn.model_selection import train_test_split
 
 
 def cross_validation(

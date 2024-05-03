@@ -75,3 +75,92 @@ def calculate_elasticity_from_parameters(
     else:
         raise ValueError("Invalid model type. Use 'linear', 'power', or 'exponential'.")
     return round(elasticity, 2)
+
+
+def calculate_elasticity_error_propagation(
+    model_type: str, a: float, b: float, cov_matrix: np.ndarray, p: float
+) -> float:
+    """Calculates the standard error of the elasticity function based on the model type.
+
+    Parameters:
+    - a: Estimated parameter for 'a'
+    - b: Estimated parameter for 'b'
+    - cov_matrix: Covariance matrix of the parameter estimates
+    - p: Price
+
+    Returns:
+        float: The standard error of the elasticity function.
+
+    Raises:
+        ValueError: If an unsupported model type is provided.
+    """
+    if model_type == "linear":
+        return elasticity_error_propagation_linear(a, b, cov_matrix, p)
+    if model_type == "exponential":
+        return elasticity_error_propagation_exponential(cov_matrix, p)
+    if model_type == "power":
+        return elasticity_error_propagation_power(cov_matrix)
+    raise ValueError(f"Unsupported model type: {model_type}")
+
+
+def elasticity_error_propagation_linear(
+    a: float, b: float, cov_matrix: np.ndarray, p: float
+) -> float:
+    """Calculate the errors of the elasticity function for a linear model.
+
+    Parameters:
+    - a: Estimated parameter for 'a'
+    - b: Estimated parameter for 'b'
+    - cov_matrix: Covariance matrix of the parameter estimates
+    - p: Price
+
+    Returns:
+    - float: Standard deviation of elasticity at price p
+    """
+
+    def partial_derivative_a_linear(a: float, b: float, p: float) -> float:
+        return (-b * p) / (a + b * p) ** 2
+
+    def partial_derivative_b_linear(a: float, b: float, p: float) -> float:
+        return (a * p) / (a + b * p) ** 2
+
+    a_label = cov_matrix.columns[0]
+    b_label = cov_matrix.columns[1]
+
+    return np.sqrt(
+        (partial_derivative_a_linear(a, b, p) ** 2 * cov_matrix[a_label][a_label])
+        + (partial_derivative_b_linear(a, b, p) ** 2 * cov_matrix[b_label][b_label])
+        + (
+            2
+            * partial_derivative_a_linear(a, b, p)
+            * partial_derivative_b_linear(a, b, p)
+            * cov_matrix[a_label][b_label]
+        )
+    )
+
+
+def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -> float:
+    """Calculate the standard errors of the elasticity function for an exponential model.
+
+    Parameters:
+    - cov_matrix: Covariance matrix of the parameter estimates
+    - p: price
+
+    Returns:
+    - std_errors_elasticity: Standard errors of the elasticity function at price p
+    """
+    b_label = cov_matrix.columns[1]
+    return np.sqrt((p**2) * cov_matrix[b_label][b_label])
+
+
+def elasticity_error_propagation_power(cov_matrix: np.ndarray) -> float:
+    """Calculate the standard errors of the elasticity function for a power model.
+
+    Parameters:
+    - cov_matrix: Covariance matrix of the parameter estimates
+
+    Returns:
+    - std_errors_elasticity: Standard errors of the elasticity function
+    """
+    b_label = cov_matrix.columns[1]
+    return np.sqrt(cov_matrix[b_label][b_label])

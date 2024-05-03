@@ -68,8 +68,16 @@ extend-ignore = ["ANN101", "G004", "S311"]
 
 [lint.mccabe]
 # Flag errors (`C901`) whenever the complexity level exceeds 5.
-max-complexity = 7
+max-complexity = 8
 
 [lint.pydocstyle]
 convention = "google"
 
+[lint.per-file-ignores]
+"__init__.py" = ["D104"]
+"tests/**/*.py" = [
+    # at least this three should be fine in tests:
+    "S101", # asserts allowed in tests...
+    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant...
+    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+]

@@ -1,7 +1,7 @@
 """Module of preprocessing."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 import numpy as np
@@ -40,7 +40,9 @@ def read_and_preprocess(
     - df_by_day (DataFrame): DataFrame grouped by day.
     """
     if end_date is None:
-        end_date = datetime.now().replace(day=1) - relativedelta(months=1)
+        end_date = (datetime.now() - timedelta(days=2)).replace(day=1) - relativedelta(
+            months=1
+        )
         end_date = end_date.strftime("%Y-%m-%d")
 
     if start_date is None:
@@ -51,8 +53,8 @@ def read_and_preprocess(
     if bucket is None:
         bucket = app_state.bucket_name
 
-    logging.info("start_date: %s", start_date)
-    logging.info("end_date: %s", end_date)
+    logging.info(f"start_date: {start_date}")
+    logging.info(f"end_date: {end_date}")
 
     df, total_uid, df_revenue_uid, total_revenue = progressive_monthly_aggregate(
         client_key=client_key,
@@ -87,7 +89,7 @@ def progressive_monthly_aggregate(
     bucket: str,
     start_date: str,
     end_date: str,
-    uids_to_filter: Optional[str]  = None,
+    uids_to_filter: Optional[str] = None,
     dir_: str = "data_science/datasets",
     price_changes: int = 4,
     threshold: float = 0.01,
@@ -104,7 +106,7 @@ def progressive_monthly_aggregate(
     df_ko = pd.DataFrame()  # Initialize df_ko
     total_uid = 0
     while end_date_dt >= start_date_dt:
-        logging.info("reading: %s", end_date_dt.strftime("%Y-%m-%d"))
+        logging.info(f'reading: {end_date_dt.strftime("%Y-%m-%d")}')
         df_part = read_data(
             client_key,
             channel,
@@ -116,8 +118,7 @@ def progressive_monthly_aggregate(
 
         # delete uid where inventory is 0
         logging.info(
-            "Number of inventory less or equal to 0: %s",
-            len(df_part[df_part["inventory"] <= 0]),
+            f'Number of inventory less or equal to 0: {len(df_part[df_part["inventory"] <= 0])}'
         )
         df_part = df_part[df_part["inventory"] > 0]
         del df_part["inventory"]
@@ -129,10 +130,12 @@ def progressive_monthly_aggregate(
             df_revenue["revenue"] = df_revenue["price_merged"] * df_revenue["units"]
             total_revenue = df_revenue["revenue"].sum()
             df_revenue_uid = df_revenue.groupby(["uid"])["revenue"].sum().reset_index()
-            df_revenue_uid['revenue_percentage'] = df_revenue_uid["revenue"] / total_revenue
+            df_revenue_uid["revenue_percentage"] = (
+                df_revenue_uid["revenue"] / total_revenue
+            )
 
             total_uid = df_part["uid"].nunique()
-            logging.info("Total uid: %s", total_uid)
+            logging.info(f"Total uid: {total_uid}")
         df_part = df_part[~df_part["uid"].isin(uid_ok)]
 
         # Concatenate df_part with df_ko
@@ -157,14 +160,14 @@ def progressive_monthly_aggregate(
         uid_ok.extend(uid_intersection_change_conversions)
 
         df_ok = df_part[df_part["uid"].isin(uid_intersection_change_conversions)]
-        logging.info("number of uid ok: %s", len(uid_ok))
+        logging.info(f"number of uid ok: {len(uid_ok)}")
         df_ko = df_part[~df_part["uid"].isin(uid_intersection_change_conversions)]
 
         df_full_list.append(df_ok)
         end_date_dt -= pd.DateOffset(months=1)
 
     result_df = pd.concat(df_full_list)
-    logging.info("Number of unique user IDs: %s", result_df["uid"].nunique())
+    logging.info(f"Number of unique user IDs: {result_df.uid.nunique()}")
     return result_df, total_uid, df_revenue_uid, total_revenue
 
 
@@ -172,7 +175,7 @@ def read_data(
     client_key: str,
     channel: str,
     bucket: str,
-    uids_to_filter: Optional[str]  = None,
+    uids_to_filter: Optional[str] = None,
     date: str = "2024-02-01",
     dir_: str = "data_science/datasets",
 ) -> pd.DataFrame:
@@ -188,17 +191,18 @@ def read_data(
         "inventory",
     ]
     try:
-        filters = [('uid', 'in', uids_to_filter)] if uids_to_filter is not None else None
+        filters = (
+            [("uid", "in", uids_to_filter)] if uids_to_filter is not None else None
+        )
         df_read = pd.read_parquet(
             f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/",
             columns=cs,
-            filters=filters
+            filters=filters,
         )
     except Exception:
-        logging.error("No data for %s_%s}", (str(year_), str(int(month_))))
+        logging.error(f"No data for {year_!s}_{int(month_)!s}")
         logging.info(
-            "s3://%s/%s/%s/%s/elasticity/%s_%s_full_data.parquet/",
-            (bucket, dir_, client_key, channel, year_, int(month_)),
+            f"s3://{bucket}/{dir_}/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet/"
         )
         df_read = pd.DataFrame(columns=cs)
         pass
@@ -207,10 +211,12 @@ def read_data(
 
 def process_data(df_full: pd.DataFrame) -> pd.DataFrame:
     """Calculate additional columns based on the read monthly data.
+
     if conversion price is available, use conversion price,
     else if view price is avaialable, use views price
     else use price recommendations
-    return price round"""
+    return price round
+    """
     df_full["price_merged"] = np.where(
         ~df_full.conversions_most_common_shelf_price.isna(),
         df_full.conversions_most_common_shelf_price,

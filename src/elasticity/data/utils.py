@@ -207,8 +207,8 @@ def get_elasticity_candidates(
     Returns:
         DataFrame: Filtered DataFrame containing elasticity candidates.
     """
-    logging.info("Number of rows:", input_df.shape[0])
-    logging.info("Number of unique user IDs:", input_df[uid_col].nunique())
+    logging.info(f"Number of rows: {input_df.shape[0]}")
+    logging.info(f"Number of unique user IDs: {input_df[uid_col].nunique()}")
     # Get user IDs with minimum conversion days
     min_conversion_day = nb_months * min_conversion_day_per_month
     uid_min_conversion_day = (
@@ -252,5 +252,5 @@ def get_elasticity_candidates(
         len(uid_price_changes),
     )
     df_gold_candidates = input_df[input_df[uid_col].isin(uid_price_changes)]
-    logging.info("Number of gold candidates:", df_gold_candidates[uid_col].nunique())
+    logging.info(f"Number of gold candidates: {df_gold_candidates[uid_col].nunique()}")
     return df_gold_candidates.sort_values(by=[uid_col, date_col])

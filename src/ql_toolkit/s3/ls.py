@@ -1,11 +1,11 @@
 """This module contains functions to list files and directories in an S3 bucket."""
+
 import logging
 from os import path
 
 import boto3
 from botocore.exceptions import ClientError
 from botocore.paginate import PageIterator
-
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3.utils import get_s3_client
 
@@ -99,10 +99,14 @@ def list_dir_pages(s3_dir: str, s3_client: boto3.client = None) -> PageIterator:
     if s3_client is None:
         s3_client = get_s3_client()
     paginator = s3_client.get_paginator("list_objects_v2")
-    return paginator.paginate(Bucket=app_state.bucket_name, Prefix=s3_dir, FetchOwner=False)
+    return paginator.paginate(
+        Bucket=app_state.bucket_name, Prefix=s3_dir, FetchOwner=False
+    )
 
 
-def list_files_in_dir(s3_dir: str, file_type: str = "json", s3_client: boto3.client = None) -> set:
+def list_files_in_dir(
+    s3_dir: str, file_type: str = "json", s3_client: boto3.client = None
+) -> set:
     """Get a sorted *set* of files of type "file_type" from an S3 directory.
 
     Args:
@@ -139,5 +143,7 @@ def folder_contents_exist(s3_dir: str) -> bool:
     s3_client = get_s3_client()
     if not s3_dir.endswith("/"):
         s3_dir += "/"
-    resp = s3_client.list_objects(Bucket=bucket_name, Prefix=s3_dir, Delimiter="/", MaxKeys=1)
+    resp = s3_client.list_objects(
+        Bucket=bucket_name, Prefix=s3_dir, Delimiter="/", MaxKeys=1
+    )
     return "Contents" in resp or "CommonPrefixes" in resp

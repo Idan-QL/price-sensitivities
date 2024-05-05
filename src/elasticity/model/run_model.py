@@ -116,6 +116,41 @@ def quality_test(
         )
     )
 
+def make_details(quality_test: bool, quality_test_high: bool, elasticity: float) -> str:
+    """Generate a concise message based on the quality test and elasticity.
+
+    Parameters:
+        quality_test (bool): Indicates if a quality test was conducted.
+        quality_test_high (bool): Indicates if the quality test was of high quality.
+        elasticity (float): The elasticity value.
+
+    Returns:
+        str: A concise message describing the elasticity and quality test conclusion.
+    """
+    # Determine elasticity description
+    if elasticity < -2.5:
+        elasticity_message = "Very elastic"
+    elif elasticity < -1:
+        elasticity_message = "Elastic"
+    elif elasticity < 0:
+        elasticity_message = "Inelastic"
+    elif elasticity > 0:
+        elasticity_message = "Positively elastic"
+    else:
+        elasticity_message = ""
+
+    # Determine quality test conclusion
+    if quality_test and quality_test_high:
+        quality_test_message = "High quality test"
+    elif quality_test and not quality_test_high:
+        quality_test_message = "Medium quality test"
+    elif not quality_test and not quality_test_high:
+        quality_test_message = "Low quality test"
+    else:
+        quality_test_message = ""  # Adjust according to your needs if other conditions exist
+
+    return f"{elasticity_message} - {quality_test_message}."
+
 
 def run_experiment(
     data: pd.DataFrame,
@@ -178,6 +213,7 @@ def run_experiment(
             "quality_test",
             "quality_test_high",
             "quality_test_medium",
+            "details"
         ]
         for col in best_model_columns:
             results[col] = np.nan
@@ -212,6 +248,10 @@ def run_experiment(
         results["quality_test_medium"] = (
             results["quality_test"] and not results["quality_test_high"]
         )
+
+        results["details"] = make_details(results["quality_test"],
+                                          results["quality_test_high"],
+                                          results["power_elasticity"])
 
     # Convert the dictionary to a DataFrame
     return pd.DataFrame(results, index=[0])

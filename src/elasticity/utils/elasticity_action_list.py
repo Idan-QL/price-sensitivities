@@ -26,6 +26,7 @@ def generate_actions_list(
         "best_model_b",
         "best_model",
         "cap_power_elasticity",
+        "details"
     ]
     df_actions = df_results[df_results.quality_test][attr_cs]
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -35,6 +36,7 @@ def generate_actions_list(
         "qlia_elasticity_param2",
         "qlia_elasticity_demand_model",
         "qlia_product_elasticity",
+        "qlia_elasticity_details",
         "qlia_elasticity_calc_date",
     ]
     res_list = [tuple(row) for row in df_actions.to_numpy()]

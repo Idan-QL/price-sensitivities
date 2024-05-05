@@ -210,13 +210,13 @@ def run_experiment(
             "best_model_aic",
             "median_quantity",
             "median_price",
-            "quality_test",
-            "quality_test_high",
-            "quality_test_medium",
             "details"
         ]
         for col in best_model_columns:
             results[col] = np.nan
+
+        for col in  ["quality_test", "quality_test_high", "quality_test_medium"]:
+            results[col] = False
     else:
         # Assign best model-specific results to the final results
         results["best_model"] = best_model

@@ -4,6 +4,7 @@
 Run with `python src/main.py -d us -c config_qa -p elasticity` from the project root.
 """
 import logging
+import traceback
 from datetime import datetime
 from sys import exit as sys_exit
 
@@ -96,6 +97,10 @@ def run() -> None:
                     f"elasticity quality test: {df_results.quality_test.value_counts()}"
                 )
 
+                logging.info(
+                    f"elasticity quality test high: {df_results.quality_test_high.value_counts()}"
+                )
+
                 s3io.write_dataframe_to_s3(
                     file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
                     xdf=df_results,
@@ -151,6 +156,8 @@ def run() -> None:
 
             except Exception as e:
                 logging.error(f"Error processing {client_key} - {client_key}: {e}")
+                error_info = traceback.format_exc()
+                logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")
                 data_report = report.add_error_run(
                     data_report=data_report,
                     client_key=client_key,

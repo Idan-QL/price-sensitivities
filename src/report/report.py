@@ -83,6 +83,7 @@ def add_run(
         None
     """
     df_results_quality = df_results[df_results["quality_test"]]
+    df_results_quality_high = df_results[df_results["quality_test_high"]]
     best_model_counts = df_results_quality["best_model"].value_counts()
 
     model_changes = None
@@ -96,6 +97,7 @@ def add_run(
             "channel": channel,
             "total_uid": total_uid,
             "uid_with_elasticity": len(df_results_quality),
+            "uid_with_elasticity_high_quality": len(df_results_quality_high),
             "uids_from_total": round(len(df_results_quality) / total_uid * 100, 1),
             "revenue_from_total": round(
                 df_results_quality["revenue"].sum() / total_revenue * 100, 1

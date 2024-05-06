@@ -396,7 +396,6 @@ def save_graph(
     except Exception:
         # Log the exception traceback
         traceback.print_exc()
-    return
 
 
 def run_save_graph_top10(
@@ -426,7 +425,6 @@ def run_save_graph_top10(
 
     for uid in elasticity_uids_top10:
         save_graph(uid, df_results, df_by_price, client_key, channel, end_date)
-
 
 def run_save_graph_parallel(
     df_results: pd.DataFrame,

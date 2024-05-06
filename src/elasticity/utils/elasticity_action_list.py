@@ -26,7 +26,7 @@ def generate_actions_list(
         "best_model_b",
         "best_model",
         "cap_power_elasticity",
-        "details"
+        "details",
     ]
     df_actions = df_results[df_results.quality_test][attr_cs]
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")

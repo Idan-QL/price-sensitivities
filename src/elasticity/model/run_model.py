@@ -116,6 +116,7 @@ def quality_test(
         )
     )
 
+
 def make_details(quality_test: bool, quality_test_high: bool, elasticity: float) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
@@ -147,7 +148,9 @@ def make_details(quality_test: bool, quality_test_high: bool, elasticity: float)
     elif not quality_test and not quality_test_high:
         quality_test_message = "Low quality test"
     else:
-        quality_test_message = ""  # Adjust according to your needs if other conditions exist
+        quality_test_message = (
+            ""  # Adjust according to your needs if other conditions exist
+        )
 
     return f"{elasticity_message} - {quality_test_message}."
 
@@ -210,12 +213,12 @@ def run_experiment(
             "best_model_aic",
             "median_quantity",
             "median_price",
-            "details"
+            "details",
         ]
         for col in best_model_columns:
             results[col] = np.nan
 
-        for col in  ["quality_test", "quality_test_high", "quality_test_medium"]:
+        for col in ["quality_test", "quality_test_high", "quality_test_medium"]:
             results[col] = False
     else:
         # Assign best model-specific results to the final results
@@ -249,9 +252,11 @@ def run_experiment(
             results["quality_test"] and not results["quality_test_high"]
         )
 
-        results["details"] = make_details(results["quality_test"],
-                                          results["quality_test_high"],
-                                          results["power_elasticity"])
+        results["details"] = make_details(
+            results["quality_test"],
+            results["quality_test_high"],
+            results["power_elasticity"],
+        )
 
     # Convert the dictionary to a DataFrame
     return pd.DataFrame(results, index=[0])

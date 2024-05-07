@@ -134,6 +134,7 @@ def uid_with_price_changes(
     date_col: str = "date",
     price_col: str = "price",
     quantity_col: str = "units",
+    last_month: bool = False
 ) -> pd.DataFrame:
     """Filter the DataFrame to obtain elasticity candidates based on specified criteria."""
     # Preprocess data
@@ -148,15 +149,44 @@ def uid_with_price_changes(
     # Calculate price change percentage
     df_by_price = df_by_price.sort_values(by=[uid_col, price_col])
     df_by_price["price_change"] = df_by_price.groupby(uid_col)[price_col].pct_change()
+    count_price_change_col = "price_change"
+    # Outlier 
+    if not last_month:
+        df_by_price['outlier_price'] = df_by_price.groupby(uid_col)[price_col].transform(
+            outliers_modified_z_score)
+        df_by_price['outlier_quantity'] = df_by_price.groupby(uid_col)[quantity_col].transform(
+            outliers_modified_z_score)
+        df_by_price["price_change_without_outliers"] = np.where(
+            ((~df_by_price['outlier_price']) & (~df_by_price['outlier_quantity'])),
+            df_by_price["price_change"],
+            0)
+        count_price_change_col = "price_change_without_outliers"
+
 
     # Filter user IDs with significant price changes
     return (
-        df_by_price[df_by_price["price_change"].abs() > threshold]
+        df_by_price[df_by_price[count_price_change_col].abs() > threshold]
         .groupby(uid_col)[price_col]
         .nunique()
         .loc[lambda x: x > price_changes]
         .index.tolist()
     )
+
+
+def mad(data, axis=None):
+    return np.median(np.abs(data - np.median(data, axis)), axis)
+
+def outliers_modified_z_score(ys):
+    threshold = 3.5
+    
+    median_y = np.median(ys)
+    mad_y = mad(ys)
+    
+    modified_z_scores = 0.6745 * (ys - median_y) / mad_y
+    # The additional term in the denominator (where n is the sample size) 
+    # helps to adjust the MAD estimator for small sample sizes, making it more robust.
+    # modified_z_scores = 0.6745 * (ys - median_y) / (mad_y * (1 + 5 / (len(ys) - 1)))
+    return np.abs(modified_z_scores) > threshold
 
 
 def uid_with_min_conversions(

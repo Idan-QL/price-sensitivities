@@ -18,11 +18,12 @@ def save_distribution_graph(
 ) -> None:
     """Save a graph representing the distribution of UID with elasticity.
 
-    Parameters:
+    Args:
         client_key (str): The client key.
         channel (str): The channel.
-        total_end_date_uid (int): The total number of UID.
-        df_results (pd.DataFrame): DataFrame containing the results.
+        total_uid (int): The total number of UID.
+        df_report (pd.DataFrame): DataFrame containing the report results.
+        end_date (str): The end date.
         s3_dir (str): The S3 directory to upload the graph to.
 
     Returns:

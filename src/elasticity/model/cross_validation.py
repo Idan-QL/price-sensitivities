@@ -19,7 +19,23 @@ def cross_validation(
     weights_col: str = "days",
     n_tests: int = 3,
 ) -> Tuple[float, float, float, float, float]:
-    """Perform cross-validation."""
+    """Perform cross-validation.
+
+    Args:
+        data (pd.DataFrame): The input data for cross-validation.
+        model_type (str): The type of model to use for estimation.
+        test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
+        price_col (str, optional): The name of the column containing prices. Defaults to "price".
+        quantity_col (str, optional): The name of the column containing quantities.
+        Defaults to "quantity".
+        weights_col (str, optional): The name of the column containing weights. Defaults to "days".
+        n_tests (int, optional): The number of cross-validation tests to perform. Defaults to 3.
+
+    Returns:
+        Tuple[float, float, float, float, float]: A tuple containing the mean relative
+        absolute error, mean coefficient 'a', mean coefficient 'b', mean elasticity,
+        and mean R-squared value.
+    """
     relative_absolute_errors_test = []
     a_lists = []
     b_lists = []
@@ -29,7 +45,7 @@ def cross_validation(
         data_train, data_test = train_test_split(
             data, test_size=test_size, random_state=42 + i
         )
-        a, b, _, r_squared, elasticity, _, _, _= estimate_coefficients(
+        a, b, _, r_squared, elasticity, _, _, _ = estimate_coefficients(
             data_train,
             model_type,
             price_col=price_col,
@@ -39,12 +55,9 @@ def cross_validation(
 
         relative_absolute_errors_test.append(
             relative_absolute_error_calculation(
-                model_type,
-                price_col,
-                quantity_col,
-                data_test,
-                a,
-                b))
+                model_type, price_col, quantity_col, data_test, a, b
+            )
+        )
         a_lists.append(a)
         b_lists.append(b)
         elasticity_lists.append(elasticity)
@@ -58,4 +71,3 @@ def cross_validation(
     mean_r_squared = np.mean(r_squared_lists)
 
     return mean_relative_error_test, mean_a, mean_b, mean_elasticity, mean_r_squared
-

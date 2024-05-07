@@ -18,8 +18,7 @@ def run_model_type(
     quantity_col: str,
     weights_col: str,
 ) -> dict:
-    """
-    Calculate cross-validation and regression results.
+    """Calculate cross-validation and regression results.
 
     Args:
         data (pd.DataFrame): The input data.
@@ -49,14 +48,21 @@ def run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic, relative_absolute_error = (
-            estimate_coefficients(
-                data,
-                model_type,
-                price_col=price_col,
-                quantity_col=quantity_col,
-                weights_col=weights_col,
-            )
+        (
+            a,
+            b,
+            pvalue,
+            r_squared,
+            elasticity,
+            elasticity_error_propagation,
+            aic,
+            relative_absolute_error,
+        ) = estimate_coefficients(
+            data,
+            model_type,
+            price_col=price_col,
+            quantity_col=quantity_col,
+            weights_col=weights_col,
         )
         # Store the results in a dictionary
         results[model_type + "_mean_relative_error"] = cv_mean_relative_error
@@ -91,7 +97,8 @@ def run_model_type(
             "_relative_absolute_error",
             "_elasticity_error_propagation",
             "_elasticity_error_propagation",
-            "_aic"]
+            "_aic",
+        ]
         for col in [model_type + c for c in model_type_columns]:
             results[col] = np.nan
     return results, median_quantity, median_price
@@ -183,7 +190,7 @@ def run_experiment(
     quantity_col: str = "quantity",
     weights_col: str = "days",
     min_r2: float = 0.3,
-    quality_test_error_col: str = 'best_relative_absolute_error'
+    quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
 

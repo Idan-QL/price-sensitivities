@@ -130,7 +130,7 @@ def linear_elasticity(price: float, a: float, b: float) -> float:
 def power_elasticity(b: float) -> float:
     """Calculate the power demand model elasticity.
 
-    Parameters:
+    Args:
         b (float): The elasticity value.
 
     Returns:

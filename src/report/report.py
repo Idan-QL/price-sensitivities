@@ -28,11 +28,16 @@ def get_last_month_results(
 ) -> pd.DataFrame:
     """Get the results from the last month.
 
-    Parameters:
+    This function retrieves the results from the last month based on the
+    provided end date, client key, and channel.
+
+    Args:
+        client_key (str): The client key.
+        channel (str): The channel.
         end_date (str): The end date.
 
     Returns:
-        DataFrame: The results from the last month.
+        pd.DataFrame: The results from the last month as a pandas DataFrame.
     """
     # Get the last month's end date
     last_month_end_date = pd.to_datetime(end_date) - pd.DateOffset(months=1)
@@ -71,16 +76,21 @@ def add_run(
 ) -> None:
     """Append data to the data report list.
 
-    Parameters:
-        data_report (List[Dict[str, Any]]): The list to append data to.
-        client_key (Any): The client key.
-        channel (Any): The channel.
-        total_end_date_uid (Any): The total end date UID.
-        df_results_quality (DataFrame): The DataFrame containing quality results.
-        df_results (DataFrame): The DataFrame containing results.
+    Args:
+        data_report (List): The list to append data to.
+        client_key (str): The client key.
+        channel (str): The channel.
+        total_uid (int): The total UID.
+        df_results (pd.DataFrame): The DataFrame containing results.
+        runtime (float): The runtime duration.
+        total_revenue (int): The total revenue.
+        error_counter (int): The error counter.
+        end_date (str): The end date.
+        max_elasticity (float, optional): The maximum elasticity value. Defaults to 3.8.
+        min_elasticity (float, optional): The minimum elasticity value. Defaults to -3.8.
 
     Returns:
-        None
+        List
     """
     df_results_quality = df_results[df_results["quality_test"]]
     df_results_quality_high = df_results[df_results["quality_test_high"]]
@@ -169,13 +179,11 @@ def add_error_run(
 ) -> None:
     """Append data to the data report list.
 
-    Parameters:
-        data_report (List[Dict[str, Any]]): The list to append data to.
-        client_key (Any): The client key.
-        channel (Any): The channel.
-        total_end_date_uid (Any): The total end date UID.
-        df_results_quality (DataFrame): The DataFrame containing quality results.
-        df_results (DataFrame): The DataFrame containing results.
+    Args:
+        data_report (List): The list to append data to.
+        client_key (str): The client key.
+        channel (str): The channel.
+        error_counter (int): The counter for errors.
 
     Returns:
         None
@@ -207,5 +215,3 @@ def add_error_run(
             "error": error_counter,
         }
     )
-
-    return data_report

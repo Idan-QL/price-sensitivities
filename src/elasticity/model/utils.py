@@ -2,6 +2,31 @@
 
 import numpy as np
 
+def relative_absolute_error_calculation(model_type, price_col, quantity_col, data_test, a, b):
+    """
+    Calculate the relative absolute error for a given model.
+
+    Parameters:
+    - model_type (str): The type of the model.
+    - price_col (str): The name of the column containing the prices.
+    - quantity_col (str): The name of the column containing the quantities.
+    - data_test (pandas.DataFrame): The test dataset.
+    - a (float): The coefficient 'a' for the model.
+    - b (float): The coefficient 'b' for the model.
+
+    Returns:
+    - relative_absolute_error (float): The relative absolute error.
+    """
+    predicted_quantity = [
+        calculate_quantity_from_price(p, a, b, model_type)
+        for p in data_test[price_col]
+    ]
+    absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
+    relative_absolute_error = (
+        np.mean(absolute_errors / data_test[quantity_col]) * 100
+    )
+
+    return relative_absolute_error
 
 def calculate_quantity_from_price(
     price: float, a: float, b: float, model_type: str

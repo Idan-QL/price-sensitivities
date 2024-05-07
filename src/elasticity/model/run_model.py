@@ -18,7 +18,22 @@ def run_model_type(
     quantity_col: str,
     weights_col: str,
 ) -> dict:
-    """Calculate cross-validation and regression results."""
+    """
+    Calculate cross-validation and regression results.
+
+    Args:
+        data (pd.DataFrame): The input data.
+        model_type (str): The type of model to run.
+        test_size (float): The proportion of the dataset to include in the test split.
+        price_col (str): The name of the column containing the prices.
+        quantity_col (str): The name of the column containing the quantities.
+        weights_col (str): The name of the column containing the weights.
+
+    Returns:
+        dict: A dictionary containing the calculated results.
+        float: The median quantity from the input data.
+        float: The median price from the input data.
+    """
     results = {}
     median_price = data[price_col].median()
     median_quantity = data[quantity_col].median()
@@ -34,7 +49,7 @@ def run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic = (
+        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic, relative_absolute_error = (
             estimate_coefficients(
                 data,
                 model_type,
@@ -54,6 +69,7 @@ def run_model_type(
         results[model_type + "_pvalue"] = pvalue
         results[model_type + "_r2"] = r_squared
         results[model_type + "_elasticity"] = elasticity
+        results[model_type + "_relative_absolute_error"] = relative_absolute_error
         results[model_type + "_elasticity_error_propagation"] = (
             elasticity_error_propagation
         )
@@ -61,18 +77,23 @@ def run_model_type(
     except Exception as e:
         logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
-        results[model_type + "_mean_relative_error"] = np.nan
-        results[model_type + "_mean_a"] = np.nan
-        results[model_type + "_mean_b"] = np.nan
-        results[model_type + "_mean_elasticity"] = np.nan
-        results[model_type + "_mean_r2"] = np.nan
-        results[model_type + "_a"] = np.nan
-        results[model_type + "_b"] = np.nan
-        results[model_type + "_pvalue"] = np.nan
-        results[model_type + "_r2"] = np.nan
-        results[model_type + "_elasticity"] = np.nan
-        results[model_type + "_elasticity_error_propagation"] = np.nan
-        results[model_type + "_aic"] = np.nan
+        model_type_columns = [
+            "_mean_relative_error",
+            "_mean_a",
+            "_mean_b",
+            "_mean_elasticity",
+            "_mean_r2",
+            "_a",
+            "_b",
+            "_pvalue",
+            "_r2",
+            "_elasticity",
+            "_relative_absolute_error",
+            "_elasticity_error_propagation",
+            "_elasticity_error_propagation",
+            "_aic"]
+        for col in [model_type + c for c in model_type_columns]:
+            results[col] = np.nan
     return results, median_quantity, median_price
 
 
@@ -162,6 +183,7 @@ def run_experiment(
     quantity_col: str = "quantity",
     weights_col: str = "days",
     min_r2: float = 0.3,
+    quality_test_error_col: str = 'best_relative_absolute_error'
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
 
@@ -172,6 +194,9 @@ def run_experiment(
     - quantity_col: column name for quantities
     - weights_col: column name for weights
     - min_r2: minimum R-squared value required for model acceptance
+    - quality_test_error_col: by default best_relative_absolute_error
+    other option is best_mean_relative_error
+    to take the mean error of the cross validation
 
     Returns:
     - DataFrame: results of the experiment
@@ -208,6 +233,7 @@ def run_experiment(
             "best_model_b",
             "best_model_r2",
             "best_mean_relative_error",
+            "best_relative_absolute_error",
             "best_model_elasticity",
             "best_model_elasticity_error_propagation",
             "best_model_aic",
@@ -229,6 +255,9 @@ def run_experiment(
         results["best_mean_relative_error"] = results[
             best_model + "_mean_relative_error"
         ]
+        results["best_relative_absolute_error"] = results[
+            best_model + "_relative_absolute_error"
+        ]
         results["best_model_elasticity"] = results[best_model + "_elasticity"]
         results["best_model_elasticity_error_propagation"] = results[
             best_model + "_elasticity_error_propagation"
@@ -239,12 +268,12 @@ def run_experiment(
 
         # Perform quality tests
         results["quality_test"] = quality_test(
-            results["median_quantity"], results["best_mean_relative_error"]
+            results["median_quantity"], results[quality_test_error_col]
         )
         # Perform high quality test
         results["quality_test_high"] = quality_test(
             results["median_quantity"],
-            results["best_mean_relative_error"],
+            results[quality_test_error_col],
             high_threshold=True,
         )
         # Perform medium quality test

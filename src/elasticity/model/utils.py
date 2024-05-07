@@ -1,6 +1,36 @@
 """utils for calculating quantity demanded and price elasticity of demand."""
 
 import numpy as np
+import pandas as pd
+
+
+def relative_absolute_error_calculation(
+    model_type: str,
+    price_col: str,
+    quantity_col: str,
+    data_test: pd.DataFrame,
+    a: float,
+    b: float,
+) -> float:
+    """Calculate the relative absolute error for a given model.
+
+    Args:
+        model_type (str): The type of the model.
+        price_col (str): The name of the column containing the prices.
+        quantity_col (str): The name of the column containing the quantities.
+        data_test (pandas.DataFrame): The test dataset.
+        a (float): The coefficient 'a' for the model.
+        b (float): The coefficient 'b' for the model.
+
+    Returns:
+    - relative_absolute_error (float): The relative absolute error.
+    """
+    predicted_quantity = [
+        calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]
+    ]
+    absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
+
+    return np.mean(absolute_errors / data_test[quantity_col]) * 100
 
 
 def calculate_quantity_from_price(
@@ -27,25 +57,70 @@ def calculate_quantity_from_price(
 
 
 def linear_demand(price: float, a: float, b: float) -> float:
-    """Linear demand model: Q = a + bP."""
+    """Linear demand model: Q = a + bP.
+
+    Args:
+        price (float): The price of the product.
+        a (float): The intercept of the demand curve.
+        b (float): The slope of the demand curve.
+
+    Returns:
+        float: The quantity demanded at the given price.
+
+    """
     return a + b * price
 
 
 def power_demand(price: float, a: float, b: float) -> float:
-    """Power demand model also called constant elasticity: Q = a * P**b."""
+    """Power demand model: Q = a * P**b.
+
+    Args:
+        price (float): The price of the power.
+        a (float): The coefficient a in the power demand model.
+        b (float): The coefficient b in the power demand model.
+
+    Returns:
+    - float: The calculated power demand.
+
+    """
     log_price = np.log(price)
     log_q = linear_demand(log_price, a, b)  # return log Q
     return np.exp(log_q)
 
 
 def exponential_demand(price: float, a: float, b: float) -> float:
-    """Exponential demand model: Q = a * exp(-bP)."""
+    """Exponential demand model: Q = a * exp(-bP).
+
+    Args:
+        price (float): The price of the product.
+        a (float): The coefficient 'a' in the demand equation.
+        b (float): The coefficient 'b' in the demand equation.
+
+    Returns:
+    - float: The quantity demanded according to the exponential demand model.
+    """
     log_q = linear_demand(price, a, b)
     return np.exp(log_q)
 
 
 def linear_elasticity(price: float, a: float, b: float) -> float:
-    """Linear demand model elasticity: e = -bP / (a + bP)."""
+    """Calculate the linear demand model elasticity.
+
+    The elasticity is calculated using the formula: e = -bP / (a + bP),
+    where e is the elasticity, P is the price, a is a constant, and b is a constant.
+
+    Args:
+        price (float): The price of the product.
+        a (float): The constant a in the demand model.
+        b (float): The constant b in the demand model.
+
+    Returns:
+        float: The elasticity value.
+
+    Raises:
+        ZeroDivisionError: If the demand is zero and the price is non-zero.
+
+    """
     demand = linear_demand(price, a, b)
     if demand == 0:
         return float("inf") if price == 0 else float("-inf")
@@ -53,19 +128,51 @@ def linear_elasticity(price: float, a: float, b: float) -> float:
 
 
 def power_elasticity(b: float) -> float:
-    """Power demand model elasticity: e = b."""
+    """Calculate the power demand model elasticity.
+
+    Args:
+        b (float): The elasticity value.
+
+    Returns:
+    - float: The elasticity value.
+
+    """
     return b
 
 
 def exponential_elasticity(price: float, b: float) -> float:
-    """Exponential demand model elasticity: e = b * price."""
+    """Exponential demand model elasticity: e = b * price.
+
+    Args:
+        price (float): The price of the product.
+        b (float): The elasticity coefficient.
+
+    Returns:
+        float: The elasticity value.
+
+    """
     return b * price
 
 
 def calculate_elasticity_from_parameters(
     model_type: str, a: float, b: float, price: float
 ) -> float:
-    """Calculate price elasticity of demand (PED) given coefficients and price points."""
+    """Calculate price elasticity of demand (PED) given coefficients and price points.
+
+    Args:
+        model_type (str): The type of model to use for calculating elasticity.
+        Valid options are 'linear', 'power', or 'exponential'.
+        a (float): The coefficient 'a' used in the linear elasticity model.
+        b (float): The coefficient 'b' used in the linear, power, or exponential elasticity model.
+        price (float): The price point at which to calculate the elasticity.
+
+    Returns:
+        float: The calculated price elasticity of demand (PED) rounded to 2 decimal places.
+
+    Raises:
+        ValueError: If an invalid model type is provided.
+
+    """
     if model_type == "linear":
         elasticity = linear_elasticity(price, a, b)
     elif model_type == "power":
@@ -82,11 +189,12 @@ def calculate_elasticity_error_propagation(
 ) -> float:
     """Calculates the standard error of the elasticity function based on the model type.
 
-    Parameters:
-    - a: Estimated parameter for 'a'
-    - b: Estimated parameter for 'b'
-    - cov_matrix: Covariance matrix of the parameter estimates
-    - p: Price
+    Args:
+        model_type (str): The type of model to use for calculating elasticity.
+        a: Estimated parameter for 'a'
+        b: Estimated parameter for 'b'
+        cov_matrix: Covariance matrix of the parameter estimates
+        p: Price
 
     Returns:
         float: The standard error of the elasticity function.
@@ -108,11 +216,11 @@ def elasticity_error_propagation_linear(
 ) -> float:
     """Calculate the errors of the elasticity function for a linear model.
 
-    Parameters:
-    - a: Estimated parameter for 'a'
-    - b: Estimated parameter for 'b'
-    - cov_matrix: Covariance matrix of the parameter estimates
-    - p: Price
+    Args:
+        a: Estimated parameter for 'a'
+        b: Estimated parameter for 'b'
+        cov_matrix: Covariance matrix of the parameter estimates
+        p: Price
 
     Returns:
     - float: Standard deviation of elasticity at price p
@@ -142,9 +250,9 @@ def elasticity_error_propagation_linear(
 def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -> float:
     """Calculate the standard errors of the elasticity function for an exponential model.
 
-    Parameters:
-    - cov_matrix: Covariance matrix of the parameter estimates
-    - p: price
+    Args:
+        cov_matrix: Covariance matrix of the parameter estimates
+        p: price
 
     Returns:
     - std_errors_elasticity: Standard errors of the elasticity function at price p
@@ -156,8 +264,8 @@ def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -
 def elasticity_error_propagation_power(cov_matrix: np.ndarray) -> float:
     """Calculate the standard errors of the elasticity function for a power model.
 
-    Parameters:
-    - cov_matrix: Covariance matrix of the parameter estimates
+    Args:
+        cov_matrix: Covariance matrix of the parameter estimates
 
     Returns:
     - std_errors_elasticity: Standard errors of the elasticity function

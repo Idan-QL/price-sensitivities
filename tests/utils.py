@@ -2,25 +2,16 @@
 
 from typing import Tuple
 
-import pandas as pd
-import pytest
-
 
 def round_tuple_values(tup: Tuple[float], decimals: int = 1) -> Tuple[float]:
-    """Round all values in a tuple to the specified number of decimals."""
-    return tuple(round(value, decimals) for value in tup)
+    """Round all values in a tuple to the specified number of decimals.
 
+    Args:
+        tup (Tuple[float]): The input tuple containing float values.
+        decimals (int, optional): The number of decimal places to round to. Defaults to 1.
 
-@pytest.fixture
-def sample_data() -> pd.DataFrame:
-    """Fixture providing sample data for tests.
+    Returns:
+        Tuple[float]: The tuple with rounded values.
 
-    those data are wollowing a linear demand curve with elasticity of -1 at median price of 30
     """
-    return pd.DataFrame(
-        {
-            "price": [10, 20, 30, 40, 50],
-            "quantity": [100, 80, 60, 40, 20],
-            "days": [1, 2, 3, 4, 5],
-        }
-    )
+    return tuple(round(value, decimals) for value in tup)

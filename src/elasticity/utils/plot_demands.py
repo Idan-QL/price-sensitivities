@@ -92,7 +92,7 @@ def plot_model_and_prices_from_df(
     days_col: str = "days",
 ) -> None:
     """plot_demand_curves from model result and actual data."""
-    a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _ = (
+    a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _, _ = (
         estimate_coefficients(
             data=df,
             model_type=model_type,

@@ -9,6 +9,7 @@ import statsmodels.api as sm
 from elasticity.model.utils import (
     calculate_elasticity_error_propagation,
     calculate_elasticity_from_parameters,
+    relative_absolute_error_calculation,
 )
 
 
@@ -19,7 +20,24 @@ def estimate_coefficients(
     quantity_col: str = "quantity",
     weights_col: str = "days",
 ) -> Tuple[float, float, float, float, float]:
-    """Estimate coefficients for demand model using log transformation if nonlinear."""
+    """Estimate coefficients for demand model using log transformation if nonlinear.
+
+    Parameters:
+        data (pd.DataFrame): The input data containing the price and quantity columns.
+        model_type (str): The type of demand model to use.
+        Valid options are "power" and "exponential".
+        price_col (str, optional): The name of the column in the data frame
+        that represents the price. Defaults to "price".
+        quantity_col (str, optional): The name of the column in the data frame
+        that represents the quantity. Defaults to "quantity".
+        weights_col (str, optional): The name of the column in the data frame
+        that represents the weights. Defaults to "days".
+
+    Returns:
+        Tuple[float, float, float, float, float]: A tuple containing the estimated
+        coefficients, p-value, R-squared value,
+        elasticity, and other relevant metrics.
+    """
     X = sm.add_constant(data[[price_col]])
     y = data[quantity_col]
     weights = data[weights_col]
@@ -41,4 +59,16 @@ def estimate_coefficients(
     a, b = model.params.iloc[0], model.params.iloc[1]
     aic = model.aic
     elasticity = calculate_elasticity_from_parameters(model_type, a, b, median_price)
-    return a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic
+    relative_absolute_error = relative_absolute_error_calculation(
+        model_type, price_col, quantity_col, data, a, b
+    )
+    return (
+        a,
+        b,
+        pvalue,
+        r_squared,
+        elasticity,
+        elasticity_error_propagation,
+        aic,
+        relative_absolute_error,
+    )

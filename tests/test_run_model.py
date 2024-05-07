@@ -4,18 +4,17 @@ from sys import path as sys_path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 sys_path.append("../src")
 from elasticity.model.run_model import run_experiment
 
 
+@pytest.mark.usefixtures("sample_data")
 def test_run_experiment(sample_data: pd.DataFrame) -> None:
     """Test run_experiment function with sample data."""
     # Call the function under test
-    print("sample_data", sample_data)
     result = run_experiment(sample_data)
-    print(result.columns)
-    print(result.iloc[0])
 
     # Assert that the result is a DataFrame
     assert isinstance(result, pd.DataFrame)
@@ -32,7 +31,9 @@ def test_run_experiment(sample_data: pd.DataFrame) -> None:
         "linear_pvalue",
         "linear_r2",
         "linear_elasticity",
+        "linear_relative_absolute_error",
         "linear_elasticity_error_propagation",
+        "linear_aic",
         "power_mean_relative_error",
         "power_mean_a",
         "power_mean_b",
@@ -43,7 +44,9 @@ def test_run_experiment(sample_data: pd.DataFrame) -> None:
         "power_pvalue",
         "power_r2",
         "power_elasticity",
+        "power_relative_absolute_error",
         "power_elasticity_error_propagation",
+        "power_aic",
         "exponential_mean_relative_error",
         "exponential_mean_a",
         "exponential_mean_b",
@@ -54,19 +57,26 @@ def test_run_experiment(sample_data: pd.DataFrame) -> None:
         "exponential_pvalue",
         "exponential_r2",
         "exponential_elasticity",
+        "exponential_relative_absolute_error",
         "exponential_elasticity_error_propagation",
+        "exponential_aic",
         "best_model",
         "best_model_a",
         "best_model_b",
         "best_model_r2",
         "best_mean_relative_error",
+        "best_relative_absolute_error",
         "best_model_elasticity",
         "best_model_elasticity_error_propagation",
+        "best_model_aic",
         "median_quantity",
         "median_price",
         "quality_test",
+        "quality_test_high",
+        "quality_test_medium",
+        "details",
     ]
-
+    print((result.columns))
     assert set(result.columns) == set(expected_columns)
     # test the results of the 3 models
     assert np.array_equal(round(result["linear_mean_relative_error"], 1), [0.0])

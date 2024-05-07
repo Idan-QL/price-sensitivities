@@ -18,7 +18,21 @@ def run_model_type(
     quantity_col: str,
     weights_col: str,
 ) -> dict:
-    """Calculate cross-validation and regression results."""
+    """Calculate cross-validation and regression results.
+
+    Args:
+        data (pd.DataFrame): The input data.
+        model_type (str): The type of model to run.
+        test_size (float): The proportion of the dataset to include in the test split.
+        price_col (str): The name of the column containing the prices.
+        quantity_col (str): The name of the column containing the quantities.
+        weights_col (str): The name of the column containing the weights.
+
+    Returns:
+        dict: A dictionary containing the calculated results.
+        float: The median quantity from the input data.
+        float: The median price from the input data.
+    """
     results = {}
     median_price = data[price_col].median()
     median_quantity = data[quantity_col].median()
@@ -34,14 +48,21 @@ def run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
         # Regular regression results
-        a, b, pvalue, r_squared, elasticity, elasticity_error_propagation, aic = (
-            estimate_coefficients(
-                data,
-                model_type,
-                price_col=price_col,
-                quantity_col=quantity_col,
-                weights_col=weights_col,
-            )
+        (
+            a,
+            b,
+            pvalue,
+            r_squared,
+            elasticity,
+            elasticity_error_propagation,
+            aic,
+            relative_absolute_error,
+        ) = estimate_coefficients(
+            data,
+            model_type,
+            price_col=price_col,
+            quantity_col=quantity_col,
+            weights_col=weights_col,
         )
         # Store the results in a dictionary
         results[model_type + "_mean_relative_error"] = cv_mean_relative_error
@@ -54,6 +75,7 @@ def run_model_type(
         results[model_type + "_pvalue"] = pvalue
         results[model_type + "_r2"] = r_squared
         results[model_type + "_elasticity"] = elasticity
+        results[model_type + "_relative_absolute_error"] = relative_absolute_error
         results[model_type + "_elasticity_error_propagation"] = (
             elasticity_error_propagation
         )
@@ -61,18 +83,24 @@ def run_model_type(
     except Exception as e:
         logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
-        results[model_type + "_mean_relative_error"] = np.nan
-        results[model_type + "_mean_a"] = np.nan
-        results[model_type + "_mean_b"] = np.nan
-        results[model_type + "_mean_elasticity"] = np.nan
-        results[model_type + "_mean_r2"] = np.nan
-        results[model_type + "_a"] = np.nan
-        results[model_type + "_b"] = np.nan
-        results[model_type + "_pvalue"] = np.nan
-        results[model_type + "_r2"] = np.nan
-        results[model_type + "_elasticity"] = np.nan
-        results[model_type + "_elasticity_error_propagation"] = np.nan
-        results[model_type + "_aic"] = np.nan
+        model_type_columns = [
+            "_mean_relative_error",
+            "_mean_a",
+            "_mean_b",
+            "_mean_elasticity",
+            "_mean_r2",
+            "_a",
+            "_b",
+            "_pvalue",
+            "_r2",
+            "_elasticity",
+            "_relative_absolute_error",
+            "_elasticity_error_propagation",
+            "_elasticity_error_propagation",
+            "_aic",
+        ]
+        for col in [model_type + c for c in model_type_columns]:
+            results[col] = np.nan
     return results, median_quantity, median_price
 
 
@@ -88,18 +116,23 @@ def quality_test(
 ) -> bool:
     """Perform quality test based on median quantity and mean relative error.
 
-    Parameters:
-    - median_quantity: median quantity value
-    - best_mean_relative_error: mean relative error of the best model
-    - high_threshold: if True, apply high threshold, otherwise apply regular threshold
-    - q_test_value_1: value for first quality test threshold
-    - q_test_value_2: value for second quality test threshold
-    - q_test_threshold_1: threshold for the first quality test
-    - q_test_threshold_2: threshold for the second quality test
-    - q_test_threshold_3: threshold for the third quality test
+    This function performs a quality test based on the provided median quantity and
+    mean relative error. The test checks if the median quantity and mean relative
+    error meet certain thresholds based on the provided parameters.
+    The thresholds can be adjusted by modifying the function parameters.
+
+    Args:
+        median_quantity: median quantity value
+        best_mean_relative_error: mean relative error of the best model
+        high_threshold: if True, apply high threshold, otherwise apply regular threshold
+        q_test_value_1: value for first quality test threshold
+        q_test_value_2: value for second quality test threshold
+        q_test_threshold_1: threshold for the first quality test
+        q_test_threshold_2: threshold for the second quality test
+        q_test_threshold_3: threshold for the third quality test
 
     Returns:
-    - bool: True if the test passes, False otherwise
+        bool: True if the test passes, False otherwise
     """
     thresholds = [q_test_threshold_1, q_test_threshold_2, q_test_threshold_3]
     if high_threshold:
@@ -120,7 +153,7 @@ def quality_test(
 def make_details(quality_test: bool, quality_test_high: bool, elasticity: float) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
-    Parameters:
+    Args:
         quality_test (bool): Indicates if a quality test was conducted.
         quality_test_high (bool): Indicates if the quality test was of high quality.
         elasticity (float): The elasticity value.
@@ -162,19 +195,23 @@ def run_experiment(
     quantity_col: str = "quantity",
     weights_col: str = "days",
     min_r2: float = 0.3,
+    quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
 
-    Parameters:
-    - data: DataFrame containing the dataset
-    - test_size: proportion of the dataset to include in the test split
-    - price_col: column name for prices
-    - quantity_col: column name for quantities
-    - weights_col: column name for weights
-    - min_r2: minimum R-squared value required for model acceptance
+    Args:
+        data: DataFrame containing the dataset
+        test_size: proportion of the dataset to include in the test split
+        price_col: column name for prices
+        quantity_col: column name for quantities
+        weights_col: column name for weights
+        min_r2: minimum R-squared value required for model acceptance
+        quality_test_error_col: by default best_relative_absolute_error
+    other option is best_mean_relative_error
+    to take the mean error of the cross validation
 
     Returns:
-    - DataFrame: results of the experiment
+        DataFrame: results of the experiment
     """
     # Initialize variables
     results = {}
@@ -208,6 +245,7 @@ def run_experiment(
             "best_model_b",
             "best_model_r2",
             "best_mean_relative_error",
+            "best_relative_absolute_error",
             "best_model_elasticity",
             "best_model_elasticity_error_propagation",
             "best_model_aic",
@@ -229,6 +267,9 @@ def run_experiment(
         results["best_mean_relative_error"] = results[
             best_model + "_mean_relative_error"
         ]
+        results["best_relative_absolute_error"] = results[
+            best_model + "_relative_absolute_error"
+        ]
         results["best_model_elasticity"] = results[best_model + "_elasticity"]
         results["best_model_elasticity_error_propagation"] = results[
             best_model + "_elasticity_error_propagation"
@@ -239,12 +280,12 @@ def run_experiment(
 
         # Perform quality tests
         results["quality_test"] = quality_test(
-            results["median_quantity"], results["best_mean_relative_error"]
+            results["median_quantity"], results[quality_test_error_col]
         )
         # Perform high quality test
         results["quality_test_high"] = quality_test(
             results["median_quantity"],
-            results["best_mean_relative_error"],
+            results[quality_test_error_col],
             high_threshold=True,
         )
         # Perform medium quality test
@@ -270,7 +311,19 @@ def run_experiment_for_uid(
     quantity_col: str = "quantity",
     weights_col: str = "days",
 ) -> pd.DataFrame:
-    """Run experiment for a specific user ID."""
+    """Run experiment for a specific user ID.
+
+    Args:
+        uid (str): The user ID for which the experiment is run.
+        data (pd.DataFrame): The input data containing the user's data.
+        test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
+        price_col (str, optional): The column name for the price data. Defaults to "price".
+        quantity_col (str, optional): The column name for the quantity data. Defaults to "quantity".
+        weights_col (str, optional): The column name for the weights data. Defaults to "days".
+
+    Returns:
+        pd.DataFrame: The results of the experiment for the specified user ID.
+    """
     subset_data = data[data["uid"] == uid]
     try:
         results_df = run_experiment(
@@ -344,7 +397,22 @@ def run_experiment_for_uids_parallel(
     quantity_col: str = "quantity",
     weights_col: str = "days",
 ) -> pd.DataFrame:
-    """Run experiment for multiple user IDs in parallel."""
+    """Run experiment for multiple user IDs in parallel.
+
+    Args:
+        df_input (pd.DataFrame): The input DataFrame containing the data.
+        test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
+        price_col (str, optional): The name of the column containing the price data.
+        Defaults to "price".
+        quantity_col (str, optional): The name of the column containing the quantity data.
+        Defaults to "quantity".
+        weights_col (str, optional): The name of the column containing the weights data.
+        Defaults to "days".
+
+    Returns:
+        pd.DataFrame: The concatenated DataFrame containing the results of the experiments
+        for each user ID.
+    """
     # Delete rows with price equal to zero
     df_input = df_input[df_input[price_col] != 0]
     unique_uids = df_input["uid"].unique()
@@ -368,7 +436,22 @@ def run_experiment_for_uids_not_parallel(
     quantity_col: str = "quantity",
     weights_col: str = "days",
 ) -> pd.DataFrame:
-    """Run experiment for multiple user IDs (not in parallel)."""
+    """Run experiment for multiple user IDs (not in parallel).
+
+    Args:
+        df_input (pd.DataFrame): The input DataFrame containing the data.
+        test_size (float, optional): The proportion of the data to use for testing.
+        Defaults to 0.1.
+        price_col (str, optional): The name of the column containing the price data.
+        Defaults to "price".
+        quantity_col (str, optional): The name of the column containing the quantity data.
+        Defaults to "quantity".
+        weights_col (str, optional): The name of the column containing the weights data.
+        Defaults to "days".
+
+    Returns:
+        pd.DataFrame: The concatenated DataFrame of results for each user ID.
+    """
     # Delete rows with price equal to zero
     df_input = df_input[df_input[price_col] != 0]
     results_list = []

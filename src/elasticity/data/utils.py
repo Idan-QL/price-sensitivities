@@ -54,18 +54,16 @@ def preprocess_by_day(
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Preprocess the DataFrame by grouping data by day.
 
-    Parameters:
-    - df (DataFrame): DataFrame containing the data.
-    - uid_col (str): Column name for the UID.
-    - date_col (str): Column name for the date.
-    - price_col (str): Column name for the price data.
-    - quantity_col (str): Column name for the quantity data.
-    - median_price_col (str): Column name for the median price.
-    - median_quantity_col (str): Column name for the median quantity.
+    Args:
+        input_df (DataFrame): DataFrame containing the data.
+        uid_col (str): Column name for the UID.
+        date_col (str): Column name for the date.
+        price_col (str): Column name for the price data.
+        quantity_col (str): Column name for the quantity data.
 
     Returns:
-    - df_by_day (DataFrame): DataFrame grouped by day.
-    - df_by_price_norm (DataFrame): DataFrame grouped by price normalization.
+        df_by_day (DataFrame): DataFrame grouped by day.
+        df_by_price_norm (DataFrame): DataFrame grouped by price normalization.
     """
     input_df.loc[:, date_col] = pd.to_datetime(input_df[date_col])
     input_df.loc[:, price_col] = round(input_df[price_col], 1)

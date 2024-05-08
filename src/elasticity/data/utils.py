@@ -114,8 +114,9 @@ def preprocess_by_price(
     weights_col: str = "days",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Preprocess the DataFrame by grouping data by price normalization."""
+    
     df_by_price_norm = (
-        input_df.groupby([uid_col, price_col])
+        input_df.groupby([uid_col, price_col, 'outlier_quantity'])
         .agg({quantity_col: "mean", date_col: "count"})
         .reset_index()
         .sort_values(by=[uid_col, price_col])
@@ -133,8 +134,7 @@ def uid_with_price_changes(
     uid_col: str = "uid",
     date_col: str = "date",
     price_col: str = "price",
-    quantity_col: str = "units",
-    last_month: bool = False
+    quantity_col: str = "units"
 ) -> pd.DataFrame:
     """Filter the DataFrame to obtain elasticity candidates based on specified criteria."""
     # Preprocess data
@@ -148,24 +148,19 @@ def uid_with_price_changes(
 
     # Calculate price change percentage
     df_by_price = df_by_price.sort_values(by=[uid_col, price_col])
-    df_by_price["price_change"] = df_by_price.groupby(uid_col)[price_col].pct_change()
-    count_price_change_col = "price_change"
-    # Outlier 
-    if not last_month:
-        df_by_price['outlier_price'] = df_by_price.groupby(uid_col)[price_col].transform(
-            outliers_modified_z_score)
-        df_by_price['outlier_quantity'] = df_by_price.groupby(uid_col)[quantity_col].transform(
-            outliers_modified_z_score)
-        df_by_price["price_change_without_outliers"] = np.where(
-            ((~df_by_price['outlier_price']) & (~df_by_price['outlier_quantity'])),
-            df_by_price["price_change"],
-            0)
-        count_price_change_col = "price_change_without_outliers"
+    # df_by_price["price_change"] = df_by_price.groupby([uid_col])[
+    #     price_col].pct_change() 
+    df_by_price["price_change"] = df_by_price.groupby([uid_col, "outlier_quantity"])[
+        price_col].pct_change() 
+    df_by_price["price_change_without_outliers"] = np.where(
+        df_by_price['outlier_quantity'],
+        0,
+        df_by_price["price_change"])
 
 
     # Filter user IDs with significant price changes
     return (
-        df_by_price[df_by_price[count_price_change_col].abs() > threshold]
+        df_by_price[df_by_price['price_change_without_outliers'].abs() > threshold]
         .groupby(uid_col)[price_col]
         .nunique()
         .loc[lambda x: x > price_changes]
@@ -173,20 +168,53 @@ def uid_with_price_changes(
     )
 
 
-def mad(data, axis=None):
-    return np.median(np.abs(data - np.median(data, axis)), axis)
 
-def outliers_modified_z_score(ys):
-    threshold = 3.5
+def outliers_iqr_filtered(ys: list[float],
+                          filter_threshold: float = 0.001,
+                          outlier_threshold: float = 10,
+                          range_threshold: float = 15,
+                          q: float = 1.5,
+                          quartile = 15) -> list[bool]:
+    """
+    Detect outliers in a list of values using the Interquartile Range (IQR) method.
+
+    Args:
+        ys (list[float]): The list of values to analyze.
+        filter_threshold (float, optional): The threshold to eliminate no conversions day
+        outlier_threshold (float, optional): The threshold above which values are considered
+            potential outliers.
+            Defaults to 10.
+        range_threshold (float, optional): The threshold for the range of filtered values.
+            If the range is less than or equal to this value, no outliers are detected. Defaults to 15.
+        q (float, optional): The coefficient used to determine the bounds for outliers.
+            Defaults to 1.5.
+        quartile (float, optional): The percentile used to calculate the quartiles.
+            Defaults to 15.
+
+    Returns:
+        list[bool]: A boolean list indicating whether each value is an outlier (True) or not (False).
+    """
+    ys = np.array(ys)
+    filtered_ys = ys[ys > filter_threshold]
+
+    if len(filtered_ys) == 0:
+        return [False] * len(ys)
     
-    median_y = np.median(ys)
-    mad_y = mad(ys)
+    filtered_range = np.max(filtered_ys) - np.min(filtered_ys)
     
-    modified_z_scores = 0.6745 * (ys - median_y) / mad_y
-    # The additional term in the denominator (where n is the sample size) 
-    # helps to adjust the MAD estimator for small sample sizes, making it more robust.
-    # modified_z_scores = 0.6745 * (ys - median_y) / (mad_y * (1 + 5 / (len(ys) - 1)))
-    return np.abs(modified_z_scores) > threshold
+    if filtered_range <= range_threshold:
+        return [False] * len(ys)
+    else:
+        quartile_1, quartile_3 = np.percentile(filtered_ys, [quartile, 100-quartile]) 
+        iqr = quartile_3 - quartile_1
+        lower_bound = quartile_1 - q * iqr
+        upper_bound = quartile_3 + q * iqr
+        
+        outliers = (ys < lower_bound) | (ys > upper_bound)
+        # Set values less than or equal to the outlier_threshold to False
+        outliers[ys <= outlier_threshold] = False
+    
+        return outliers
 
 
 def uid_with_min_conversions(

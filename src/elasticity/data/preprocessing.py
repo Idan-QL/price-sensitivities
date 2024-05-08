@@ -13,7 +13,7 @@ from elasticity.data.utils import (
     round_price_effect,
     uid_with_min_conversions,
     uid_with_price_changes,
-    outliers_modified_z_score
+    outliers_iqr_filtered
 )
 from ql_toolkit.config.runtime_config import app_state
 
@@ -82,11 +82,6 @@ def read_and_preprocess(
         quantity_col=quantity_col,
     )
 
-    df_by_price['outlier_price'] = df_by_price.groupby(uid_col)[price_col].transform(
-        outliers_modified_z_score)
-    df_by_price['outlier_quantity'] = df_by_price.groupby(uid_col)[quantity_col].transform(
-        outliers_modified_z_score)
-
     return df_by_price, df, total_uid, end_date, df_revenue_uid, total_revenue
 
 
@@ -148,24 +143,16 @@ def progressive_monthly_aggregate(
         # Concatenate df_part with df_ko
         df_part = pd.concat([df_part, df_ko])
 
-        if end_date_dt == start_date_dt:
-            uid_changes = uid_with_price_changes(
+        df_part['outlier_quantity'] = df_part.groupby(uid_col)[quantity_col].transform(
+        outliers_iqr_filtered)
+
+        uid_changes = uid_with_price_changes(
                 df_part,
                 price_changes=price_changes,
                 threshold=threshold,
                 price_col=price_col,
-                quantity_col=quantity_col,
-                last_month=True
-            )
-        else:
-            uid_changes = uid_with_price_changes(
-                df_part,
-                price_changes=price_changes,
-                threshold=threshold,
-                price_col=price_col,
-                quantity_col=quantity_col,
-                last_month=False
-            )
+                quantity_col=quantity_col)
+
         uid_conversions = uid_with_min_conversions(
             df_part,
             min_days_with_conversions=min_days_with_conversions,

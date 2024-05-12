@@ -40,6 +40,7 @@ def run_model_type(
         # Cross-validation results
         (
             cv_mean_relative_error,
+            cv_mean_norm_rmse,
             cv_mean_a,
             cv_mean_b,
             cv_mean_elasticity,
@@ -57,6 +58,7 @@ def run_model_type(
             elasticity_error_propagation,
             aic,
             relative_absolute_error,
+            norm_rmse,
         ) = estimate_coefficients(
             data,
             model_type,
@@ -66,6 +68,7 @@ def run_model_type(
         )
         # Store the results in a dictionary
         results[model_type + "_mean_relative_error"] = cv_mean_relative_error
+        results[model_type + "_mean_norm_rmse"] = cv_mean_norm_rmse
         results[model_type + "_mean_a"] = cv_mean_a
         results[model_type + "_mean_b"] = cv_mean_b
         results[model_type + "_mean_elasticity"] = cv_mean_elasticity
@@ -76,6 +79,7 @@ def run_model_type(
         results[model_type + "_r2"] = r_squared
         results[model_type + "_elasticity"] = elasticity
         results[model_type + "_relative_absolute_error"] = relative_absolute_error
+        results[model_type + "_norm_rmse"] = norm_rmse
         results[model_type + "_elasticity_error_propagation"] = (
             elasticity_error_propagation
         )
@@ -85,6 +89,7 @@ def run_model_type(
         # Set all the results to np.nan
         model_type_columns = [
             "_mean_relative_error",
+            "_mean_norm_rmse",
             "_mean_a",
             "_mean_b",
             "_mean_elasticity",
@@ -95,7 +100,7 @@ def run_model_type(
             "_r2",
             "_elasticity",
             "_relative_absolute_error",
-            "_elasticity_error_propagation",
+            "_norm_rmse",
             "_elasticity_error_propagation",
             "_aic",
         ]
@@ -188,30 +193,34 @@ def make_details(quality_test: bool, quality_test_high: bool, elasticity: float)
     return f"{elasticity_message} - {quality_test_message}."
 
 
+# TO DO REVIEW QUALITY TEST
 def run_experiment(
     data: pd.DataFrame,
     test_size: float = 0.1,
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
-    min_r2: float = 0.3,
+    max_pvalue: float = 0.05,
+    best_model_error_col: str = "relative_absolute_error",
     quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
 
     Args:
-        data: DataFrame containing the dataset
-        test_size: proportion of the dataset to include in the test split
-        price_col: column name for prices
-        quantity_col: column name for quantities
-        weights_col: column name for weights
-        min_r2: minimum R-squared value required for model acceptance
-        quality_test_error_col: by default best_relative_absolute_error
-    other option is best_mean_relative_error
-    to take the mean error of the cross validation
+        data (pd.DataFrame): DataFrame containing the dataset.
+        test_size (float, optional): Proportion of the dataset to include in the test split.
+        Defaults to 0.1.
+        price_col (str, optional): Column name for prices. Defaults to "price".
+        quantity_col (str, optional): Column name for quantities. Defaults to "quantity".
+        weights_col (str, optional): Column name for weights. Defaults to "days".
+        max_pvalue (float, optional): Maximum p-value for model acceptance. Defaults to 0.05.
+        best_model_error_col (str, optional): Column name for the best model error.
+        Defaults to "relative_absolute_error".
+        quality_test_error_col (str, optional): Column name for the quality test error.
+        Defaults to "best_relative_absolute_error".
 
     Returns:
-        DataFrame: results of the experiment
+        pd.DataFrame: Results of the experiment.
     """
     # Initialize variables
     results = {}
@@ -227,10 +236,14 @@ def run_experiment(
 
         # Check if this model has the lowest mean relative error so far and
         # meets minimum R-squared requirement
-        if (model_results[model_type + "_mean_relative_error"] < best_error) & (
-            model_results[model_type + "_r2"] >= min_r2
+        if (
+            (model_results[model_type + "_" + best_model_error_col] < best_error)
+            &
+            # (model_results[model_type + "_r2"] >= min_r2) &
+            (model_results[model_type + "_pvalue"] <= max_pvalue)
+            & (model_results[model_type + "_" + best_model_error_col] >= 0)
         ):
-            best_error = model_results[model_type + "_mean_relative_error"]
+            best_error = model_results[model_type + "_" + best_model_error_col]
             best_model = model_type
 
         # Update results with model-specific results
@@ -246,6 +259,8 @@ def run_experiment(
             "best_model_r2",
             "best_mean_relative_error",
             "best_relative_absolute_error",
+            "best_mean_norm_rmse",
+            "best_norm_rmse",
             "best_model_elasticity",
             "best_model_elasticity_error_propagation",
             "best_model_aic",
@@ -270,6 +285,8 @@ def run_experiment(
         results["best_relative_absolute_error"] = results[
             best_model + "_relative_absolute_error"
         ]
+        results["best_mean_norm_rmse"] = results[best_model + "_mean_norm_rmse"]
+        results["best_norm_rmse"] = results[best_model + "_norm_rmse"]
         results["best_model_elasticity"] = results[best_model + "_elasticity"]
         results["best_model_elasticity_error_propagation"] = results[
             best_model + "_elasticity_error_propagation"

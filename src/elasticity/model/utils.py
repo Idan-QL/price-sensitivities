@@ -4,6 +4,37 @@ import numpy as np
 import pandas as pd
 
 
+def normalised_rmse(
+    model_type: str,
+    price_col: str,
+    quantity_col: str,
+    data_test: pd.DataFrame,
+    a: float,
+    b: float,
+) -> float:
+    """Calculate the Normalised Root Mean Squared Error (RMSE) by median.
+
+    Args:
+        model_type (str): The type of model being used.
+        price_col (str): The column name for the price data.
+        quantity_col (str): The column name for the quantity data.
+        data_test (pd.DataFrame): The test dataset containing price and quantity data.
+        a (float): The coefficient 'a' used in the quantity calculation.
+        b (float): The coefficient 'b' used in the quantity calculation.
+
+    Returns:
+        float: The normalised RMSE value.
+
+    """
+    predicted_quantity = [
+        calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]
+    ]
+    mean_squared_error = np.mean((data_test[quantity_col] - predicted_quantity) ** 2)
+    rmse = np.sqrt(mean_squared_error)
+    median_predicted_quantity = np.median(predicted_quantity)
+    return round(rmse / median_predicted_quantity, 4)
+
+
 def relative_absolute_error_calculation(
     model_type: str,
     price_col: str,
@@ -12,7 +43,7 @@ def relative_absolute_error_calculation(
     a: float,
     b: float,
 ) -> float:
-    """Calculate the relative absolute error for a given model.
+    """Calculate the relative absolute error for a given model normalised by the max.
 
     Args:
         model_type (str): The type of the model.
@@ -29,8 +60,10 @@ def relative_absolute_error_calculation(
         calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]
     ]
     absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
-
-    return np.mean(absolute_errors / data_test[quantity_col]) * 100
+    normaliser = np.maximum.reduce(
+        [np.abs(data_test[quantity_col].values), np.abs(predicted_quantity)]
+    )
+    return np.mean(absolute_errors / normaliser) * 100
 
 
 def calculate_quantity_from_price(

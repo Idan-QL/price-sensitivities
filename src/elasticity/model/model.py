@@ -9,6 +9,7 @@ import statsmodels.api as sm
 from elasticity.model.utils import (
     calculate_elasticity_error_propagation,
     calculate_elasticity_from_parameters,
+    normalised_rmse,
     relative_absolute_error_calculation,
 )
 
@@ -62,6 +63,7 @@ def estimate_coefficients(
     relative_absolute_error = relative_absolute_error_calculation(
         model_type, price_col, quantity_col, data, a, b
     )
+    norm_rmse = normalised_rmse(model_type, price_col, quantity_col, data, a, b)
     return (
         a,
         b,
@@ -71,4 +73,5 @@ def estimate_coefficients(
         elasticity_error_propagation,
         aic,
         relative_absolute_error,
+        norm_rmse,
     )

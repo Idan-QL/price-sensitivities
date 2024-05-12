@@ -9,11 +9,11 @@ import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 from elasticity.data.utils import (
+    outliers_iqr_filtered,
     preprocess_by_price,
     round_price_effect,
     uid_with_min_conversions,
     uid_with_price_changes,
-    outliers_iqr_filtered
 )
 from ql_toolkit.config.runtime_config import app_state
 
@@ -143,15 +143,17 @@ def progressive_monthly_aggregate(
         # Concatenate df_part with df_ko
         df_part = pd.concat([df_part, df_ko])
 
-        df_part['outlier_quantity'] = df_part.groupby(uid_col)[quantity_col].transform(
-        outliers_iqr_filtered)
+        df_part["outlier_quantity"] = df_part.groupby(uid_col)[quantity_col].transform(
+            outliers_iqr_filtered
+        )
 
         uid_changes = uid_with_price_changes(
-                df_part,
-                price_changes=price_changes,
-                threshold=threshold,
-                price_col=price_col,
-                quantity_col=quantity_col)
+            df_part,
+            price_changes=price_changes,
+            threshold=threshold,
+            price_col=price_col,
+            quantity_col=quantity_col,
+        )
 
         uid_conversions = uid_with_min_conversions(
             df_part,

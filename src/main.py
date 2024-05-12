@@ -83,9 +83,13 @@ def run() -> None:
                 logging.info(f"End date: {end_date}")
                 logging.info(f"Total number of uid: {total_end_date_uid}")
                 logging.info(f"total_revenue: {total_revenue}")
+                outliers_count = df_by_price[
+                    df_by_price["outlier_quantity"]
+                ].uid.nunique()
+                logging.info(f"Number of uid with outliers: {outliers_count}")
 
                 df_results = run_experiment_for_uids_parallel(
-                    df_by_price,
+                    df_by_price[~df_by_price["outlier_quantity"]],
                     price_col="round_price",
                     quantity_col="units",
                     weights_col="days",

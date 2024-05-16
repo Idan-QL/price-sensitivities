@@ -36,7 +36,6 @@ def run() -> None:
     logging.info("config: %s", config)
     client_keys_map = config["client_keys"]
     # End of setup
-    logging.info(f"bucket_name: {app_state.bucket_name}")
     logging.info(f"client_keys_map: {client_keys_map}")
 
     try:
@@ -74,10 +73,7 @@ def run() -> None:
                     total_revenue,
                 ) = preprocessing.read_and_preprocess(
                     client_key=client_key,
-                    channel=channel,
-                    price_changes=5,
-                    threshold=0.01,
-                    min_days_with_conversions=10,
+                    channel=channel
                 )
 
                 logging.info(f"End date: {end_date}")

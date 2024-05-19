@@ -9,8 +9,8 @@ def normalised_rmse(
     price_col: str,
     quantity_col: str,
     data_test: pd.DataFrame,
-    a: float,
-    b: float,
+    a_linear: float,
+    b_linear: float,
 ) -> float:
     """Calculate the Normalised Root Mean Squared Error (RMSE) by median.
 
@@ -19,16 +19,16 @@ def normalised_rmse(
         price_col (str): The column name for the price data.
         quantity_col (str): The column name for the quantity data.
         data_test (pd.DataFrame): The test dataset containing price and quantity data.
-        a (float): The coefficient 'a' used in the quantity calculation.
-        b (float): The coefficient 'b' used in the quantity calculation.
+        a_linear (float): The coefficient 'a_linear' used in the quantity calculation.
+        b_linear (float): The coefficient 'b_linear' used in the quantity calculation.
 
     Returns:
         float: The normalised RMSE value.
 
     """
-    predicted_quantity = [
-        calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]
-    ]
+    predicted_quantity = np.vectorize(
+        lambda p: calculate_quantity_from_price(p, a_linear, b_linear, model_type)
+    )(data_test[price_col])
     mean_squared_error = np.mean((data_test[quantity_col] - predicted_quantity) ** 2)
     rmse = np.sqrt(mean_squared_error)
     median_predicted_quantity = np.median(predicted_quantity)
@@ -40,8 +40,8 @@ def relative_absolute_error_calculation(
     price_col: str,
     quantity_col: str,
     data_test: pd.DataFrame,
-    a: float,
-    b: float,
+    a_linear: float,
+    b_linear: float,
 ) -> float:
     """Calculate the relative absolute error for a given model normalised by the max.
 
@@ -50,15 +50,16 @@ def relative_absolute_error_calculation(
         price_col (str): The name of the column containing the prices.
         quantity_col (str): The name of the column containing the quantities.
         data_test (pandas.DataFrame): The test dataset.
-        a (float): The coefficient 'a' for the model.
-        b (float): The coefficient 'b' for the model.
+        a_linear (float): The coefficient 'a_linear' used in the quantity calculation.
+        b_linear (float): The coefficient 'b_linear' used in the quantity calculation.
 
     Returns:
     - relative_absolute_error (float): The relative absolute error.
     """
-    predicted_quantity = [
-        calculate_quantity_from_price(p, a, b, model_type) for p in data_test[price_col]
-    ]
+    predicted_quantity = np.vectorize(
+        lambda p: calculate_quantity_from_price(p, a_linear, b_linear, model_type)
+    )(data_test[price_col])
+
     absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
     normaliser = np.maximum.reduce(
         [np.abs(data_test[quantity_col].values), np.abs(predicted_quantity)]
@@ -67,72 +68,79 @@ def relative_absolute_error_calculation(
 
 
 def calculate_quantity_from_price(
-    price: float, a: float, b: float, model_type: str
+    price: float, a_linear: float, b_linear: float, model_type: str
 ) -> float:
     """Calculate quantity demanded given price and demand model parameters.
 
     Args:
         price (float): Price of the product.
-        a (float): Intercept parameter of the demand model.
-        b (float): Slope parameter of the demand model.
+        a_linear (float): Intercept parameter of the demand model.
+        b_linear (float): Slope parameter of the demand model.
         model_type (str): Type of demand model ('linear', 'power', or 'exponential').
 
     Returns:
         float: Quantity demanded.
     """
     if model_type == "linear":
-        return linear_demand(price, a, b)
+        return linear_demand(price, a_linear, b_linear)
     if model_type == "power":
-        return power_demand(price, a, b)
+        return power_demand(price, a_linear, b_linear)
     if model_type == "exponential":
-        return exponential_demand(price, a, b)
+        return exponential_demand(price, a_linear, b_linear)
     raise ValueError("Invalid model type. Use 'linear', 'power', or 'exponential'.")
 
 
-def linear_demand(price: float, a: float, b: float) -> float:
+def linear_demand(price: float, a_linear: float, b_linear: float) -> float:
     """Linear demand model: Q = a + bP.
 
     Args:
         price (float): The price of the product.
-        a (float): The intercept of the demand curve.
-        b (float): The slope of the demand curve.
+        a_linear (float): The intercept of the demand curve.
+        b_linear (float): The slope of the demand curve.
 
     Returns:
         float: The quantity demanded at the given price.
 
     """
-    return a + b * price
+    return a_linear + b_linear * price
 
 
-def power_demand(price: float, a: float, b: float) -> float:
+def power_demand(price: float, a_linear: float, b_linear: float) -> float:
     """Power demand model: Q = a * P**b.
 
+    a_linear and b_linear are the result of a fit after linear transformation
+    log(Q) = log(a_power) + b_power * log(P)
+    log(Q) = a_linear + b_linear * log(P)
+
     Args:
-        price (float): The price of the power.
-        a (float): The coefficient a in the power demand model.
-        b (float): The coefficient b in the power demand model.
+        price (float): Price.
+        a_linear (float): The coefficient a_linear.
+        b_linear (float): The coefficient b_linear.
 
     Returns:
     - float: The calculated power demand.
 
     """
     log_price = np.log(price)
-    log_q = linear_demand(log_price, a, b)  # return log Q
+    log_q = linear_demand(log_price, a_linear, b_linear)
     return np.exp(log_q)
 
 
-def exponential_demand(price: float, a: float, b: float) -> float:
+def exponential_demand(price: float, a_linear: float, b_linear: float) -> float:
     """Exponential demand model: Q = a * exp(-bP).
 
+    a_linear and b_linear are the result of a fit after linear transformation
+    log(Q) = log(a_exp) +  b_exp * P
+    log(Q) = a_linear + b_linear * P
     Args:
         price (float): The price of the product.
-        a (float): The coefficient 'a' in the demand equation.
-        b (float): The coefficient 'b' in the demand equation.
+        a_linear (float): The coefficient a_linear.
+        b_linear (float): The coefficient b_linear.
 
     Returns:
     - float: The quantity demanded according to the exponential demand model.
     """
-    log_q = linear_demand(price, a, b)
+    log_q = linear_demand(price, a_linear, b_linear)
     return np.exp(log_q)
 
 
@@ -259,25 +267,30 @@ def elasticity_error_propagation_linear(
     - float: Standard deviation of elasticity at price p
     """
 
-    def partial_derivative_a_linear(a: float, b: float, p: float) -> float:
+    def partial_derivative_a(a: float, b: float, p: float) -> float:
         return (-b * p) / (a + b * p) ** 2
 
-    def partial_derivative_b_linear(a: float, b: float, p: float) -> float:
+    def partial_derivative_b(a: float, b: float, p: float) -> float:
         return (a * p) / (a + b * p) ** 2
 
-    a_label = cov_matrix.columns[0]
-    b_label = cov_matrix.columns[1]
+    # Calculate partial derivatives at the given price p
+    partial_a = partial_derivative_a(a, b, p)
+    partial_b = partial_derivative_b(a, b, p)
 
-    return np.sqrt(
-        (partial_derivative_a_linear(a, b, p) ** 2 * cov_matrix[a_label][a_label])
-        + (partial_derivative_b_linear(a, b, p) ** 2 * cov_matrix[b_label][b_label])
-        + (
-            2
-            * partial_derivative_a_linear(a, b, p)
-            * partial_derivative_b_linear(a, b, p)
-            * cov_matrix[a_label][b_label]
-        )
+    # Extract the covariance matrix elements
+    cov_aa = cov_matrix.iloc[0, 0]
+    cov_bb = cov_matrix.iloc[1, 1]
+    cov_ab = cov_matrix.iloc[0, 1]
+
+    # Calculate the variance of elasticity using the covariance matrix and partial derivatives
+    variance = (
+        partial_a**2 * cov_aa
+        + partial_b**2 * cov_bb
+        + 2 * partial_a * partial_b * cov_ab
     )
+
+    # Return the standard deviation (square root of the variance)
+    return np.sqrt(variance)
 
 
 def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -> float:

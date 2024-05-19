@@ -121,46 +121,46 @@ def add_run(
             ),
             "uid_with_data_for_elasticity": len(df_results),
             "uid_with_elasticity_less_than_minus6": len(
-                df_results_quality[df_results_quality.best_model_elasticity < -6]
+                df_results_quality[df_results_quality.best_elasticity < -6]
             ),
             "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= -6)
-                    & (df_results_quality.best_model_elasticity < min_elasticity)
+                    (df_results_quality.best_elasticity >= -6)
+                    & (df_results_quality.best_elasticity < min_elasticity)
                 ]
             ),
             "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= min_elasticity)
-                    & (df_results_quality.best_model_elasticity < -1)
+                    (df_results_quality.best_elasticity >= min_elasticity)
+                    & (df_results_quality.best_elasticity < -1)
                 ]
             ),
             "uid_with_elasticity_moreorequal_minus1_less_than_0": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= -1)
-                    & (df_results_quality.best_model_elasticity < 0)
+                    (df_results_quality.best_elasticity >= -1)
+                    & (df_results_quality.best_elasticity < 0)
                 ]
             ),
             "uid_with_elasticity_moreorequal_0_less_than_1": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= 0)
-                    & (df_results_quality.best_model_elasticity < 1)
+                    (df_results_quality.best_elasticity >= 0)
+                    & (df_results_quality.best_elasticity < 1)
                 ]
             ),
             "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= 1)
-                    & (df_results_quality.best_model_elasticity < max_elasticity)
+                    (df_results_quality.best_elasticity >= 1)
+                    & (df_results_quality.best_elasticity < max_elasticity)
                 ]
             ),
             "uid_with_elasticity_moreorequal_3.8_less_than_6": len(
                 df_results_quality[
-                    (df_results_quality.best_model_elasticity >= max_elasticity)
-                    & (df_results_quality.best_model_elasticity < 6)
+                    (df_results_quality.best_elasticity >= max_elasticity)
+                    & (df_results_quality.best_elasticity < 6)
                 ]
             ),
             "uid_with_elasticity_moreorequal_6": len(
-                df_results_quality[df_results_quality.best_model_elasticity >= 6]
+                df_results_quality[df_results_quality.best_elasticity >= 6]
             ),
             "best_model_power_count": best_model_counts.get("power", 0),
             "best_model_exponential_count": best_model_counts.get("exponential", 0),

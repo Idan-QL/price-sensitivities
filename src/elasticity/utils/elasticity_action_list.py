@@ -22,8 +22,8 @@ def generate_actions_list(
 
     attr_cs = [
         "uid",
-        "best_model_a",
-        "best_model_b",
+        "best_a",
+        "best_b",
         "best_model",
         "cap_power_elasticity",
         "details",

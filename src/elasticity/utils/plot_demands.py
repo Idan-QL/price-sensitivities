@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from elasticity.model.model import estimate_coefficients
+from elasticity.utils.consts import EXPONENTIAL, LINEAR, POWER
 from ql_toolkit.s3 import io as s3io
 
 
@@ -85,7 +86,7 @@ def generate_data(
 
 def plot_model_and_prices_from_df(
     df: pd.DataFrame,
-    model_type: str = "linear",
+    model_type: str = LINEAR,
     title: str = "",
     quantity_col: str = "quantity",
     price_col: str = "price",
@@ -105,13 +106,13 @@ def plot_model_and_prices_from_df(
 
     prices = df[price_col]
 
-    if model_type == "power":
+    if model_type == POWER:
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Power Demand Curve"
-    elif model_type == "exponential":
+    elif model_type == EXPONENTIAL:
         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Exponential Demand Curve"
-    elif model_type == "linear":
+    elif model_type == LINEAR:
         quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
         label = "Linear Demand Curve"
     else:
@@ -235,20 +236,20 @@ def plot_model_and_prices(
     print("uid:", uid)
     df_results_uid = df_results[df_results.uid == uid]
     df_uid = df_data[df_data.uid == uid]
-    a_linear = df_results_uid["best_model_a"].iloc[0]
-    b_linear = df_results_uid["best_model_b"].iloc[0]
+    a_linear = df_results_uid["best_a"].iloc[0]
+    b_linear = df_results_uid["best_b"].iloc[0]
     model_type = df_results_uid["best_model"].iloc[0]
-    elasticity = df_results_uid["best_model_elasticity"].iloc[0]
-    error = df_results_uid["best_model_elasticity_error_propagation"].iloc[0]
+    elasticity = df_results_uid["best_elasticity"].iloc[0]
+    error = df_results_uid["best_elasticity_error_propagation"].iloc[0]
     prices = np.linspace(df_uid[price_col].min(), df_uid[price_col].max(), 100)
 
-    if model_type == "power":
+    if model_type == POWER:
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Power Demand Curve"
-    elif model_type == "exponential":
+    elif model_type == EXPONENTIAL:
         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Exponential Demand Curve"
-    elif model_type == "linear":
+    elif model_type == LINEAR:
         quantities = linear_demand_equation(prices, a_linear, b_linear)
         label = "Linear Demand Curve"
     else:
@@ -389,11 +390,11 @@ def plot_model_and_prices_buffer(
     """
     df_results_uid = df_results[df_results.uid == uid]
     df_uid = df_data[df_data.uid == uid]
-    a_linear = df_results_uid["best_model_a"].iloc[0]
-    b_linear = df_results_uid["best_model_b"].iloc[0]
+    a_linear = df_results_uid["best_a"].iloc[0]
+    b_linear = df_results_uid["best_b"].iloc[0]
     model_type = df_results_uid["best_model"].iloc[0]
-    elasticity = df_results_uid["best_model_elasticity"].iloc[0]
-    error = df_results_uid["best_model_elasticity_error_propagation"].iloc[0]
+    elasticity = df_results_uid["best_elasticity"].iloc[0]
+    error = df_results_uid["best_elasticity_error_propagation"].iloc[0]
     prices = np.linspace(df_uid["round_price"].min(), df_uid["round_price"].max(), 100)
 
     fig, ax = plt.subplots()
@@ -507,7 +508,7 @@ def run_save_graph_top10(
     """
     elasticity_uids_top10 = (
         df_results[df_results["quality_test"]]
-        .sort_values("best_mean_relative_error")[:10]["uid"]
+        .sort_values("best_relative_absolute_error")[:10]["uid"]
         .unique()
     )
 
@@ -536,7 +537,7 @@ def run_save_graph_parallel(
     """
     elasticity_uids = (
         df_results[df_results["quality_test"]]
-        .sort_values("best_mean_relative_error")["uid"]
+        .sort_values("best_relative_absolute_error")["uid"]
         .unique()
     )
 

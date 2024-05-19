@@ -2,12 +2,19 @@
 
 import logging
 import multiprocessing
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 
 from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
+from elasticity.utils.consts import (
+    CV_SUFFIXES_CS,
+    MODEL_SUFFIXES_CS,
+    MODEL_TYPES,
+    OUTPUT_CS,
+)
 
 
 def run_model_type(
@@ -17,7 +24,7 @@ def run_model_type(
     price_col: str,
     quantity_col: str,
     weights_col: str,
-) -> dict:
+) -> Tuple[dict, float, float]:
     """Calculate cross-validation and regression results.
 
     Args:
@@ -37,29 +44,10 @@ def run_model_type(
     median_price = data[price_col].median()
     median_quantity = data[quantity_col].median()
     try:
-        # Cross-validation results
-        (
-            cv_mean_relative_error,
-            cv_mean_norm_rmse,
-            cv_mean_a,
-            cv_mean_b,
-            cv_mean_elasticity,
-            cv_mean_r2,
-        ) = cross_validation(
+        cv_result = cross_validation(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
-        # Regular regression results
-        (
-            a,
-            b,
-            pvalue,
-            r_squared,
-            elasticity,
-            elasticity_error_propagation,
-            aic,
-            relative_absolute_error,
-            norm_rmse,
-        ) = estimate_coefficients(
+        estimation_result = estimate_coefficients(
             data,
             model_type,
             price_col=price_col,
@@ -67,44 +55,19 @@ def run_model_type(
             weights_col=weights_col,
         )
         # Store the results in a dictionary
-        results[model_type + "_mean_relative_error"] = cv_mean_relative_error
-        results[model_type + "_mean_norm_rmse"] = cv_mean_norm_rmse
-        results[model_type + "_mean_a"] = cv_mean_a
-        results[model_type + "_mean_b"] = cv_mean_b
-        results[model_type + "_mean_elasticity"] = cv_mean_elasticity
-        results[model_type + "_mean_r2"] = cv_mean_r2
-        results[model_type + "_a"] = a
-        results[model_type + "_b"] = b
-        results[model_type + "_pvalue"] = pvalue
-        results[model_type + "_r2"] = r_squared
-        results[model_type + "_elasticity"] = elasticity
-        results[model_type + "_relative_absolute_error"] = relative_absolute_error
-        results[model_type + "_norm_rmse"] = norm_rmse
-        results[model_type + "_elasticity_error_propagation"] = (
-            elasticity_error_propagation
-        )
-        results[model_type + "_aic"] = aic
+        for suffix in CV_SUFFIXES_CS:
+            key = model_type + "_" + suffix
+            results[key] = getattr(cv_result, suffix)
+        for suffix in MODEL_SUFFIXES_CS:
+            key = model_type + "_" + suffix
+            results[key] = getattr(estimation_result, suffix)
+
     except Exception as e:
         logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
-        model_type_columns = [
-            "_mean_relative_error",
-            "_mean_norm_rmse",
-            "_mean_a",
-            "_mean_b",
-            "_mean_elasticity",
-            "_mean_r2",
-            "_a",
-            "_b",
-            "_pvalue",
-            "_r2",
-            "_elasticity",
-            "_relative_absolute_error",
-            "_norm_rmse",
-            "_elasticity_error_propagation",
-            "_aic",
-        ]
-        for col in [model_type + c for c in model_type_columns]:
+        for col in [
+            model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)
+        ]:
             results[col] = np.nan
     return results, median_quantity, median_price
 
@@ -228,7 +191,7 @@ def run_experiment(
     best_error = float("inf")  # Initialize with a very large value
 
     # Iterate over different model types
-    for model_type in ["linear", "power", "exponential"]:
+    for model_type in MODEL_TYPES:
         # Run model for each type
         model_results, median_quantity, median_price = run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
@@ -252,46 +215,25 @@ def run_experiment(
     # If no best model is found, log and assign NaN values
     if best_model is None:
         logging.info("No best model found")
-        best_model_columns = [
-            "best_model",
-            "best_model_a",
-            "best_model_b",
-            "best_model_r2",
-            "best_mean_relative_error",
-            "best_relative_absolute_error",
-            "best_mean_norm_rmse",
-            "best_norm_rmse",
-            "best_model_elasticity",
-            "best_model_elasticity_error_propagation",
-            "best_model_aic",
-            "median_quantity",
-            "median_price",
-            "details",
-        ]
-        for col in best_model_columns:
-            results[col] = np.nan
 
+        # Assign nan
+        results["best_model"] = np.nan
+        for suffix in MODEL_SUFFIXES_CS:
+            results[f"best_{suffix}"] = np.nan
+        results["median_quantity"] = np.nan
+        results["median_price"] = np.nan
+
+        # Assign False
         for col in ["quality_test", "quality_test_high", "quality_test_medium"]:
             results[col] = False
+        results["details"] = np.nan
     else:
-        # Assign best model-specific results to the final results
+        # Assign best model-specific results to the final results using a loop
         results["best_model"] = best_model
-        results["best_model_a"] = results[best_model + "_a"]
-        results["best_model_b"] = results[best_model + "_b"]
-        results["best_model_r2"] = results[best_model + "_r2"]
-        results["best_mean_relative_error"] = results[
-            best_model + "_mean_relative_error"
-        ]
-        results["best_relative_absolute_error"] = results[
-            best_model + "_relative_absolute_error"
-        ]
-        results["best_mean_norm_rmse"] = results[best_model + "_mean_norm_rmse"]
-        results["best_norm_rmse"] = results[best_model + "_norm_rmse"]
-        results["best_model_elasticity"] = results[best_model + "_elasticity"]
-        results["best_model_elasticity_error_propagation"] = results[
-            best_model + "_elasticity_error_propagation"
-        ]
-        results["best_model_aic"] = results[best_model + "_aic"]
+        for suffix in MODEL_SUFFIXES_CS:
+            results[f"best_{suffix}"] = results[f"{best_model}_{suffix}"]
+
+        # Assign other results
         results["median_quantity"] = median_quantity
         results["median_price"] = median_price
 
@@ -299,17 +241,16 @@ def run_experiment(
         results["quality_test"] = quality_test(
             results["median_quantity"], results[quality_test_error_col]
         )
-        # Perform high quality test
         results["quality_test_high"] = quality_test(
             results["median_quantity"],
             results[quality_test_error_col],
             high_threshold=True,
         )
-        # Perform medium quality test
         results["quality_test_medium"] = (
             results["quality_test"] and not results["quality_test_high"]
         )
 
+        # Generate detailed results
         results["details"] = make_details(
             results["quality_test"],
             results["quality_test_high"],
@@ -352,57 +293,8 @@ def run_experiment_for_uid(
         )
     except Exception as e:
         logging.info(f"Error for user ID {uid}: {e}")
-        columns = [
-            "linear_mean_relative_error",
-            "linear_mean_a",
-            "linear_mean_b",
-            "linear_mean_elasticity",
-            "linear_mean_r2",
-            "linear_a",
-            "linear_b",
-            "linear_pvalue",
-            "linear_r2",
-            "linear_elasticity",
-            "linear_elasticity_error_propagation",
-            "linear_aic",
-            "power_mean_relative_error",
-            "power_mean_a",
-            "power_mean_b",
-            "power_mean_elasticity",
-            "power_mean_r2",
-            "power_a",
-            "power_b",
-            "power_pvalue",
-            "power_r2",
-            "power_elasticity",
-            "power_elasticity_error_propagation",
-            "power_aic",
-            "exponential_mean_relative_error",
-            "exponential_mean_a",
-            "exponential_mean_b",
-            "exponential_mean_elasticity",
-            "exponential_mean_r2",
-            "exponential_a",
-            "exponential_b",
-            "exponential_pvalue",
-            "exponential_r2",
-            "exponential_elasticity",
-            "exponential_elasticity_error_propagation",
-            "exponential_aic",
-            "best_model",
-            "best_model_a",
-            "best_model_b",
-            "best_model_r2",
-            "best_mean_relative_error",
-            "best_model_elasticity",
-            "best_model_elasticity_error_propagation",
-            "median_quantity",
-            "median_price",
-            "quality_test",
-            "uid",
-        ]
 
-        results_df = pd.DataFrame(np.nan, index=[0], columns=columns)
+        results_df = pd.DataFrame(np.nan, index=[0], columns=OUTPUT_CS)
     results_df["uid"] = uid
     return results_df
 

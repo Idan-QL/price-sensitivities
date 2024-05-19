@@ -16,7 +16,6 @@ from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
 from ql_toolkit.attrs.write import write_actions_list
-from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
 from report import logging_error, report, write_graphs
@@ -72,8 +71,7 @@ def run() -> None:
                     df_revenue_uid,
                     total_revenue,
                 ) = preprocessing.read_and_preprocess(
-                    client_key=client_key,
-                    channel=channel
+                    client_key=client_key, channel=channel
                 )
 
                 logging.info(f"End date: {end_date}")

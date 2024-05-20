@@ -11,7 +11,7 @@ CV_SUFFIXES_CS = [
     "mean_b",
     "mean_elasticity",
     "mean_r2",
-    "mean_relative_error",
+    "mean_relative_absolute_error",
     "mean_norm_rmse",
 ]
 
@@ -41,12 +41,14 @@ OUTPUT_CS = [
 OUTPUT_CS += [f"best_model_{suffix}" for suffix in MODEL_SUFFIXES_CS]
 
 # Add other specific keys directly
-OUTPUT_CS.extend([
-    "median_quantity",
-    "median_price",
-    "quality_test",
-    "quality_test_high",
-    "quality_test_medium",
-    "details",
-    "uid"  # Including uid as in the original OUTPUT_CS
-])
+OUTPUT_CS.extend(
+    [
+        "median_quantity",
+        "median_price",
+        "quality_test",
+        "quality_test_high",
+        "quality_test_medium",
+        "details",
+        "uid",  # Including uid as in the original OUTPUT_CS
+    ]
+)

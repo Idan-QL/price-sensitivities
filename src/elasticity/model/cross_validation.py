@@ -16,7 +16,7 @@ class CrossValidationResult(BaseModel):
     """Represents the result of cross_validation.
 
     Attributes:
-        mean_relative_error (float): The estimated coefficient 'a'.
+        mean_relative_absolute_error (float): The estimated coefficient 'a'.
         mean_norm_rmse (float): The estimated coefficient 'b'.
         mean_a (float): The p-value associated with the estimated coefficients.
         mean_b (float): The R-squared value of the fitted model.
@@ -30,7 +30,7 @@ class CrossValidationResult(BaseModel):
     mean_a: float = float("inf")
     mean_b: float = float("inf")
     mean_elasticity: float = float("inf")
-    mean_relative_error: float = float("inf")
+    mean_relative_absolute_error: float = float("inf")
     mean_norm_rmse: float = float("inf")
     mean_r2: float = float("inf")
 
@@ -109,7 +109,7 @@ def cross_validation(
             logging.warning("Cross-validation failed: No valid results.")
             return CrossValidationResult()
 
-        mean_relative_error = np.mean(relative_absolute_errors_test)
+        mean_relative_absolute_error = np.mean(relative_absolute_errors_test)
         mean_norm_rmse = np.mean(normalised_rmse_test)
         mean_a = np.mean(a_lists)
         mean_b = np.mean(b_lists)
@@ -120,7 +120,7 @@ def cross_validation(
             mean_a=mean_a,
             mean_b=mean_b,
             mean_elasticity=mean_elasticity,
-            mean_relative_error=mean_relative_error,
+            mean_relative_absolute_error=mean_relative_absolute_error,
             mean_norm_rmse=mean_norm_rmse,
             mean_r2=mean_r2,
         )

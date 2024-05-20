@@ -31,15 +31,16 @@ class EstimationResult(BaseModel):
         norm_rmse (float): The normalized root mean squared error of the fitted model.
     """
 
-    a: float = float('inf')
-    b: float = float('inf')
-    pvalue: float = float('inf')
-    r2: float = float('inf')
-    elasticity: float = float('inf')
-    elasticity_error_propagation: float = float('inf')
-    aic: float = float('inf')
-    relative_absolute_error: float = float('inf')
-    norm_rmse: float = float('inf')
+    a: float = float("inf")
+    b: float = float("inf")
+    pvalue: float = float("inf")
+    r2: float = float("inf")
+    elasticity: float = float("inf")
+    elasticity_error_propagation: float = float("inf")
+    aic: float = float("inf")
+    relative_absolute_error: float = float("inf")
+    norm_rmse: float = float("inf")
+
 
 def validate_data(data: pd.DataFrame, required_columns: List[str]) -> bool:
     """Validate the input data for coefficient estimation.
@@ -56,9 +57,12 @@ def validate_data(data: pd.DataFrame, required_columns: List[str]) -> bool:
         logging.warning(f"Missing required columns: {', '.join(missing_columns)}")
         return False
     if data.shape[0] < 3:
-        logging.warning("Insufficient data to fit the model. Need at least 3 rows of data.")
+        logging.warning(
+            "Insufficient data to fit the model. Need at least 3 rows of data."
+        )
         return False
     return True
+
 
 def check_positive_values(data: pd.DataFrame, columns: List[str]) -> bool:
     """Check if specified columns contain only positive values.
@@ -73,15 +77,19 @@ def check_positive_values(data: pd.DataFrame, columns: List[str]) -> bool:
     for column in columns:
         if (data[column] <= 0).any():
             logging.warning(
-                f"Column '{column}' contains negative values, not suitable for log transformation.")
+                f"Column '{column}' contains negative values, not suitable for log transformation."
+            )
             return False
     return True
 
-def fit_model(data: pd.DataFrame,
-              model_type: str,
-              price_col: str,
-              quantity_col: str,
-              weights_col: str)-> sm.WLS:
+
+def fit_model(
+    data: pd.DataFrame,
+    model_type: str,
+    price_col: str,
+    quantity_col: str,
+    weights_col: str,
+) -> sm.WLS:
     """Fit a weighted least squares (WLS) model.
 
     Args:
@@ -105,6 +113,7 @@ def fit_model(data: pd.DataFrame,
         y = np.log(y)
 
     return sm.WLS(y, x, weights=weights).fit()
+
 
 def estimate_coefficients(
     data: pd.DataFrame,
@@ -148,11 +157,17 @@ def estimate_coefficients(
         median_price = data[price_col].median()
 
         elasticity_error_propagation = calculate_elasticity_error_propagation(
-            model_type, model.params.iloc[0], model.params.iloc[1], cov_matrix, median_price
+            model_type,
+            model.params.iloc[0],
+            model.params.iloc[1],
+            cov_matrix,
+            median_price,
         )
         a, b = model.params.iloc[0], model.params.iloc[1]
         aic = model.aic
-        elasticity = calculate_elasticity_from_parameters(model_type, a, b, median_price)
+        elasticity = calculate_elasticity_from_parameters(
+            model_type, a, b, median_price
+        )
         relative_absolute_error = relative_absolute_error_calculation(
             model_type, price_col, quantity_col, data, a, b
         )
@@ -168,11 +183,12 @@ def estimate_coefficients(
             elasticity_error_propagation=elasticity_error_propagation,
             aic=aic,
             relative_absolute_error=relative_absolute_error,
-            norm_rmse=norm_rmse
+            norm_rmse=norm_rmse,
         )
     except Exception as e:
         logging.error(f"Error during model estimation: {e}")
         return EstimationResult()
+
 
 # Example usage:
 # data = pd.DataFrame({

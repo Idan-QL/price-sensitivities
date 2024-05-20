@@ -27,7 +27,6 @@ MODEL_SUFFIXES_CS = [
     "aic",
 ]
 
-# Combine CV_SUFFIXES_CS and MODEL_SUFFIXES_CS to create MODEL_TYPE_SUFFIXE_CS
 MODEL_TYPE_SUFFIXE_CS = CV_SUFFIXES_CS + MODEL_SUFFIXES_CS
 
 # Generate OUTPUT_CS dynamically using list comprehensions
@@ -36,10 +35,9 @@ OUTPUT_CS = [
     for model_type in MODEL_TYPES
     for suffix in MODEL_TYPE_SUFFIXE_CS
 ]
-
 # Add best model-specific keys using list comprehension
-OUTPUT_CS += [f"best_model_{suffix}" for suffix in MODEL_SUFFIXES_CS]
-
+OUTPUT_CS.extend(["best_model"])
+OUTPUT_CS += [f"best_{suffix}" for suffix in MODEL_SUFFIXES_CS]
 # Add other specific keys directly
 OUTPUT_CS.extend(
     [
@@ -49,6 +47,5 @@ OUTPUT_CS.extend(
         "quality_test_high",
         "quality_test_medium",
         "details",
-        "uid",  # Including uid as in the original OUTPUT_CS
     ]
 )

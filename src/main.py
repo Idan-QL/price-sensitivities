@@ -16,6 +16,7 @@ from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
 from ql_toolkit.attrs.write import write_actions_list
+from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
 from report import logging_error, report, write_graphs
@@ -138,7 +139,7 @@ def process_client_channel(
             total_uid=total_end_date_uid,
             df_report=pd.DataFrame([data_report[-1]]),
             end_date=end_date,
-            s3_dir="data_science/eval_results/elasticity/graphs/",
+            s3_dir=app_state.s3_eval_results_dir() + "graphs/",
         )
 
     except (KeyError, pd.errors.EmptyDataError) as e:
@@ -172,7 +173,7 @@ def run() -> None:
     s3io.write_dataframe_to_s3(
         file_name=f"elasticity_report_{args_dict['config']}_{end_date}.csv",
         xdf=report_df,
-        s3_dir="data_science/eval_results/elasticity/",
+        s3_dir=app_state.s3_eval_results_dir(),
     )
 
 

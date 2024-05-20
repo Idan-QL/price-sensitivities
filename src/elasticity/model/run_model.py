@@ -2,12 +2,19 @@
 
 import logging
 import multiprocessing
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 
 from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
+from elasticity.utils.consts import (
+    CV_SUFFIXES_CS,
+    MODEL_SUFFIXES_CS,
+    MODEL_TYPES,
+    OUTPUT_CS,
+)
 
 
 def run_model_type(
@@ -17,7 +24,7 @@ def run_model_type(
     price_col: str,
     quantity_col: str,
     weights_col: str,
-) -> dict:
+) -> Tuple[dict, float, float]:
     """Calculate cross-validation and regression results.
 
     Args:
@@ -32,32 +39,18 @@ def run_model_type(
         dict: A dictionary containing the calculated results.
         float: The median quantity from the input data.
         float: The median price from the input data.
+
+    Raises:
+        ValueError: If there is an error.
     """
     results = {}
     median_price = data[price_col].median()
     median_quantity = data[quantity_col].median()
     try:
-        # Cross-validation results
-        (
-            cv_mean_relative_error,
-            cv_mean_a,
-            cv_mean_b,
-            cv_mean_elasticity,
-            cv_mean_r2,
-        ) = cross_validation(
+        cv_result = cross_validation(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
-        # Regular regression results
-        (
-            a,
-            b,
-            pvalue,
-            r_squared,
-            elasticity,
-            elasticity_error_propagation,
-            aic,
-            relative_absolute_error,
-        ) = estimate_coefficients(
+        estimation_result = estimate_coefficients(
             data,
             model_type,
             price_col=price_col,
@@ -65,48 +58,26 @@ def run_model_type(
             weights_col=weights_col,
         )
         # Store the results in a dictionary
-        results[model_type + "_mean_relative_error"] = cv_mean_relative_error
-        results[model_type + "_mean_a"] = cv_mean_a
-        results[model_type + "_mean_b"] = cv_mean_b
-        results[model_type + "_mean_elasticity"] = cv_mean_elasticity
-        results[model_type + "_mean_r2"] = cv_mean_r2
-        results[model_type + "_a"] = a
-        results[model_type + "_b"] = b
-        results[model_type + "_pvalue"] = pvalue
-        results[model_type + "_r2"] = r_squared
-        results[model_type + "_elasticity"] = elasticity
-        results[model_type + "_relative_absolute_error"] = relative_absolute_error
-        results[model_type + "_elasticity_error_propagation"] = (
-            elasticity_error_propagation
-        )
-        results[model_type + "_aic"] = aic
+        for suffix in CV_SUFFIXES_CS:
+            key = model_type + "_" + suffix
+            results[key] = getattr(cv_result, suffix)
+        for suffix in MODEL_SUFFIXES_CS:
+            key = model_type + "_" + suffix
+            results[key] = getattr(estimation_result, suffix)
+
     except Exception as e:
         logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
-        model_type_columns = [
-            "_mean_relative_error",
-            "_mean_a",
-            "_mean_b",
-            "_mean_elasticity",
-            "_mean_r2",
-            "_a",
-            "_b",
-            "_pvalue",
-            "_r2",
-            "_elasticity",
-            "_relative_absolute_error",
-            "_elasticity_error_propagation",
-            "_elasticity_error_propagation",
-            "_aic",
-        ]
-        for col in [model_type + c for c in model_type_columns]:
+        for col in [
+            model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)
+        ]:
             results[col] = np.nan
     return results, median_quantity, median_price
 
 
 def quality_test(
     median_quantity: float,
-    best_mean_relative_error: float,
+    best_relative_absolute_error: float,
     high_threshold: bool = False,
     q_test_value_1: float = 30,
     q_test_value_2: float = 100,
@@ -114,48 +85,72 @@ def quality_test(
     q_test_threshold_2: float = 40,
     q_test_threshold_3: float = 30,
 ) -> bool:
-    """Perform quality test based on median quantity and mean relative error.
+    """Perform quality test based on median quantity and relative absolute error.
 
     This function performs a quality test based on the provided median quantity and
-    mean relative error. The test checks if the median quantity and mean relative
+    relative absolute error. The test checks if the median quantity and relative absolute
     error meet certain thresholds based on the provided parameters.
-    The thresholds can be adjusted by modifying the function parameters.
+
+    The thresholds can be adjusted by modifying the function parameters. If `high_threshold`
+    is True, thresholds are halved, making the test stricter. For example, if the original
+    thresholds list is [50, 40, 30], then if `high_threshold` is True, the new thresholds
+    list will be [25, 20, 15]. Thus, the high quality test is twice as strict as the medium
+    quality test.
 
     Args:
-        median_quantity: median quantity value
-        best_mean_relative_error: mean relative error of the best model
-        high_threshold: if True, apply high threshold, otherwise apply regular threshold
-        q_test_value_1: value for first quality test threshold
-        q_test_value_2: value for second quality test threshold
-        q_test_threshold_1: threshold for the first quality test
-        q_test_threshold_2: threshold for the second quality test
-        q_test_threshold_3: threshold for the third quality test
+        median_quantity (float): The median quantity value.
+        best_relative_absolute_error (float): The relative absolute error of the best model.
+        high_threshold (bool): If True, apply high threshold by halving the thresholds.
+        q_test_value_1 (float): Value for the first quality test threshold.
+        q_test_value_2 (float): Value for the second quality test threshold.
+        q_test_threshold_1 (float): Threshold for the first quality test.
+        q_test_threshold_2 (float): Threshold for the second quality test.
+        q_test_threshold_3 (float): Threshold for the third quality test.
 
     Returns:
-        bool: True if the test passes, False otherwise
+        bool: True if the test passes, False otherwise.
+
+    Raises:
+        ValueError: If input values are not of the expected type.
     """
-    thresholds = [q_test_threshold_1, q_test_threshold_2, q_test_threshold_3]
-    if high_threshold:
-        thresholds = [threshold // 2 for threshold in thresholds]
-    return (
-        (median_quantity < q_test_value_1 and best_mean_relative_error <= thresholds[0])
-        or (
-            q_test_value_1 <= median_quantity < q_test_value_2
-            and best_mean_relative_error <= thresholds[1]
+    try:
+        if not isinstance(median_quantity, (int, float)):
+            raise ValueError("median_quantity must be a number.")
+        if not isinstance(best_relative_absolute_error, (int, float)):
+            raise ValueError("best_relative_absolute_error must be a number.")
+        thresholds = [q_test_threshold_1, q_test_threshold_2, q_test_threshold_3]
+        if high_threshold:
+            thresholds = [threshold // 2 for threshold in thresholds]
+        return (
+            (
+                median_quantity < q_test_value_1
+                and best_relative_absolute_error <= thresholds[0]
+            )
+            or (
+                q_test_value_1 <= median_quantity < q_test_value_2
+                and best_relative_absolute_error <= thresholds[1]
+            )
+            or (
+                median_quantity >= q_test_value_2
+                and best_relative_absolute_error <= thresholds[2]
+            )
         )
-        or (
-            median_quantity >= q_test_value_2
-            and best_mean_relative_error <= thresholds[2]
-        )
-    )
+    except ValueError as e:
+        if high_threshold:
+            logging.error(f"High quality_test failed,: {e}")
+        else:
+            logging.error(f"Medium quality_test failed,: {e}")
+        return False
 
 
-def make_details(quality_test: bool, quality_test_high: bool, elasticity: float) -> str:
+def make_details(
+    is_quality_test_passed: bool, is_high_quality_test_passed: bool, elasticity: float
+) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
     Args:
-        quality_test (bool): Indicates if a quality test was conducted.
-        quality_test_high (bool): Indicates if the quality test was of high quality.
+        is_quality_test_passed (bool): Indicates if a quality test was conducted.
+        is_high_quality_test_passed (bool): Indicates if the quality test was of high quality.
         elasticity (float): The elasticity value.
 
     Returns:
@@ -174,121 +169,130 @@ def make_details(quality_test: bool, quality_test_high: bool, elasticity: float)
         elasticity_message = ""
 
     # Determine quality test conclusion
-    if quality_test and quality_test_high:
+    if is_quality_test_passed and is_high_quality_test_passed:
         quality_test_message = "High quality test"
-    elif quality_test and not quality_test_high:
+    elif is_quality_test_passed and not is_high_quality_test_passed:
         quality_test_message = "Medium quality test"
-    elif not quality_test and not quality_test_high:
+    elif not is_quality_test_passed and not is_high_quality_test_passed:
         quality_test_message = "Low quality test"
     else:
-        quality_test_message = (
-            ""  # Adjust according to your needs if other conditions exist
-        )
+        quality_test_message = ""
 
     return f"{elasticity_message} - {quality_test_message}."
 
 
+# TO DO REVIEW QUALITY TEST
 def run_experiment(
     data: pd.DataFrame,
     test_size: float = 0.1,
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
-    min_r2: float = 0.3,
+    max_pvalue: float = 0.05,
+    threshold_best_model_cv_or_refit: int = 7,
     quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
 
+    This function evaluates multiple regression models using cross-validation and
+    coefficient estimation. It selects the best model based on the lowest
+    'best_model_error_col', given the model's p-value is within the max_pvalue limit.
+    It also performs quality tests on 'quality_test_error_col' and generates a
+    detailed result.
+
     Args:
-        data: DataFrame containing the dataset
-        test_size: proportion of the dataset to include in the test split
-        price_col: column name for prices
-        quantity_col: column name for quantities
-        weights_col: column name for weights
-        min_r2: minimum R-squared value required for model acceptance
-        quality_test_error_col: by default best_relative_absolute_error
-    other option is best_mean_relative_error
-    to take the mean error of the cross validation
+        data (pd.DataFrame): DataFrame containing the dataset.
+        test_size (float, optional): Proportion of the dataset to include in the test split.
+        Defaults to 0.1.
+        price_col (str, optional): Column name for prices. Defaults to "price".
+        quantity_col (str, optional): Column name for quantities. Defaults to "quantity".
+        weights_col (str, optional): Column name for weights. Defaults to "days".
+        max_pvalue (float, optional): Maximum p-value for model acceptance. Defaults to 0.05.
+        threshold_best_model_cv_or_refit (int, optional): threshold to choose best model from
+        cv test score or refit. Defaults to 7.
+        quality_test_error_col (str, optional): Column name for the quality test error.
+        Defaults to "best_relative_absolute_error".
+
+    The function follows these steps:
+    1. Initialize a dictionary `results` to store results and variables to track the best model
+    and error.
+    2. Iterate over each model type in MODEL_TYPES.
+       - For each model type, perform cross-validation and coefficient estimation using
+       `run_model_type`.
+       - Update `results` with the model-specific results.
+       - if len(data)>'threshold_best_model_cv_or_refit, best_model_error_col from CV test
+       otherwise from refit error
+       - Check if the current model has the lowest 'best_model_error_col', meets the p-value
+       criterion, and has a non-negative error.
+       - If the current model is better than the previous best, update `best_model` and
+       `best_error`.
+    3. If no model meets the criteria, log the information, assign NaN values for model-specific
+    results,
+    and set quality test flags to False.
+    4. If a best model is found:
+       - Assign best model-specific results to the final results.
+       - Perform quality tests to determine if the model meets high, medium, or low quality
+       standards.
+       - Generate a detailed message based on the quality tests and elasticity.
+    5. Convert the `results` dictionary to a DataFrame and return it.
 
     Returns:
-        DataFrame: results of the experiment
+        pd.DataFrame: Results of the experiment.
     """
     # Initialize variables
     results = {}
     best_model = None
     best_error = float("inf")  # Initialize with a very large value
 
-    # Iterate over different model types
-    for model_type in ["linear", "power", "exponential"]:
-        # Run model for each type
+    for model_type in MODEL_TYPES:
         model_results, median_quantity, median_price = run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
 
-        # Check if this model has the lowest mean relative error so far and
-        # meets minimum R-squared requirement
-        if (model_results[model_type + "_mean_relative_error"] < best_error) & (
-            model_results[model_type + "_r2"] >= min_r2
+        if len(data) > threshold_best_model_cv_or_refit:
+            best_model_error_col = "mean_relative_absolute_error"
+        else:
+            best_model_error_col = "relative_absolute_error"
+
+        if (
+            (model_results[model_type + "_" + best_model_error_col] < best_error)
+            and (model_results[model_type + "_pvalue"] <= max_pvalue)
+            and (model_results[model_type + "_" + best_model_error_col] >= 0)
         ):
-            best_error = model_results[model_type + "_mean_relative_error"]
+            best_error = model_results[model_type + "_" + best_model_error_col]
             best_model = model_type
 
-        # Update results with model-specific results
         results.update(model_results)
 
     # If no best model is found, log and assign NaN values
     if best_model is None:
-        logging.info("No best model found")
-        best_model_columns = [
-            "best_model",
-            "best_model_a",
-            "best_model_b",
-            "best_model_r2",
-            "best_mean_relative_error",
-            "best_relative_absolute_error",
-            "best_model_elasticity",
-            "best_model_elasticity_error_propagation",
-            "best_model_aic",
-            "median_quantity",
-            "median_price",
-            "details",
-        ]
-        for col in best_model_columns:
-            results[col] = np.nan
+        results["best_model"] = np.nan
+        for suffix in MODEL_SUFFIXES_CS:
+            results[f"best_{suffix}"] = np.nan
+        results["median_quantity"] = np.nan
+        results["median_price"] = np.nan
 
         for col in ["quality_test", "quality_test_high", "quality_test_medium"]:
             results[col] = False
+
+        results["details"] = np.nan
     else:
-        # Assign best model-specific results to the final results
         results["best_model"] = best_model
-        results["best_model_a"] = results[best_model + "_a"]
-        results["best_model_b"] = results[best_model + "_b"]
-        results["best_model_r2"] = results[best_model + "_r2"]
-        results["best_mean_relative_error"] = results[
-            best_model + "_mean_relative_error"
-        ]
-        results["best_relative_absolute_error"] = results[
-            best_model + "_relative_absolute_error"
-        ]
-        results["best_model_elasticity"] = results[best_model + "_elasticity"]
-        results["best_model_elasticity_error_propagation"] = results[
-            best_model + "_elasticity_error_propagation"
-        ]
-        results["best_model_aic"] = results[best_model + "_aic"]
+
+        for suffix in MODEL_SUFFIXES_CS:
+            results[f"best_{suffix}"] = results[f"{best_model}_{suffix}"]
+
         results["median_quantity"] = median_quantity
         results["median_price"] = median_price
 
-        # Perform quality tests
         results["quality_test"] = quality_test(
             results["median_quantity"], results[quality_test_error_col]
         )
-        # Perform high quality test
         results["quality_test_high"] = quality_test(
             results["median_quantity"],
             results[quality_test_error_col],
             high_threshold=True,
         )
-        # Perform medium quality test
         results["quality_test_medium"] = (
             results["quality_test"] and not results["quality_test_high"]
         )
@@ -299,7 +303,6 @@ def run_experiment(
             results["power_elasticity"],
         )
 
-    # Convert the dictionary to a DataFrame
     return pd.DataFrame(results, index=[0])
 
 
@@ -334,58 +337,9 @@ def run_experiment_for_uid(
             weights_col=weights_col,
         )
     except Exception as e:
-        logging.info(f"Error for user ID {uid}: {e}")
-        columns = [
-            "linear_mean_relative_error",
-            "linear_mean_a",
-            "linear_mean_b",
-            "linear_mean_elasticity",
-            "linear_mean_r2",
-            "linear_a",
-            "linear_b",
-            "linear_pvalue",
-            "linear_r2",
-            "linear_elasticity",
-            "linear_elasticity_error_propagation",
-            "linear_aic",
-            "power_mean_relative_error",
-            "power_mean_a",
-            "power_mean_b",
-            "power_mean_elasticity",
-            "power_mean_r2",
-            "power_a",
-            "power_b",
-            "power_pvalue",
-            "power_r2",
-            "power_elasticity",
-            "power_elasticity_error_propagation",
-            "power_aic",
-            "exponential_mean_relative_error",
-            "exponential_mean_a",
-            "exponential_mean_b",
-            "exponential_mean_elasticity",
-            "exponential_mean_r2",
-            "exponential_a",
-            "exponential_b",
-            "exponential_pvalue",
-            "exponential_r2",
-            "exponential_elasticity",
-            "exponential_elasticity_error_propagation",
-            "exponential_aic",
-            "best_model",
-            "best_model_a",
-            "best_model_b",
-            "best_model_r2",
-            "best_mean_relative_error",
-            "best_model_elasticity",
-            "best_model_elasticity_error_propagation",
-            "median_quantity",
-            "median_price",
-            "quality_test",
-            "uid",
-        ]
+        logging.info(f"Error for UID {uid}: {e}")
 
-        results_df = pd.DataFrame(np.nan, index=[0], columns=columns)
+        results_df = pd.DataFrame(np.nan, index=[0], columns=OUTPUT_CS)
     results_df["uid"] = uid
     return results_df
 
@@ -397,7 +351,7 @@ def run_experiment_for_uids_parallel(
     quantity_col: str = "quantity",
     weights_col: str = "days",
 ) -> pd.DataFrame:
-    """Run experiment for multiple user IDs in parallel.
+    """Run experiment for multiple UID in parallel.
 
     Args:
         df_input (pd.DataFrame): The input DataFrame containing the data.
@@ -416,7 +370,8 @@ def run_experiment_for_uids_parallel(
     # Delete rows with price equal to zero
     df_input = df_input[df_input[price_col] != 0]
     unique_uids = df_input["uid"].unique()
-    pool = multiprocessing.Pool()  # Use the default number of processes
+    total_cores = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool((total_cores - 1))
     results_list = pool.starmap(
         run_experiment_for_uid,
         [

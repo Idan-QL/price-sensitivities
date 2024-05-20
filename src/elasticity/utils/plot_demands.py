@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from elasticity.model.model import estimate_coefficients
+from elasticity.utils.consts import EXPONENTIAL, LINEAR, POWER
 from ql_toolkit.s3 import io as s3io
 
 
@@ -85,11 +86,12 @@ def generate_data(
 
 def plot_model_and_prices_from_df(
     df: pd.DataFrame,
-    model_type: str = "linear",
+    model_type: str = LINEAR,
     title: str = "",
     quantity_col: str = "quantity",
     price_col: str = "price",
     days_col: str = "days",
+    outlier_col: str = "outlier_quantity",
 ) -> None:
     """plot_demand_curves from model result and actual data."""
     a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _, _ = (
@@ -104,29 +106,39 @@ def plot_model_and_prices_from_df(
 
     prices = df[price_col]
 
-    if model_type == "power":
+    if model_type == POWER:
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Power Demand Curve"
-    elif model_type == "exponential":
+    elif model_type == EXPONENTIAL:
         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Exponential Demand Curve"
-    elif model_type == "linear":
+    elif model_type == LINEAR:
         quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
         label = "Linear Demand Curve"
     else:
         print("typo in model type, power, exponential or linear")
 
+    outlier_mask = df[outlier_col]  # Boolean mask for outliers
+
     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
     plt.scatter(
-        df[quantity_col],
-        df[price_col],
-        s=df[days_col] * 10,
+        df[quantity_col][~outlier_mask],  # Plot non-outlier points
+        df[price_col][~outlier_mask],
+        s=df[days_col][~outlier_mask] * 10,
         marker="+",
-        color="red",
+        color="blue",
         label=(
             "Actual Data (Avg units sold, size is prop. to "
             "the nb. of days at this price"
         ),
+    )
+    plt.scatter(
+        df[quantity_col][outlier_mask],  # Plot outlier points
+        df[price_col][outlier_mask],
+        s=df[days_col][outlier_mask] * 10,
+        marker="+",
+        color="red",  # Change color for outliers
+        label="Outlier Data",
     )
 
     plt.xlabel("Quantity")
@@ -146,47 +158,124 @@ def plot_model_and_prices_from_df(
     plt.show()
 
 
+# def plot_model_and_prices_from_df(
+#     df: pd.DataFrame,
+#     model_type: str = "linear",
+#     title: str = "",
+#     quantity_col: str = "quantity",
+#     price_col: str = "price",
+#     days_col: str = "days",
+#     outlier_col: str = 'outlier_quantity'
+# ) -> None:
+#     """plot_demand_curves from model result and actual data."""
+#     a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _, _ = (
+#         estimate_coefficients(
+#             data=df,
+#             model_type=model_type,
+#             price_col=price_col,
+#             quantity_col=quantity_col,
+#             weights_col=days_col,
+#         )
+#     )
+
+#     prices = df[price_col]
+
+#     if model_type == "power":
+#         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
+#         label = "Power Demand Curve"
+#     elif model_type == "exponential":
+#         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
+#         label = "Exponential Demand Curve"
+#     elif model_type == "linear":
+#         quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
+#         label = "Linear Demand Curve"
+#     else:
+#         print("typo in model type, power, exponential or linear")
+
+#     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
+#     plt.scatter(
+#         df[quantity_col],
+#         df[price_col],
+#         s=df[days_col] * 10,
+#         marker="+",
+#         color="red",
+#         label=(
+#             "Actual Data (Avg units sold, size is prop. to "
+#             "the nb. of days at this price"
+#         ),
+#     )
+
+#     plt.xlabel("Quantity")
+#     plt.ylabel("Price")
+#     plt.title(
+#         title
+#         + label
+#         + "= elasticity: "
+#         + str(elasticity)
+#         + " +/- "
+#         + str(round(elasticity_error_propagation, 2))
+#     )
+#     plt.grid(True)
+#     # Place legend outside the plot at the bottom
+#     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
+
+#     plt.show()
+
+
 def plot_model_and_prices(
     df_results: pd.DataFrame,
     df_data: pd.DataFrame,
     uid: str,
     title: str = "",
-    price_col: str = "round_price",
+    quantity_col: str = "quantity",
+    price_col: str = "price",
+    days_col: str = "days",
+    outlier_col: str = "outlier_quantity",
 ) -> None:
     """plot_demand_curves from model result and actual data."""
     print("uid:", uid)
     df_results_uid = df_results[df_results.uid == uid]
     df_uid = df_data[df_data.uid == uid]
-    a_linear = df_results_uid["best_model_a"].iloc[0]
-    b_linear = df_results_uid["best_model_b"].iloc[0]
+    a_linear = df_results_uid["best_a"].iloc[0]
+    b_linear = df_results_uid["best_b"].iloc[0]
     model_type = df_results_uid["best_model"].iloc[0]
-    elasticity = df_results_uid["best_model_elasticity"].iloc[0]
-    error = df_results_uid["best_model_elasticity_error_propagation"].iloc[0]
+    elasticity = df_results_uid["best_elasticity"].iloc[0]
+    error = df_results_uid["best_elasticity_error_propagation"].iloc[0]
     prices = np.linspace(df_uid[price_col].min(), df_uid[price_col].max(), 100)
 
-    if model_type == "power":
+    if model_type == POWER:
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Power Demand Curve"
-    elif model_type == "exponential":
+    elif model_type == EXPONENTIAL:
         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Exponential Demand Curve"
-    elif model_type == "linear":
+    elif model_type == LINEAR:
         quantities = linear_demand_equation(prices, a_linear, b_linear)
         label = "Linear Demand Curve"
     else:
         print("typo in model type, power, exponential or linear")
 
+    outlier_mask = df_uid[outlier_col]  # Boolean mask for outliers
+
     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
     plt.scatter(
-        df_uid["units"],
-        df_uid[price_col],
-        s=df_uid["days"] * 10,
+        df_uid[quantity_col][~outlier_mask],  # Plot non-outlier points
+        df_uid[price_col][~outlier_mask],
+        s=df_uid[days_col][~outlier_mask] * 10,
         marker="+",
-        color="red",
+        color="green",
         label=(
             "Actual Data (Avg units sold, size is prop. to "
             "the nb. of days at this price"
         ),
+    )
+    plt.scatter(
+        df_uid[quantity_col][outlier_mask],  # Plot outlier points
+        df_uid[price_col][outlier_mask],
+        s=df_uid[days_col][outlier_mask] * 10,
+        marker="+",
+        color="red",  # Change color for outliers
+        label="Outlier Data",
     )
 
     plt.xlabel("Quantity")
@@ -301,11 +390,11 @@ def plot_model_and_prices_buffer(
     """
     df_results_uid = df_results[df_results.uid == uid]
     df_uid = df_data[df_data.uid == uid]
-    a_linear = df_results_uid["best_model_a"].iloc[0]
-    b_linear = df_results_uid["best_model_b"].iloc[0]
+    a_linear = df_results_uid["best_a"].iloc[0]
+    b_linear = df_results_uid["best_b"].iloc[0]
     model_type = df_results_uid["best_model"].iloc[0]
-    elasticity = df_results_uid["best_model_elasticity"].iloc[0]
-    error = df_results_uid["best_model_elasticity_error_propagation"].iloc[0]
+    elasticity = df_results_uid["best_elasticity"].iloc[0]
+    error = df_results_uid["best_elasticity_error_propagation"].iloc[0]
     prices = np.linspace(df_uid["round_price"].min(), df_uid["round_price"].max(), 100)
 
     fig, ax = plt.subplots()
@@ -419,7 +508,7 @@ def run_save_graph_top10(
     """
     elasticity_uids_top10 = (
         df_results[df_results["quality_test"]]
-        .sort_values("best_mean_relative_error")[:10]["uid"]
+        .sort_values("best_relative_absolute_error")[:10]["uid"]
         .unique()
     )
 
@@ -448,7 +537,7 @@ def run_save_graph_parallel(
     """
     elasticity_uids = (
         df_results[df_results["quality_test"]]
-        .sort_values("best_mean_relative_error")["uid"]
+        .sort_values("best_relative_absolute_error")["uid"]
         .unique()
     )
 

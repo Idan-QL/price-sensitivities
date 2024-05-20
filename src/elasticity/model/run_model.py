@@ -189,7 +189,7 @@ def run_experiment(
     quantity_col: str = "quantity",
     weights_col: str = "days",
     max_pvalue: float = 0.05,
-    best_model_error_col: str = "mean_relative_absolute_error",
+    threshold_best_model_cv_or_refit: int = 7,
     quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
@@ -208,8 +208,8 @@ def run_experiment(
         quantity_col (str, optional): Column name for quantities. Defaults to "quantity".
         weights_col (str, optional): Column name for weights. Defaults to "days".
         max_pvalue (float, optional): Maximum p-value for model acceptance. Defaults to 0.05.
-        best_model_error_col (str, optional): Column name for the best model error.
-        Defaults to "relative_absolute_error".
+        threshold_best_model_cv_or_refit (int, optional): threshold to choose best model from
+        cv test score or refit. Defaults to 7.
         quality_test_error_col (str, optional): Column name for the quality test error.
         Defaults to "best_relative_absolute_error".
 
@@ -220,6 +220,8 @@ def run_experiment(
        - For each model type, perform cross-validation and coefficient estimation using
        `run_model_type`.
        - Update `results` with the model-specific results.
+       - if len(data)>'threshold_best_model_cv_or_refit, best_model_error_col from CV test
+       otherwise from refit error
        - Check if the current model has the lowest 'best_model_error_col', meets the p-value
        criterion, and has a non-negative error.
        - If the current model is better than the previous best, update `best_model` and
@@ -246,6 +248,11 @@ def run_experiment(
         model_results, median_quantity, median_price = run_model_type(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
+
+        if len(data)>threshold_best_model_cv_or_refit:
+            best_model_error_col = "mean_relative_absolute_error"
+        else:
+            best_model_error_col = "relative_absolute_error"
 
         if (
             (model_results[model_type + "_" + best_model_error_col] < best_error)

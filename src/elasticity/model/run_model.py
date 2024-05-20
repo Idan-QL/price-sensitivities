@@ -249,7 +249,7 @@ def run_experiment(
             data, model_type, test_size, price_col, quantity_col, weights_col
         )
 
-        if len(data)>threshold_best_model_cv_or_refit:
+        if len(data) > threshold_best_model_cv_or_refit:
             best_model_error_col = "mean_relative_absolute_error"
         else:
             best_model_error_col = "relative_absolute_error"

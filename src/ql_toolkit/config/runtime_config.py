@@ -201,5 +201,21 @@ class AppState(metaclass=SingletonMeta):
             )
         )
 
+    def s3_eval_results_dir(
+        self, client_key: Optional[str] = None, channel: Optional[str] = None
+    ) -> str:
+        """Property that gets the S3 datasets directory path.
+
+        Args:
+            client_key (Optional[str]): The client key. Defaults to None.
+            channel (Optional[str]): The channel. Defaults to None.
+
+        Returns:
+            (str): The S3 datasets directory path.
+        """
+        if not client_key or not channel:
+            return str(path.join(self.s3_ds_dir, "eval_results"))
+        return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
+
 
 app_state = AppState()

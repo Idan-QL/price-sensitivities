@@ -12,6 +12,9 @@ import pandas as pd
 
 import elasticity.utils.plot_demands as plot_demands
 from elasticity.data import preprocessing
+from elasticity.data.group import data_for_group_elasticity
+from elasticity.data.utils import initialize_dates
+from elasticity.model.group import add_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
@@ -34,6 +37,10 @@ def setup_environment() -> tuple:
     client_keys_map = config["client_keys"]
     logging.info(f"client_keys_map: {client_keys_map}")
 
+    start_date, end_date = initialize_dates()
+    logging.info(f"start_date: {start_date}")
+    logging.info(f"end_date: {end_date}")
+
     try:
         is_local = args_dict["local"]
         is_qa_run = config.get("qa_run", False)
@@ -48,11 +55,25 @@ def setup_environment() -> tuple:
     else:
         logging.info(" ------ Running in Production mode ------ ")
 
-    return args_dict, config, client_keys_map, is_local, is_qa_run
+    return (
+        args_dict,
+        config,
+        client_keys_map,
+        is_local,
+        is_qa_run,
+        start_date,
+        end_date,
+    )
 
 
 def process_client_channel(
-    data_report: list, client_key: str, channel: str, is_local: bool
+    data_report: list,
+    client_key: str,
+    channel: str,
+    attr_name: str,
+    is_local: bool,
+    start_date: str,
+    end_date: str,
 ) -> dict:
     """Process a client and channel and return the results.
 
@@ -60,7 +81,10 @@ def process_client_channel(
         data_report (list): List of the data report by client/channel
         client_key (str): The client key.
         channel (str): The channel.
+        attr_name (str): The attr_name to read from Athena.
         is_local (bool): Flag indicating if the script is running locally.
+        start_date (str): The start_date to read data.
+        end_date (str): The end_date.
 
     Returns:
         dict: The results of processing.
@@ -68,11 +92,16 @@ def process_client_channel(
     error_counter = logging_error.ErrorCounter()
     logging.getLogger().addHandler(error_counter)
     try:
-        logging.info(f"Processing {client_key} - {channel}")
+        logging.info(f"Processing {client_key} - {channel} - attr: {attr_name}")
         start_time = datetime.now()
 
-        df_by_price, _, total_end_date_uid, end_date, df_revenue_uid, total_revenue = (
-            preprocessing.read_and_preprocess(client_key=client_key, channel=channel)
+        df_by_price, _, total_end_date_uid, df_revenue_uid, total_revenue = (
+            preprocessing.read_and_preprocess(
+                client_key=client_key,
+                channel=channel,
+                start_date=start_date,
+                end_date=end_date,
+            )
         )
 
         logging.info(f"End date: {end_date}")
@@ -90,11 +119,19 @@ def process_client_channel(
 
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
+        df_group = data_for_group_elasticity(
+            df_by_price, client_key, channel, attr_name
+        )
+        df_results = add_group_elasticity(df_group, df_results)
+
         logging.info(
-            f"elasticity quality test: {df_results.quality_test.value_counts()}"
+            f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"
         )
         logging.info(
-            f"elasticity quality test high: {df_results.quality_test_high.value_counts()}"
+            f"Test high: {df_results[df_results.result_to_push].quality_test_high.value_counts()}"
+        )
+        logging.info(
+            f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}"
         )
 
         s3io.write_dataframe_to_s3(
@@ -139,7 +176,7 @@ def process_client_channel(
             total_uid=total_end_date_uid,
             df_report=pd.DataFrame([data_report[-1]]),
             end_date=end_date,
-            s3_dir=app_state.s3_eval_results_dir() + "graphs/",
+            s3_dir=app_state.s3_eval_results_dir + "/graphs/",
         )
 
     except (KeyError, pd.errors.EmptyDataError) as e:
@@ -157,23 +194,33 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    args_dict, config, client_keys_map, is_local, is_qa_run = setup_environment()
+    (args_dict, config, client_keys_map, is_local, is_qa_run, start_date, end_date) = (
+        setup_environment()
+    )
     data_report = []
 
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
-        for channel in channels_list:
+        attr_name_list = client_keys_map[client_key]["attr_name"]
+        for channel, attr_name in zip(channels_list, attr_name_list):
             data_report = process_client_channel(
-                data_report, client_key, channel, is_local
+                data_report,
+                client_key,
+                channel,
+                attr_name,
+                is_local,
+                start_date,
+                end_date,
             )
 
     report_df = pd.DataFrame(data_report)
 
-    end_date = datetime.now().strftime("%Y-%m-%d")
+    run_date = datetime.now().strftime("%Y-%m-%d")
+    year_month = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m")
     s3io.write_dataframe_to_s3(
-        file_name=f"elasticity_report_{args_dict['config']}_{end_date}.csv",
+        file_name=f"elasticity_report_{args_dict['config']}_{year_month}_{run_date}.csv",
         xdf=report_df,
-        s3_dir=app_state.s3_eval_results_dir(),
+        s3_dir=app_state.s3_eval_results_dir,
     )
 
 

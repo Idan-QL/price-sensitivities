@@ -201,15 +201,42 @@ class AppState(metaclass=SingletonMeta):
             )
         )
 
+    @property
     def s3_eval_results_dir(self) -> str:
-        """Property that gets the S3 datasets directory path.
+        """Property that gets the S3 eval result path.
 
         Returns:
-            (str): The S3 datasets directory path.
+            (str): The S3 eval result path.
         """
         if not self.project_name:
             return str(path.join(self.s3_ds_dir, "eval_results"))
         return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
+
+    @property
+    def s3_athena_dir(self) -> str:
+        """Property that gets the S3 athena dir.
+
+        Returns:
+            (str): The S3 athena dir.
+        """
+        if self.bucket_name == "quicklizard":
+            return "s3://noam-test-glue-use1/athena/output/"
+        if self.bucket_name == "quicklizard-eu-central":
+            return "s3://noam-test-glue-euc1/athena/output/"
+        return ""
+
+    @property
+    def s3_region(self) -> str:
+        """Property that gets the S3 athena dir.
+
+        Returns:
+            (str): The S3 athena dir.
+        """
+        if self.bucket_name == "quicklizard":
+            return "us-east-1"
+        if self.bucket_name == "quicklizard-eu-central":
+            return "eu-central-1"
+        return ""
 
 
 app_state = AppState()

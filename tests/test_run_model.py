@@ -19,7 +19,6 @@ def test_run_experiment(sample_data: pd.DataFrame) -> None:
 
     # Assert that the result is a DataFrame
     assert isinstance(result, pd.DataFrame)
-    print(result.columns)
     assert set(result.columns) == set(OUTPUT_CS)
     # test the results of the 3 models
     assert np.array_equal(result["linear_elasticity"], [-1.0])

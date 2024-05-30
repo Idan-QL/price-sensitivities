@@ -28,7 +28,7 @@ def generate_actions_list(
         "cap_power_elasticity",
         "details",
     ]
-    df_actions = df_results[df_results.quality_test][attr_cs]
+    df_actions = df_results[df_results.result_to_push][attr_cs]
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     attr_names = [
         "uid",

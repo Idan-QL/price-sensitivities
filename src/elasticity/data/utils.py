@@ -257,12 +257,17 @@ def uid_with_min_conversions(
     )
 
 
-def initialize_dates(start_date: str, end_date: str) -> Tuple[str, str]:
+def initialize_dates(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Tuple[str, str]:
     """Initializes the start and end dates for data processing.
 
     Args:
-        start_date (str): The start d -> Tuple[str, str]:ate in the format 'YYYY-MM-DD'.
-        end_date (str): The end date in the format 'YYYY-MM-DD'.
+        start_date (str, optional): The start date in the format 'YYYY-MM-DD'.
+        Defaults to None.
+        end_date (str, optional): The end date in the format 'YYYY-MM-DD'.
+        Defaults to None.
 
     Returns:
         tuple: A tuple containing the initialized start date and end date.
@@ -274,7 +279,7 @@ def initialize_dates(start_date: str, end_date: str) -> Tuple[str, str]:
     The default start_date is 11 months before the end_date.
 
     Example:
-        start_date, end_date = initialize_dates(None, None)
+        start_date, end_date = initialize_dates()
         print(start_date, end_date)
         # Output: '2021-01-01', '2021-12-01'
     """

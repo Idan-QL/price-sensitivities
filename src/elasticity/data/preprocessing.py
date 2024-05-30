@@ -53,7 +53,6 @@ def read_and_preprocess(
             - df_by_price (pd.DataFrame): DataFrame grouped by price.
             - df (pd.DataFrame): Original DataFrame.
             - total_uid (int): Total number of unique IDs.
-            - end_date (str): End date used for data retrieval.
             - df_revenue_uid (pd.DataFrame): DataFrame containing revenue and UID.
             - total_revenue (int): Total revenue.
             Returns None for these values in case of error.
@@ -85,16 +84,16 @@ def read_and_preprocess(
             )
         except Exception as e:
             logging.error(f"Error fetching data: {e}")
-            return None, None, None, end_date, None, None
+            return None, None, None, None, None
 
         # Data preprocessing
         try:
             df_by_price = preprocess_by_price(df, data_columns=data_columns)
         except Exception as e:
             logging.error(f"Error during preprocessing by price: {e}")
-            return None, df, total_uid, end_date, df_revenue_uid, total_revenue
+            return None, df, total_uid, df_revenue_uid, total_revenue
 
-        return df_by_price, df, total_uid, end_date, df_revenue_uid, total_revenue
+        return df_by_price, df, total_uid, df_revenue_uid, total_revenue
 
     except ValueError as e:
         logging.error(f"Date format error: {e}")

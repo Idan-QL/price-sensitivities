@@ -173,8 +173,6 @@ class ElasticityPlotter:
         )
         ax2.set_ylabel("Units", color="tab:orange")
 
-        print(dfplot.date.min(), dfplot.date.max())
-
         ax2.axhline(
             y=median_quantity_uid,
             color="tab:orange",

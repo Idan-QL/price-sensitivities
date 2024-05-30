@@ -92,9 +92,14 @@ def add_run(
     Returns:
         List
     """
-    df_results_quality = df_results[df_results["quality_test"]]
-    df_results_quality_high = df_results[df_results["quality_test_high"]]
+    df_results_quality = df_results[
+        df_results["quality_test"] & df_results["result_to_push"]
+    ]
+    df_results_quality_high = df_results[
+        df_results["quality_test_high"] & df_results["result_to_push"]
+    ]
     best_model_counts = df_results_quality["best_model"].value_counts()
+    elasticity_type_counts = df_results_quality["type"].value_counts()
 
     model_changes = None
     df_lastmonth = get_last_month_results(client_key, channel, end_date)
@@ -162,6 +167,9 @@ def add_run(
             "uid_with_elasticity_moreorequal_6": len(
                 df_results_quality[df_results_quality.best_elasticity >= 6]
             ),
+            "type_uid": elasticity_type_counts.get("uid", 0),
+            "type_group1": elasticity_type_counts.get("group 1", 0),
+            "type_group2": elasticity_type_counts.get("group 2", 0),
             "best_model_power_count": best_model_counts.get("power", 0),
             "best_model_exponential_count": best_model_counts.get("exponential", 0),
             "best_model_linear_count": best_model_counts.get("linear", 0),

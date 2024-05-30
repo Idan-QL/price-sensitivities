@@ -28,7 +28,6 @@ def test_estimate_coefficients_linear(sample_data: pd.DataFrame) -> None:
     """
     model_type = "linear"
     estimation_results = estimate_coefficients(sample_data, model_type)
-    print(model_type, estimation_results)
     assert round(estimation_results.a, 1) == 120.0
     assert round(estimation_results.b, 1) == -2.0
     assert round(estimation_results.pvalue, 1) == 0.0
@@ -58,7 +57,6 @@ def test_estimate_coefficients_power(sample_data: pd.DataFrame) -> None:
     """
     model_type = "power"
     estimation_results = estimate_coefficients(sample_data, model_type)
-    print(model_type, estimation_results)
     assert round(estimation_results.a, 1) == 7.7
     assert round(estimation_results.b, 1) == -1.1
     assert round(estimation_results.pvalue, 1) == 0.0
@@ -88,7 +86,6 @@ def test_estimate_coefficients_exponential(sample_data: pd.DataFrame) -> None:
     """
     model_type = "exponential"
     estimation_results = estimate_coefficients(sample_data, model_type)
-    print(model_type, estimation_results)
     assert round(estimation_results.a, 1) == 5.3
     assert round(estimation_results.b, 1) == -0.0
     assert round(estimation_results.pvalue, 1) == 0.0

@@ -246,6 +246,7 @@ def maybe_get_pd_csv_df(
     file_name: str,
     parse_dates: Union[bool, list] = False,
     s3_rsc: boto3.resource = None,
+    usecols: Optional[list] = None,
 ) -> pd.DataFrame:
     """Read a CSV file, if it exists, from S3 and return it as a pandas DataFrame.
 
@@ -258,6 +259,8 @@ def maybe_get_pd_csv_df(
         parse_dates (Union[bool, list[str]]): if True, try parsing the index as datetime Index.
             If a list of int or str is given, try parsing columns - each as a separate date column.
         s3_rsc (boto3.resource, optional): An S3 resource object.
+        usecols (list): Subset of columns to select, denoted either by column labels or column
+        indices.
 
     Returns:
         pd.DataFrame: A pandas DataFrame.
@@ -271,7 +274,9 @@ def maybe_get_pd_csv_df(
     )
 
     if file_content and isinstance(file_content, str):
-        csv_df = pd.read_csv(StringIO(file_content), parse_dates=parse_dates)
+        csv_df = pd.read_csv(
+            StringIO(file_content), parse_dates=parse_dates, usecols=usecols
+        )
         if not csv_df.empty:
             if "Unnamed: 0" in csv_df.columns:
                 csv_df = csv_df.drop(columns="Unnamed: 0")

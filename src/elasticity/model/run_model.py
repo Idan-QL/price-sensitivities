@@ -310,6 +310,7 @@ def run_experiment_for_uid(
     uid: str,
     data: pd.DataFrame,
     test_size: float = 0.1,
+    uid_col: str = "uid",
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
@@ -320,6 +321,8 @@ def run_experiment_for_uid(
         uid (str): The user ID for which the experiment is run.
         data (pd.DataFrame): The input data containing the user's data.
         test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
+        uid_col (str, optional): The name of the column containing the uid.
+        Defaults to "uid".
         price_col (str, optional): The column name for the price data. Defaults to "price".
         quantity_col (str, optional): The column name for the quantity data. Defaults to "quantity".
         weights_col (str, optional): The column name for the weights data. Defaults to "days".
@@ -327,7 +330,7 @@ def run_experiment_for_uid(
     Returns:
         pd.DataFrame: The results of the experiment for the specified user ID.
     """
-    subset_data = data[data["uid"] == uid]
+    subset_data = data[data[uid_col] == uid]
     try:
         results_df = run_experiment(
             data=subset_data,
@@ -340,13 +343,14 @@ def run_experiment_for_uid(
         logging.info(f"Error for UID {uid}: {e}")
 
         results_df = pd.DataFrame(np.nan, index=[0], columns=OUTPUT_CS)
-    results_df["uid"] = uid
+    results_df[uid_col] = uid
     return results_df
 
 
 def run_experiment_for_uids_parallel(
     df_input: pd.DataFrame,
     test_size: float = 0.1,
+    uid_col: str = "uid",
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
@@ -356,6 +360,8 @@ def run_experiment_for_uids_parallel(
     Args:
         df_input (pd.DataFrame): The input DataFrame containing the data.
         test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
+        uid_col (str, optional): The name of the column containing the uid.
+        Defaults to "uid".
         price_col (str, optional): The name of the column containing the price data.
         Defaults to "price".
         quantity_col (str, optional): The name of the column containing the quantity data.
@@ -369,13 +375,13 @@ def run_experiment_for_uids_parallel(
     """
     # Delete rows with price equal to zero
     df_input = df_input[df_input[price_col] != 0]
-    unique_uids = df_input["uid"].unique()
+    unique_uids = df_input[uid_col].unique()
     total_cores = multiprocessing.cpu_count()
     pool = multiprocessing.Pool((total_cores - 1))
     results_list = pool.starmap(
         run_experiment_for_uid,
         [
-            (uid, df_input, test_size, price_col, quantity_col, weights_col)
+            (uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col)
             for uid in unique_uids
         ],
     )
@@ -387,6 +393,7 @@ def run_experiment_for_uids_parallel(
 def run_experiment_for_uids_not_parallel(
     df_input: pd.DataFrame,
     test_size: float = 0.1,
+    uid_col: str = "uid",
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
@@ -397,6 +404,8 @@ def run_experiment_for_uids_not_parallel(
         df_input (pd.DataFrame): The input DataFrame containing the data.
         test_size (float, optional): The proportion of the data to use for testing.
         Defaults to 0.1.
+        uid_col (str, optional): The name of the column containing the uid.
+        Defaults to "uid".
         price_col (str, optional): The name of the column containing the price data.
         Defaults to "price".
         quantity_col (str, optional): The name of the column containing the quantity data.
@@ -410,10 +419,10 @@ def run_experiment_for_uids_not_parallel(
     # Delete rows with price equal to zero
     df_input = df_input[df_input[price_col] != 0]
     results_list = []
-    unique_uids = df_input["uid"].unique()
+    unique_uids = df_input[uid_col].unique()
     for uid in unique_uids:
         results_df = run_experiment_for_uid(
-            uid, df_input, test_size, price_col, quantity_col, weights_col
+            uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col
         )
         results_list.append(results_df)
     return pd.concat(results_list)

@@ -8,9 +8,9 @@ This project is designed to calculate elasticity accross clients and channels, w
 
 The main script in this project is `main.py`. This script performs several key tasks by client_key and clannel:
 
-1. **Process Data**: The `preprocessing.read_and_preprocess` function is used to read and process the data. It is reading one month to one year of data from data_science/datasets/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet and process the data to calculate elasticity.
+1. **Process Data**: The `preprocessing.read_and_preprocess` function is used to read and process the data. It is reading one month to one year of data from data_science/datasets/{client_key}/{channel}/elasticity/{year_}_{int(month_)}_full_data.parquet and process the data to calculate elasticity by uid and by group.
 
-2. **Elasticity calculation**: The `run_experiment_for_uids_parallel` function is calculate elasticity and output a dataframe with the results.
+2. **Elasticity calculation**: The `run_experiment_for_uids_parallel` function is calculate elasticity and output a dataframe with the results. Used to run elasticity by uid, group_segmentation_1 and group_segmentation_2
 
 3. **Saving results**: The `write_dataframe_to_s3` function is used to write results to data_science/eval_results/elasticity/ as elasticity_{client_key}_{channel}_{end_date}.csv.
 
@@ -21,6 +21,7 @@ The main script in this project is `main.py`. This script performs several key t
 - qlia_elasticity_param2
 - qlia_elasticity_demand_model
 - qlia_product_elasticity
+- qlia_elasticity_details
 - qlia_elasticity_calc_date
 
 6. **Reporting**: The `report.add_run` function is used to add a run to the report. The final report is saved to 

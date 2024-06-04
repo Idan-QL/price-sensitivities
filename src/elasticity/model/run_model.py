@@ -11,9 +11,12 @@ from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
 from elasticity.utils.consts import (
     CV_SUFFIXES_CS,
+    ELASTIC_THRESHOLD,
     MODEL_SUFFIXES_CS,
     MODEL_TYPES,
     OUTPUT_CS,
+    SUPER_ELASTIC_THRESHOLD,
+    VERY_ELASTIC_THRESHOLD,
 )
 
 
@@ -76,6 +79,7 @@ def run_model_type(
 
 
 def quality_test(
+    elasticity: float,
     median_quantity: float,
     best_relative_absolute_error: float,
     high_threshold: bool = False,
@@ -87,9 +91,10 @@ def quality_test(
 ) -> bool:
     """Perform quality test based on median quantity and relative absolute error.
 
-    This function performs a quality test based on the provided median quantity and
-    relative absolute error. The test checks if the median quantity and relative absolute
-    error meet certain thresholds based on the provided parameters.
+    If Elasticty is negative or equal to 0, this function performs a quality test based on
+    the provided median quantity and relative absolute error.
+    The test checks if the median quantity and relative absolute error meet certain
+    thresholds based on the provided parameters.
 
     The thresholds can be adjusted by modifying the function parameters. If `high_threshold`
     is True, thresholds are halved, making the test stricter. For example, if the original
@@ -98,6 +103,7 @@ def quality_test(
     quality test.
 
     Args:
+        elasticity (float): The Elasticity
         median_quantity (float): The median quantity value.
         best_relative_absolute_error (float): The relative absolute error of the best model.
         high_threshold (bool): If True, apply high threshold by halving the thresholds.
@@ -114,10 +120,16 @@ def quality_test(
         ValueError: If input values are not of the expected type.
     """
     try:
+        if not isinstance(elasticity, (int, float)):
+            raise ValueError("elasticity must be a number.")
         if not isinstance(median_quantity, (int, float)):
             raise ValueError("median_quantity must be a number.")
         if not isinstance(best_relative_absolute_error, (int, float)):
             raise ValueError("best_relative_absolute_error must be a number.")
+
+        if elasticity > 0:
+            return False
+
         thresholds = [q_test_threshold_1, q_test_threshold_2, q_test_threshold_3]
         if high_threshold:
             thresholds = [threshold // 2 for threshold in thresholds]
@@ -143,31 +155,44 @@ def quality_test(
         return False
 
 
+def make_level(elasticity: float) -> str:
+    """Generate a concise message based on the quality test and elasticity.
+
+    Args:
+        elasticity (float): The elasticity value.
+
+    Returns:
+        str: A concise message describing the elasticity level.
+    """
+    # Determine elasticity description
+    if elasticity < SUPER_ELASTIC_THRESHOLD:
+        elasticity_level = "Super elastic"
+    elif elasticity < VERY_ELASTIC_THRESHOLD:
+        elasticity_level = "Very elastic"
+    elif elasticity < ELASTIC_THRESHOLD:
+        elasticity_level = "Elastic"
+    elif elasticity < 0:
+        elasticity_level = "Inelastic"
+    elif elasticity > 0:
+        elasticity_level = "Positively elastic"
+    else:
+        elasticity_level = ""
+
+    return f"{elasticity_level}"
+
+
 def make_details(
-    is_quality_test_passed: bool, is_high_quality_test_passed: bool, elasticity: float
+    is_quality_test_passed: bool, is_high_quality_test_passed: bool
 ) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
     Args:
         is_quality_test_passed (bool): Indicates if a quality test was conducted.
         is_high_quality_test_passed (bool): Indicates if the quality test was of high quality.
-        elasticity (float): The elasticity value.
 
     Returns:
-        str: A concise message describing the elasticity and quality test conclusion.
+        str: A concise message describing the quality test conclusion.
     """
-    # Determine elasticity description
-    if elasticity < -2.5:
-        elasticity_message = "Very elastic"
-    elif elasticity < -1:
-        elasticity_message = "Elastic"
-    elif elasticity < 0:
-        elasticity_message = "Inelastic"
-    elif elasticity > 0:
-        elasticity_message = "Positively elastic"
-    else:
-        elasticity_message = ""
-
     # Determine quality test conclusion
     if is_quality_test_passed and is_high_quality_test_passed:
         quality_test_message = "High quality test"
@@ -178,7 +203,7 @@ def make_details(
     else:
         quality_test_message = ""
 
-    return f"{elasticity_message} - {quality_test_message}."
+    return f"{quality_test_message}."
 
 
 # TO DO REVIEW QUALITY TEST
@@ -284,11 +309,16 @@ def run_experiment(
 
         results["median_quantity"] = median_quantity
         results["median_price"] = median_price
+        results["last_price"] = data["last_price"].iloc[0]
+        results["last_date"] = data["last_date"].iloc[0]
 
         results["quality_test"] = quality_test(
-            results["median_quantity"], results[quality_test_error_col]
+            results["best_elasticity"],
+            results["median_quantity"],
+            results[quality_test_error_col],
         )
         results["quality_test_high"] = quality_test(
+            results["best_elasticity"],
             results["median_quantity"],
             results[quality_test_error_col],
             high_threshold=True,
@@ -297,10 +327,10 @@ def run_experiment(
             results["quality_test"] and not results["quality_test_high"]
         )
 
+        results["elasticity_level"] = make_level(results["best_elasticity"])
+
         results["details"] = make_details(
-            results["quality_test"],
-            results["quality_test_high"],
-            results["power_elasticity"],
+            results["quality_test"], results["quality_test_high"]
         )
 
     return pd.DataFrame(results, index=[0])

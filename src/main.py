@@ -72,6 +72,7 @@ def process_client_channel(
     channel: str,
     attr_name: str,
     is_local: bool,
+    is_qa_run: bool,
     start_date: str,
     end_date: str,
 ) -> dict:
@@ -83,6 +84,7 @@ def process_client_channel(
         channel (str): The channel.
         attr_name (str): The attr_name to read from Athena.
         is_local (bool): Flag indicating if the script is running locally.
+        is_qa_run (bool): Flag indicating if the script is running in qa.
         start_date (str): The start_date to read data.
         end_date (str): The end_date.
 
@@ -103,12 +105,6 @@ def process_client_channel(
                 end_date=end_date,
             )
         )
-
-        logging.info(f"End date: {end_date}")
-        logging.info(f"Total number of uid: {total_end_date_uid}")
-        logging.info(f"total_revenue: {total_revenue}")
-        outliers_count = df_by_price[df_by_price["outlier_quantity"]].uid.nunique()
-        logging.info(f"Number of uid with outliers: {outliers_count}")
 
         df_results = run_experiment_for_uids_parallel(
             df_by_price[~df_by_price["outlier_quantity"]],
@@ -150,7 +146,7 @@ def process_client_channel(
             actions_list=actions_list,
             client_key=client_key,
             channel=channel,
-            qa_run=True,
+            qa_run=is_qa_run,
             is_local=is_local,
             filename_prefix=None,
             chunk_size=5000,
@@ -209,6 +205,7 @@ def run() -> None:
                 channel,
                 attr_name,
                 is_local,
+                is_qa_run,
                 start_date,
                 end_date,
             )

@@ -4,6 +4,11 @@ LINEAR = "linear"
 POWER = "power"
 EXPONENTIAL = "exponential"
 
+MIN_ELASTICITY = -3.8
+VERY_ELASTIC_THRESHOLD = -2.3
+SUPER_ELASTIC_THRESHOLD = -3.8
+ELASTIC_THRESHOLD = -1
+
 MODEL_TYPES = [LINEAR, POWER, EXPONENTIAL]
 
 CV_SUFFIXES_CS = [
@@ -43,9 +48,12 @@ OUTPUT_CS.extend(
     [
         "median_quantity",
         "median_price",
+        "last_price",
+        "last_date",
         "quality_test",
         "quality_test_high",
         "quality_test_medium",
+        "elasticity_level",
         "details",
     ]
 )

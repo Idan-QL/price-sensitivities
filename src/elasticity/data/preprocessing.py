@@ -9,6 +9,7 @@ import pandas as pd
 
 from elasticity.data.configurator import DataColumns, PreprocessingParameters
 from elasticity.data.utils import (
+    calculate_last_values,
     get_revenue,
     initialize_dates,
     outliers_iqr_filtered,
@@ -71,7 +72,7 @@ def read_and_preprocess(
 
         # Data retrieval with error handling
         try:
-            df, total_uid, df_revenue_uid, total_revenue = (
+            raw_df, total_uid, df_revenue_uid, total_revenue = (
                 progressive_monthly_aggregate(
                     client_key=client_key,
                     channel=channel,
@@ -82,25 +83,38 @@ def read_and_preprocess(
                     data_columns=data_columns,
                 )
             )
+            # Add the last price and date by uid
+            last_values_df = calculate_last_values(raw_df, data_columns)
         except Exception as e:
             logging.error(f"Error fetching data: {e}")
             return None, None, None, None, None
 
         # Data preprocessing
         try:
-            df_by_price = preprocess_by_price(df, data_columns=data_columns)
+            df_by_price = preprocess_by_price(raw_df, data_columns=data_columns)
+            # add last price and date
+            df_by_price = df_by_price.merge(
+                last_values_df, on=[data_columns.uid], how="left"
+            )
+            outliers_count = df_by_price[df_by_price["outlier_quantity"]].uid.nunique()
+            logging.info(f"Number of uid with outliers: {outliers_count}")
         except Exception as e:
             logging.error(f"Error during preprocessing by price: {e}")
-            return None, df, total_uid, df_revenue_uid, total_revenue
+            return None, raw_df, total_uid, df_revenue_uid, total_revenue
 
-        return df_by_price, df, total_uid, df_revenue_uid, total_revenue
+        logging.info(f"start_date: {start_date}")
+        logging.info(f"end_date: {end_date}")
+        logging.info(f"Total number of uid: {total_uid}")
+        logging.info(f"total_revenue: {total_revenue}")
+
+        return df_by_price, raw_df, total_uid, df_revenue_uid, total_revenue
 
     except ValueError as e:
-        logging.error(f"Date format error: {e}")
-        return None, None, None, None, None, None
+        logging.error(f"ValueError: {e}")
+        return None, None, None, None, None
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
-        return None, None, None, None, None, None
+        return None, None, None, None, None
 
 
 def progressive_monthly_aggregate(
@@ -229,7 +243,7 @@ def read_data(
     uids_to_filter: Optional[list] = None,
     date: str = "2024-02-01",
 ) -> pd.DataFrame:
-    """Read one month data. Filter out inventory 0. Option to filter one uids.
+    """Read one month data. Filter out inventory 0 and negative unit. Option to filter one uids.
 
     Args:
         client_key (str): The client key.
@@ -270,6 +284,11 @@ def read_data(
             f'Number of inventory less or equal to 0: {len(df_read[df_read["inventory"] <= 0])}'
         )
         df_read = df_read[df_read["inventory"] > 0].drop(columns=["inventory"])
+
+        logging.info(
+            f'Number of negative unit: {len(df_read[df_read["total_units"] < 0])}'
+        )
+        df_read = df_read[df_read["total_units"] >= 0]
     except Exception:
         logging.error(f"No data for {year_!s}_{int(month_)!s}")
         df_read = pd.DataFrame(columns=cs)

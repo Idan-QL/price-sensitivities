@@ -154,20 +154,18 @@ def estimate_coefficients(
         pvalue = model.f_pvalue
         r2 = model.rsquared
         cov_matrix = model.cov_params()
-        median_price = data[price_col].median()
+        last_price = data["last_price"].median()
 
         elasticity_error_propagation = calculate_elasticity_error_propagation(
             model_type,
             model.params.iloc[0],
             model.params.iloc[1],
             cov_matrix,
-            median_price,
+            last_price,
         )
         a, b = model.params.iloc[0], model.params.iloc[1]
         aic = model.aic
-        elasticity = calculate_elasticity_from_parameters(
-            model_type, a, b, median_price
-        )
+        elasticity = calculate_elasticity_from_parameters(model_type, a, b, last_price)
         relative_absolute_error = relative_absolute_error_calculation(
             model_type, price_col, quantity_col, data, a, b
         )

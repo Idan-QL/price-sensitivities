@@ -6,6 +6,7 @@ from typing import Any, List, Tuple
 
 import pandas as pd
 
+from elasticity.utils.consts import MIN_ELASTICITY
 from ql_toolkit.attrs.action_list import create_actions_list
 
 
@@ -13,11 +14,14 @@ def generate_actions_list(
     df_results: pd.DataFrame,
     client_key: str,
     channel: str,
-    min_elasticity: float = -3.8,
+    min_elasticity: float = MIN_ELASTICITY,
 ) -> List[Tuple[Any, ...]]:
     """Generate actions list from the results DataFrame."""
-    df_results["cap_power_elasticity"] = df_results["power_elasticity"].apply(
+    df_results["cap_elasticity"] = df_results["best_elasticity"].apply(
         lambda x: max(x, min_elasticity)
+    )
+    df_results["elastcity_level_detail"] = (
+        df_results["elasticity_level"] + " - " + df_results["details"]
     )
 
     attr_cs = [
@@ -25,8 +29,8 @@ def generate_actions_list(
         "best_a",
         "best_b",
         "best_model",
-        "cap_power_elasticity",
-        "details",
+        "cap_elasticity",
+        "elastcity_level_detail",
     ]
     df_actions = df_results[df_results.result_to_push][attr_cs]
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -35,7 +39,7 @@ def generate_actions_list(
         "qlia_elasticity_param1",
         "qlia_elasticity_param2",
         "qlia_elasticity_demand_model",
-        "qlia_product_elasticity",
+        "qlia_elasticity_value",
         "qlia_elasticity_details",
         "qlia_elasticity_calc_date",
     ]

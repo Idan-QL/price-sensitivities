@@ -11,6 +11,38 @@ from dateutil.relativedelta import relativedelta
 from elasticity.data.configurator import DataColumns
 
 
+def calculate_last_values(
+    input_df: pd.DataFrame, data_columns: DataColumns
+) -> pd.DataFrame:
+    """Get last price and date for each uid in a new df.
+
+    Args:
+        input_df (pd.DataFrame): The input DataFrame.
+        data_columns (DataColumns): An instance of the DataColumns class.
+
+    Returns:
+        pd.DataFrame: A new DataFrame with columns uid, last_price, and last_date.
+    """
+    # Group by uid and get the last entry for each group
+    last_values_df = (
+        input_df[[data_columns.uid, data_columns.date]]
+        .groupby(data_columns.uid)
+        .agg({data_columns.date: "max"})
+        .reset_index()
+    )
+
+    # Merge back to get the last price corresponding to the last date for each uid
+    last_values_df = last_values_df.merge(
+        input_df[[data_columns.uid, data_columns.date, data_columns.price]],
+        on=[data_columns.uid, data_columns.date],
+        how="left",
+    )
+
+    return last_values_df.rename(
+        columns={data_columns.price: "last_price", data_columns.date: "last_date"}
+    )
+
+
 def get_revenue(
     df_revenue: pd.DataFrame, uid_col: str, total_uid: int
 ) -> Tuple[int, float, pd.DataFrame]:

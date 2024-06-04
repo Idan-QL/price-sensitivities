@@ -7,6 +7,8 @@ import pandas as pd
 
 from ql_toolkit.s3 import io as s3io
 
+plt.switch_backend("agg")
+
 
 def save_distribution_graph(
     client_key: str,

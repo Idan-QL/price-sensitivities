@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+plt.switch_backend("agg")
+
 # from elasticity.data.preprocessing import preprocess_by_day
 
 

@@ -20,26 +20,28 @@ def generate_actions_list(
     df_results["cap_elasticity"] = df_results["best_elasticity"].apply(
         lambda x: max(x, min_elasticity)
     )
-    df_results["elastcity_level_detail"] = (
-        df_results["elasticity_level"] + " - " + df_results["details"]
+
+    # Combine best_a, best_b, and best_model into a dictionary
+    df_results["qlia_elasticity_model"] = (
+        df_results[["best_a", "best_b", "best_model"]]
+        .rename(columns={"best_a": "a", "best_b": "b", "best_model": "model"})
+        .to_dict(orient="records")
     )
 
     attr_cs = [
         "uid",
-        "best_a",
-        "best_b",
-        "best_model",
         "cap_elasticity",
-        "elastcity_level_detail",
+        "elasticity_level",
+        "qlia_elasticity_model",
+        "details",
     ]
     df_actions = df_results[df_results.result_to_push][attr_cs]
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     attr_names = [
         "uid",
-        "qlia_elasticity_param1",
-        "qlia_elasticity_param2",
-        "qlia_elasticity_demand_model",
-        "qlia_elasticity_value",
+        "elasticity_value",
+        "elasticity_level",
+        "qlia_elasticity_model",
         "qlia_elasticity_details",
         "qlia_elasticity_calc_date",
     ]

@@ -12,6 +12,8 @@ from elasticity.model.model import estimate_coefficients
 from elasticity.utils.consts import EXPONENTIAL, LINEAR, POWER
 from ql_toolkit.s3 import io as s3io
 
+plt.switch_backend("agg")
+
 
 def linear_demand_equation(price: float, a: float, b: float) -> float:
     """Linear demand model: Q = a - bP."""

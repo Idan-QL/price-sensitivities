@@ -1,6 +1,6 @@
 """This module contains functions to write actions to a file."""
 
-import json
+# import json
 from datetime import datetime
 
 import numpy as np
@@ -107,8 +107,9 @@ def create_action(
         if attr_name not in ["uid"]:  # Exclude already handled attributes
             if isinstance(value, (list, np.ndarray)):
                 value = list_to_delimited_string(value)
-            val = json.dumps(value)
-            action["changes"][0]["attrs"].append({"name": attr_name, "value": val})
+            # val = json.dumps(value)
+            # action["changes"][0]["attrs"].append({"name": attr_name, "value": val})
+            action["changes"][0]["attrs"].append({"name": attr_name, "value": value})
 
     return action
 

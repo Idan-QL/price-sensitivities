@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-"""The article_segmentation batch job entry point.
+"""The elasticity batch job entry point.
 
+source $(poetry env info --path)/bin/activate
 Run with `python src/main.py -d us -c config_qa -p elasticity` from the project root.
 """
 import logging
@@ -106,6 +107,12 @@ def process_client_channel(
             )
         )
 
+        s3io.write_dataframe_to_s3(
+            file_name=f"df_by_price_{client_key}_{channel}_{end_date}.parquet",
+            xdf=df_by_price,
+            s3_dir="data_science/eval_results/elasticity/",
+        )
+
         df_results = run_experiment_for_uids_parallel(
             df_by_price[~df_by_price["outlier_quantity"]],
             price_col="round_price",
@@ -115,10 +122,16 @@ def process_client_channel(
 
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
-        df_group = data_for_group_elasticity(
-            df_by_price, client_key, channel, attr_name
-        )
-        df_results = add_group_elasticity(df_group, df_results)
+        if attr_name:
+            logging.info(f"Running group elasticity - attr: {attr_name}")
+            df_group = data_for_group_elasticity(
+                df_by_price, client_key, channel, attr_name
+            )
+            df_results = add_group_elasticity(df_group, df_results)
+        else:
+            logging.info(f"Skipping group elasticity - attr: {attr_name}")
+            df_results["result_to_push"] = df_results["quality_test"]
+            df_results["type"] = "uid"
 
         logging.info(
             f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"

@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Any, List, Tuple
+from typing import List
 
 import pandas as pd
 
@@ -15,7 +15,7 @@ def generate_actions_list(
     client_key: str,
     channel: str,
     min_elasticity: float = MIN_ELASTICITY,
-) -> List[Tuple[Any, ...]]:
+) -> List[dict]:
     """Generate actions list from the results DataFrame."""
     df_results["cap_elasticity"] = df_results["best_elasticity"].apply(
         lambda x: max(x, min_elasticity)
@@ -50,4 +50,42 @@ def generate_actions_list(
 
     return create_actions_list(
         res_list=res_list, client_key=client_key, channel=channel, attr_names=attr_names
+    )
+
+
+def generate_delete_actions_list(
+    uid_to_delete_list: List[str],
+    attributes_list: List[str],
+    client_key: str,
+    channel: str,
+) -> List[dict]:
+    """Generate an actions list for deleting attributes from a list of UIDs.
+
+    This function creates a list of actions for deleting specified attributes for each UID
+    in the provided list. Each action is represented as a tuple where the attributes to be
+    deleted are marked with the string 'delete!'.
+
+    Args:
+        uid_to_delete_list (List[str]): A list of unique identifiers (UIDs) for which attributes
+        need to be deleted.
+        attributes_list (List[str]): A list of attribute names that need to be deleted for each UID.
+        client_key (str): A unique key for the client making the request.
+        channel (str): The channel through which the request is made.
+
+    List:
+        List[dict]: A List containing the actions dictionary ready to be processed.
+    """
+    df_actions = pd.DataFrame({"uid": uid_to_delete_list})
+    for c in attributes_list:
+        df_actions[c] = "delete!"
+
+    res_list = [tuple(row) for row in df_actions.to_numpy()]
+    logging.info(f"len of res_list: {len(res_list)}")
+
+    return create_actions_list(
+        res_list=res_list,
+        client_key=client_key,
+        channel=channel,
+        attr_names=["uid", *attributes_list],
+        delete_actions=True,
     )

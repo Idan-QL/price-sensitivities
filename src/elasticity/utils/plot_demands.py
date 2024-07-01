@@ -1,5 +1,6 @@
 """Module of plot_demands."""
 
+import logging
 import multiprocessing
 import traceback
 from io import BytesIO
@@ -80,10 +81,71 @@ def generate_data(
         quantity *= error_factor * scaled_weights
 
     # Clip quantity to be 0.001 to avoid negative values
-    print("before clip", quantity)
+    logging.info(f"before clip {quantity}")
     quantity = np.clip(quantity, 0.001, None)
-    print("after clip", quantity)
+    logging.info(f"after clip {quantity}")
     return pd.DataFrame({"price": price_range, "quantity": quantity, "days": weights})
+
+
+def plot_quantity_and_prices_from_df(
+    df: pd.DataFrame,
+    title: str = "",
+    quantity_col: str = "quantity",
+    price_col: str = "price",
+    days_col: str = "days",
+    outlier_col: str = "outlier_quantity",
+) -> None:
+    """Plot quantity and prices from the DataFrame with outlier differentiation.
+
+    This function creates a scatter plot of quantities and prices from the provided DataFrame.
+    It differentiates between actual data and outlier data based on a boolean mask column.
+    The size of the markers in the scatter plot is proportional to the number of days
+    at each price point.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame containing the data to plot.
+        title (str, optional): The title of the plot. Defaults to an empty string.
+        quantity_col (str, optional): The column name for quantities in the DataFrame.
+        Defaults to "quantity".
+        price_col (str, optional): The column name for prices in the DataFrame. Defaults to "price".
+        days_col (str, optional): The column name for the number of days in the DataFrame.
+        Defaults to "days".
+        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
+        Defaults to "outlier_quantity".
+
+    Returns:
+        None: This function does not return any value. It only creates a plot.
+
+    """
+    outlier_mask = df[outlier_col]  # Boolean mask for outliers
+    plt.scatter(
+        df[quantity_col][~outlier_mask],  # Plot non-outlier points
+        df[price_col][~outlier_mask],
+        s=df[days_col][~outlier_mask] * 10,
+        marker="+",
+        color="blue",
+        label=(
+            "Actual Data (Avg units sold, size is prop. to "
+            "the nb. of days at this price"
+        ),
+    )
+    plt.scatter(
+        df[quantity_col][outlier_mask],  # Plot outlier points
+        df[price_col][outlier_mask],
+        s=df[days_col][outlier_mask] * 10,
+        marker="+",
+        color="red",  # Change color for outliers
+        label="Outlier Data",
+    )
+
+    plt.xlabel("Quantity")
+    plt.ylabel("Price")
+    plt.title(title)
+    plt.grid(True)
+    # Place legend outside the plot at the bottom
+    plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
+
+    plt.show()
 
 
 def plot_model_and_prices_from_df(
@@ -95,30 +157,59 @@ def plot_model_and_prices_from_df(
     days_col: str = "days",
     outlier_col: str = "outlier_quantity",
 ) -> None:
-    """plot_demand_curves from model result and actual data."""
-    a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _, _ = (
-        estimate_coefficients(
-            data=df,
-            model_type=model_type,
-            price_col=price_col,
-            quantity_col=quantity_col,
-            weights_col=days_col,
-        )
+    """Plot demand curves from model results and actual data.
+
+    This function estimates the coefficients for a specified demand model type
+    (linear, exponential, or power) using the provided DataFrame and plots the
+    resulting demand curve alongside the actual data points. Outliers are differentiated
+    in the scatter plot.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame containing the data to plot.
+        model_type (str, optional): The type of demand model to fit. Defaults to LINEAR.
+        title (str, optional): The title of the plot. Defaults to an empty string.
+        quantity_col (str, optional): The column name for quantities in the DataFrame.
+        Defaults to "quantity".
+        price_col (str, optional): The column name for prices in the DataFrame.
+        Defaults to "price".
+        days_col (str, optional): The column name for the number of days in the DataFrame.
+        Defaults to "days".
+        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
+        Defaults to "outlier_quantity".
+
+    Returns:
+        None: This function does not return any value. It only creates a plot.
+
+    Raises:
+        ValueError: If an invalid model type is provided.
+    """
+    estimation_result = estimate_coefficients(
+        data=df,
+        model_type=model_type,
+        price_col=price_col,
+        quantity_col=quantity_col,
+        weights_col=days_col,
     )
 
     prices = df[price_col]
 
     if model_type == POWER:
-        quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
+        quantities = power_demand_equation(
+            prices, np.exp(estimation_result.aic), estimation_result.b
+        )
         label = "Power Demand Curve"
     elif model_type == EXPONENTIAL:
-        quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
+        quantities = exponential_demand_equation(
+            prices, np.exp(estimation_result.a), estimation_result.b
+        )
         label = "Exponential Demand Curve"
     elif model_type == LINEAR:
-        quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
+        quantities = linear_demand_equation(
+            prices, float(estimation_result.a), float(estimation_result.b)
+        )
         label = "Linear Demand Curve"
     else:
-        print("typo in model type, power, exponential or linear")
+        logging.info("typo in model type, power, exponential or linear")
 
     outlier_mask = df[outlier_col]  # Boolean mask for outliers
 
@@ -149,79 +240,15 @@ def plot_model_and_prices_from_df(
         title
         + label
         + "= elasticity: "
-        + str(elasticity)
+        + str(estimation_result.elasticity)
         + " +/- "
-        + str(round(elasticity_error_propagation, 2))
+        + str(round(estimation_result.elasticity_error_propagation, 2))
     )
     plt.grid(True)
     # Place legend outside the plot at the bottom
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
 
     plt.show()
-
-
-# def plot_model_and_prices_from_df(
-#     df: pd.DataFrame,
-#     model_type: str = "linear",
-#     title: str = "",
-#     quantity_col: str = "quantity",
-#     price_col: str = "price",
-#     days_col: str = "days",
-#     outlier_col: str = 'outlier_quantity'
-# ) -> None:
-#     """plot_demand_curves from model result and actual data."""
-#     a_linear, b_linear, _, _, elasticity, elasticity_error_propagation, _, _ = (
-#         estimate_coefficients(
-#             data=df,
-#             model_type=model_type,
-#             price_col=price_col,
-#             quantity_col=quantity_col,
-#             weights_col=days_col,
-#         )
-#     )
-
-#     prices = df[price_col]
-
-#     if model_type == "power":
-#         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
-#         label = "Power Demand Curve"
-#     elif model_type == "exponential":
-#         quantities = exponential_demand_equation(prices, np.exp(a_linear), b_linear)
-#         label = "Exponential Demand Curve"
-#     elif model_type == "linear":
-#         quantities = linear_demand_equation(prices, float(a_linear), float(b_linear))
-#         label = "Linear Demand Curve"
-#     else:
-#         print("typo in model type, power, exponential or linear")
-
-#     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
-#     plt.scatter(
-#         df[quantity_col],
-#         df[price_col],
-#         s=df[days_col] * 10,
-#         marker="+",
-#         color="red",
-#         label=(
-#             "Actual Data (Avg units sold, size is prop. to "
-#             "the nb. of days at this price"
-#         ),
-#     )
-
-#     plt.xlabel("Quantity")
-#     plt.ylabel("Price")
-#     plt.title(
-#         title
-#         + label
-#         + "= elasticity: "
-#         + str(elasticity)
-#         + " +/- "
-#         + str(round(elasticity_error_propagation, 2))
-#     )
-#     plt.grid(True)
-#     # Place legend outside the plot at the bottom
-#     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
-
-#     plt.show()
 
 
 def plot_model_and_prices(
@@ -234,8 +261,29 @@ def plot_model_and_prices(
     days_col: str = "days",
     outlier_col: str = "outlier_quantity",
 ) -> None:
-    """plot_demand_curves from model result and actual data."""
-    print("uid:", uid)
+    """Plot demand curves from model results and actual data for a specific UID.
+
+    This function extracts model parameters from a results DataFrame and actual data
+    for a specific UID from a data DataFrame. It then plots the resulting demand curve
+    alongside the actual data points. Outliers are differentiated in the scatter plot.
+
+    Args:
+        df_results (pd.DataFrame): The DataFrame containing the model results.
+        df_data (pd.DataFrame): The DataFrame containing the actual data.
+        uid (str): The unique identifier for the data to be plotted.
+        title (str, optional): The title of the plot. Defaults to an empty string.
+        quantity_col (str, optional): The column name for quantities in the DataFrame.
+        Defaults to "quantity".
+        price_col (str, optional): The column name for prices in the DataFrame.
+        Defaults to "price".
+        days_col (str, optional): The column name for the number of days in the DataFrame.
+        Defaults to "days".
+        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
+        Defaults to "outlier_quantity".
+
+    Returns:
+        None: This function does not return any value. It only creates a plot.
+    """
     df_results_uid = df_results[df_results.uid == uid]
     df_uid = df_data[df_data.uid == uid]
     a_linear = df_results_uid["best_a"].iloc[0]
@@ -255,7 +303,7 @@ def plot_model_and_prices(
         quantities = linear_demand_equation(prices, a_linear, b_linear)
         label = "Linear Demand Curve"
     else:
-        print("typo in model type, power, exponential or linear")
+        logging.info("typo in model type, power, exponential or linear")
 
     outlier_mask = df_uid[outlier_col]  # Boolean mask for outliers
 
@@ -317,7 +365,7 @@ def plot_model_type(
         quantities = linear_demand_equation(prices, np.exp(a_linear), b_linear)
         label = "Linear Demand Curve"
     else:
-        print("typo in model type, power, exponential or linear")
+        logging.info("typo in model type, power, exponential or linear")
 
     plt.plot(quantities, prices, label=label, color="blue")
 
@@ -411,7 +459,7 @@ def plot_model_and_prices_buffer(
         quantities = linear_demand_equation(prices, a_linear, b_linear)
         label = "Linear Demand Curve"
     else:
-        print("typo in model type, power, exponential or linear")
+        logging.info("typo in model type, power, exponential or linear")
         return None
 
     ax.plot(quantities, prices, color="blue", label="Quicklizard Model")

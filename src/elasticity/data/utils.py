@@ -1,7 +1,7 @@
 """Module of utils."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional, Tuple
 
 import numpy as np
@@ -62,7 +62,7 @@ def get_revenue(
     """
     total_uid = df_revenue[uid_col].nunique()
 
-    df_revenue["revenue"] = df_revenue["price_merged"] * df_revenue["units"]
+    df_revenue["revenue"] = df_revenue["shelf_price"] * df_revenue["units"]
     total_revenue = df_revenue["revenue"].sum()
 
     df_revenue_uid = df_revenue.groupby(uid_col)["revenue"].sum().reset_index()
@@ -316,15 +316,13 @@ def initialize_dates(
         # Output: '2021-01-01', '2021-12-01'
     """
     if end_date is None:
-        end_date = (datetime.now() - timedelta(days=2)).replace(day=1) - relativedelta(
-            months=1
-        )
-        end_date = end_date.strftime("%Y-%m-%d")
+        end_date = datetime.now().replace(day=1) - relativedelta(days=1)
+        end_date = str(end_date.strftime("%Y-%m-%d"))
 
     if start_date is None:
         end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
         start_date_dt = end_date_dt - relativedelta(months=11)
-        start_date = start_date_dt.strftime("%Y-%m-%d")
+        start_date = str(start_date_dt.strftime("%Y-%m-%d"))
 
     return start_date, end_date
 

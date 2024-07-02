@@ -120,8 +120,6 @@ def process_client_channel(
             weights_col="days",
         )
 
-        df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
-
         if attr_name:
             logging.info(f"Running group elasticity - attr: {attr_name}")
             df_group = data_for_group_elasticity(
@@ -132,6 +130,8 @@ def process_client_channel(
             logging.info(f"Skipping group elasticity - attr: {attr_name}")
             df_results["result_to_push"] = df_results["quality_test"]
             df_results["type"] = "uid"
+
+        df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
         logging.info(
             f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"

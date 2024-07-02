@@ -84,6 +84,9 @@ convention = "google"
 "src/elasticity/data/group.py" = [
     "S608", # to fix pyathena no option to pass table name as parameters
 ]
+"src/ql_toolkit/s3/pya.py" = [
+    "S608", # to fix pyathena no option to pass table name as parameters
+]
 
 [lint.isort]
 known-first-party = ["ql_toolkit", "elasticity", "report"]

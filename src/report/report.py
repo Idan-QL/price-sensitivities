@@ -30,6 +30,8 @@ def get_last_month_results(
 
     This function retrieves the results from the last month based on the
     provided end date, client key, and channel.
+    # TODO: change only to last month in one month as
+    # we just changed to save the file as end of the month
 
     Args:
         client_key (str): The client key.
@@ -39,11 +41,12 @@ def get_last_month_results(
     Returns:
         pd.DataFrame: The results from the last month as a pandas DataFrame.
     """
-    # Get the last month's end date
-    last_month_end_date = pd.to_datetime(end_date) - pd.DateOffset(months=1)
-    last_month_end_date = last_month_end_date.strftime("%Y-%m-%d")
+    # Compute the last day of the previous month in one line
+    last_month_end_date = (
+        pd.to_datetime(end_date).replace(day=1) - pd.DateOffset(days=1)
+    ).strftime("%Y-%m-%d")
 
-    # Read the results from the last month
+    # Try reading the results from the last day of the previous month
     try:
         df_results_last_month = s3io.maybe_get_pd_csv_df(
             file_name=f"elasticity_{client_key}_{channel}_{last_month_end_date}.csv",
@@ -52,12 +55,36 @@ def get_last_month_results(
     except Exception:
         logging.error(traceback.format_exc())
         logging.error(
-            "No results found for last month %s - %s - %s",
+            "No results found for last month (end date) %s - %s - %s",
             client_key,
             channel,
             last_month_end_date,
         )
+
+    # Try reading the results from the first day of the previous month
+    try:
+        # Compute the first day of the previous month
+        first_day_previous_month = (
+            (pd.to_datetime(end_date) - pd.DateOffset(months=1))
+            .replace(day=1)
+            .strftime("%Y-%m-%d")
+        )
+
+        df_results_last_month = s3io.maybe_get_pd_csv_df(
+            file_name=f"elasticity_{client_key}_{channel}_{first_day_previous_month}.csv",
+            s3_dir="data_science/eval_results/elasticity/",
+        )
+    except Exception:
+        logging.error(traceback.format_exc())
+        logging.error(
+            "No results found for last month (start date) %s - %s - %s",
+            client_key,
+            channel,
+            first_day_previous_month,
+        )
+        # Return an empty DF
         df_results_last_month = pd.DataFrame()
+
     return df_results_last_month
 
 
@@ -92,6 +119,7 @@ def add_run(
     Returns:
         List
     """
+    uid_results_count = df_results.uid.nunique()
     df_results_quality = df_results[
         df_results["quality_test"] & df_results["result_to_push"]
     ]
@@ -118,13 +146,14 @@ def add_run(
                 df_results_quality["revenue"].sum() / total_revenue * 100, 1
             ),
             "uids_from_total_with_data": round(
-                len(df_results_quality) / len(df_results) * 100, 1
+                len(df_results_quality) / uid_results_count * 100, 1
             ),
             "revenue_from_total_with_data": round(
-                df_results_quality["revenue"].sum() / df_results["revenue"].sum() * 100,
+                (df_results_quality["revenue"].sum() /
+                 df_results[df_results.type == 'uid'].revenue.sum() * 100),
                 1,
             ),
-            "uid_with_data_for_elasticity": len(df_results),
+            "uid_with_data_for_elasticity": uid_results_count,
             "uid_with_elasticity_less_than_minus6": len(
                 df_results_quality[df_results_quality.best_elasticity < -6]
             ),

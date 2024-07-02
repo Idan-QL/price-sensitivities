@@ -1,10 +1,10 @@
 """Module of preprocessing."""
 
+import calendar
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, Tuple
 
-import numpy as np
 import pandas as pd
 
 from elasticity.data.configurator import DataColumns, PreprocessingParameters
@@ -18,7 +18,7 @@ from elasticity.data.utils import (
     uid_with_min_conversions,
     uid_with_price_changes,
 )
-from ql_toolkit.config.runtime_config import app_state
+from ql_toolkit.s3.pya import query_agg_day_client_data
 
 
 def read_and_preprocess(
@@ -96,6 +96,14 @@ def read_and_preprocess(
             df_by_price = df_by_price.merge(
                 last_values_df, on=[data_columns.uid], how="left"
             )
+            logging.info(f"Number of unique UID : {df_by_price.uid.nunique()}")
+            # df_by_price = df_by_price[df_by_price[data_columns.quantity] >
+            # preprocessing_parameters.avg_daily_sales]
+            # uid_ok = (df_by_price.groupby('uid').units.count()[df_by_price.groupby('uid').
+            # units.count()>5]).index.tolist()
+            # df_by_price = df_by_price[df_by_price.uid.isin(uid_ok)]
+            # logging.info(f"Number of unique UID after filter avg_daily_sales :
+            # {df_by_price.uid.nunique()}")
             outliers_count = df_by_price[df_by_price["outlier_quantity"]].uid.nunique()
             logging.info(f"Number of uid with outliers: {outliers_count}")
         except Exception as e:
@@ -166,12 +174,11 @@ def progressive_monthly_aggregate(
 
     approved_data_list = []
     approved_uids = []
-
-    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
-    dates_list = pd.date_range(
-        start=start_date_dt, end=end_date_dt, freq="MS"
-    ).strftime("%Y-%m-%d")[::-1]
+    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+    dates_list = pd.date_range(start=start_date_dt, end=end_date_dt, freq="ME").strftime(
+        "%Y-%m-%d"
+    )[::-1]
 
     uid_col = data_columns.uid
     qtity_col = data_columns.quantity
@@ -185,10 +192,10 @@ def progressive_monthly_aggregate(
             client_key,
             channel,
             uids_to_filter=uids_to_filter,
-            date=date_month,
+            date_read=date_month,
         )
 
-        df_month = process_data(df_month)
+        df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
 
         if total_uid == 0:
             total_uid, total_revenue, df_revenue_uid = get_revenue(
@@ -225,7 +232,7 @@ def progressive_monthly_aggregate(
         approved_data = data_to_test[
             data_to_test[uid_col].isin(uid_intersection_change_conversions)
         ]
-        logging.info(f"number of uid ok: {len(approved_uids)}")
+        # logging.info(f"number of uid ok: {len(approved_uids)}")
         rejected_data = data_to_test[
             ~data_to_test[uid_col].isin(uid_intersection_change_conversions)
         ]
@@ -241,7 +248,7 @@ def read_data(
     client_key: str,
     channel: str,
     uids_to_filter: Optional[list] = None,
-    date: str = "2024-02-01",
+    date_read: str = "2024-02-01",
 ) -> pd.DataFrame:
     """Read one month data. Filter out inventory 0 and negative unit. Option to filter one uids.
 
@@ -250,7 +257,7 @@ def read_data(
         channel (str): The channel.
         uids_to_filter (Optional[str], optional): A list of uids to filter the data.
         Defaults to None.
-        date (str, optional): The date in the format "YYYY-MM-DD".
+        date_read (str, optional): The date in the format "YYYY-MM-DD".
         Defaults to "2024-02-01".
 
     Returns:
@@ -260,96 +267,49 @@ def read_data(
         Exception: If there is an error reading the data.
 
     """
-    year_, month_ = datetime.strptime(date, "%Y-%m-%d").strftime("%Y-%m").split("-")
+    if isinstance(date_read, datetime):
+        date_read = date_read.date()
+    elif isinstance(date_read, str):
+        date_read = datetime.strptime(date_read, "%Y-%m-%d").date()
+    elif not isinstance(date_read, date):
+        raise ValueError("Input must be a string, date, or datetime object")
     cs = [
         "date",
         "uid",
-        "conversions_most_common_shelf_price",
-        "views_most_common_shelf_price",
-        "total_units",
+        "shelf_price",
+        "units",
         "price",
         "inventory",
     ]
-    dataset_dir = app_state.s3_datasets_dir(client_key, channel)
+
+    date_params = {
+        "start_date": str(date_read.replace(day=1)),
+        "end_date": str(
+            date_read.replace(
+                day=calendar.monthrange(date_read.year, date_read.month)[1]
+            )
+        ),
+    }
+
     try:
-        filters = (
-            [("uid", "in", uids_to_filter)] if uids_to_filter is not None else None
-        )
-        df_read = pd.read_parquet(
-            f"s3://{app_state.bucket_name}/{dataset_dir}/{year_}_{int(month_)}_full_data.parquet/",
-            columns=cs,
-            filters=filters,
-        )
+        df_read = query_agg_day_client_data(client_key, channel, date_params, True)
+        # filter out uids already complete
+        if uids_to_filter is not None:
+            df_read = df_read[~df_read.uid.isin(uids_to_filter)]
+
         logging.info(
             f'Number of inventory less or equal to 0: {len(df_read[df_read["inventory"] <= 0])}'
         )
-        df_read = df_read[df_read["inventory"] > 0].drop(columns=["inventory"])
+        df_read = df_read[
+            (df_read["inventory"] > 0) | (df_read["inventory"].isna())
+        ].drop(columns=["inventory"])
 
-        logging.info(
-            f'Number of negative unit: {len(df_read[df_read["total_units"] < 0])}'
-        )
-        df_read = df_read[df_read["total_units"] >= 0]
+        logging.info(f'Number of negative unit: {len(df_read[df_read["units"] < 0])}')
+        df_read["units"] = df_read["units"].fillna(0)
+        df_read = df_read[df_read["units"] >= 0]
     except Exception:
+        year_, month_ = date.strftime("%Y-%m").split("-")
         logging.error(f"No data for {year_!s}_{int(month_)!s}")
         df_read = pd.DataFrame(columns=cs)
         pass
     return df_read
-
-
-def process_data(
-    df_full: pd.DataFrame,
-    data_columns: Optional[DataColumns] = None,
-) -> pd.DataFrame:
-    """Merge and round price.
-
-    - If conversion price is available, use conversion price.
-    - else if view price is available, use views price.
-    - Otherwise, use price recommendations.
-    - Round the price.
-
-    Args:
-        df_full (pd.DataFrame): The input DataFrame containing the monthly data.
-        data_columns (DataColumns, optional): An instance of the DataColumns class.
-        Defaults to DataColumns().
-
-    Returns:
-        pd.DataFrame: The processed DataFrame with additional columns.
-    """
-    if data_columns is None:
-        data_columns = DataColumns()
-
-    df_full["price_merged"] = np.where(
-        ~df_full.conversions_most_common_shelf_price.isna(),
-        df_full.conversions_most_common_shelf_price,
-        np.where(
-            ~df_full.views_most_common_shelf_price.isna(),
-            df_full.views_most_common_shelf_price,
-            df_full.price,
-        ),
-    )
-
-    df_full["source"] = np.where(
-        ~df_full.conversions_most_common_shelf_price.isna(),
-        "conversions",
-        np.where(
-            ~df_full.views_most_common_shelf_price.isna(),
-            "views",
-            "price_recommendations",
-        ),
-    )
-
-    df_full[data_columns.quantity] = np.where(
-        ~df_full.total_units.isna(), df_full.total_units, 0
-    )
-    df_full[data_columns.price] = df_full["price_merged"].apply(round_price_effect)
-
-    return df_full[
-        [
-            data_columns.date,
-            data_columns.uid,
-            data_columns.price,
-            data_columns.quantity,
-            "price_merged",
-            "source",
-        ]
-    ]

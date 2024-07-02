@@ -210,6 +210,61 @@ def query_client_attrs(
     return pivot_attributes(df_attrs)
 
 
+# TODO: for cov add MAX(competitors) AS competitors
+def query_agg_day_client_data(
+    client_key: str,
+    channel: str,
+    date_params: Optional[dict] = None,
+    filter_units: Optional[bool] = False,
+) -> pd.DataFrame:
+    """Query aggregated daily client data from the AWS data catalog.
+
+    Args:
+        client_key (str): The client key.
+        channel (str): The channel.
+        date_params (Optional[dict], optional): Date parameters for filtering the data.
+        Defaults to None.
+        filter_units (Optional[bool], optional): Whether to filter units greater than 0.
+        Defaults to False.
+
+    Returns:
+        DataFrame: A DataFrame containing the queried data.
+
+    """
+    days_back, start_date, end_date = extract_date_params(date_params)
+    start_date, end_date = calculate_date_range(days_back, start_date, end_date)
+
+    table_name = f"AwsDataCatalog.analytics.client_key_{client_key}"
+
+    where_clause = """
+    WHERE date BETWEEN %(start_date)s AND %(end_date)s
+        AND channel = %(channel)s
+    """
+    if filter_units:
+        where_clause += " AND units > 0"
+
+    query = f"""
+    SELECT uid,
+           date,
+           AVG(shelf_price) AS shelf_price,
+           SUM(units) AS units,
+           SUM(revenue) AS revenue,
+           MAX(inventory) AS inventory
+    FROM {table_name}
+    {where_clause}
+    GROUP BY
+    uid, date;
+    """
+
+    params = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "channel": channel,
+    }
+
+    return execute_query(query, params)
+
+
 def query_client_data(
     client_key: str,
     channel: str,

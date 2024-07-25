@@ -43,7 +43,7 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
             s3_dir=app_state.s3_conf_dir, file_name=f"{conf_file}.yaml"
         )
     if config is None:
-        sys_exit(f"Config file {conf_file} not found.\nExiting!")
+        logging.error(f"Config file {conf_file} not found.")
     return config
 
 

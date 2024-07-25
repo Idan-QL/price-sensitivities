@@ -238,5 +238,32 @@ class AppState(metaclass=SingletonMeta):
             return "eu-central-1"
         return ""
 
+    @property
+    def s3_config_directory(self) -> str:
+        """Property that gets the S3 config dir.
+
+        Returns:
+            (str): The S3 config dir.
+        """
+        return "data_science/credentials/"
+
+    @property
+    def config_prod_spreadsheet(self) -> str:
+        """Property that gets the name of the prod config spreadsheet.
+
+        Returns:
+            (str): The prod config name.
+        """
+        return "DS_PROD_CONFIG"
+
+    @property
+    def config_qa_spreadsheet(self) -> str:
+        """Property that gets the name of the QA config spreadsheet.
+
+        Returns:
+            (str): The qa config name.
+        """
+        return "DS_QA_CONFIG"
+
 
 app_state = AppState()

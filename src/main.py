@@ -56,6 +56,7 @@ def setup_environment() -> tuple:
     else:
         logging.info(" ------ Running in Production mode ------ ")
 
+    print(config)
     return (
         args_dict,
         config,
@@ -210,18 +211,21 @@ def run() -> None:
 
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
-        attr_name_list = client_keys_map[client_key]["attr_name"]
-        for channel, attr_name in zip(channels_list, attr_name_list):
-            data_report = process_client_channel(
-                data_report,
-                client_key,
-                channel,
-                attr_name,
-                is_local,
-                is_qa_run,
-                start_date,
-                end_date,
-            )
+        if len(client_keys_map[client_key]["attr_name"]) == 1:
+            attr_name = client_keys_map[client_key]["attr_name"][0]
+            for channel in channels_list:
+                data_report = process_client_channel(
+                    data_report,
+                    client_key,
+                    channel,
+                    attr_name,
+                    is_local,
+                    is_qa_run,
+                    start_date,
+                    end_date,
+                )
+        else:
+            logging.error(f"Error occurred for {client_key}.")
 
     report_df = pd.DataFrame(data_report)
 

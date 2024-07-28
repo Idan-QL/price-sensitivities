@@ -13,4 +13,3 @@ def test_round_price_effect() -> None:
     assert round_price_effect(15.82) == 15.5
     assert round_price_effect(103.5) == 103
     assert round_price_effect(687) == 685
-

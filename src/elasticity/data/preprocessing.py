@@ -176,9 +176,9 @@ def progressive_monthly_aggregate(
     approved_uids = []
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
-    dates_list = pd.date_range(start=start_date_dt, end=end_date_dt, freq="ME").strftime(
-        "%Y-%m-%d"
-    )[::-1]
+    dates_list = pd.date_range(
+        start=start_date_dt, end=end_date_dt, freq="ME"
+    ).strftime("%Y-%m-%d")[::-1]
 
     uid_col = data_columns.uid
     qtity_col = data_columns.quantity
@@ -292,7 +292,14 @@ def read_data(
     }
 
     try:
-        df_read = query_agg_day_client_data(client_key, channel, date_params, True)
+        # TODO: Decide with or without filter
+        df_read = query_agg_day_client_data(
+            client_key=client_key,
+            channel=channel,
+            date_params=date_params,
+            filter_units=False,
+        )
+        # df_read = query_agg_day_client_data(client_key, channel, date_params, False)
         # filter out uids already complete
         if uids_to_filter is not None:
             df_read = df_read[~df_read.uid.isin(uids_to_filter)]

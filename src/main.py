@@ -123,9 +123,14 @@ def process_client_channel(
 
         if attr_name:
             logging.info(f"Running group elasticity - attr: {attr_name}")
+            # TODO: VALIDATE OR DELETE THIS
+            df_by_price_GROUP = df_by_price[df_by_price["units"] > 0.001]
             df_group = data_for_group_elasticity(
-                df_by_price, client_key, channel, attr_name
+                df_by_price_GROUP, client_key, channel, attr_name
             )
+            # df_group = data_for_group_elasticity(
+            #     df_by_price, client_key, channel, attr_name
+            # )
             df_results = add_group_elasticity(df_group, df_results)
         else:
             logging.info(f"Skipping group elasticity - attr: {attr_name}")

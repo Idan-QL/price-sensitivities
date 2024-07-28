@@ -193,6 +193,10 @@ def uid_with_price_changes(
     # Preprocess data
     df_by_price = preprocess_by_price(input_df=input_df, data_columns=data_columns)
 
+    # TODO: VALIDATE OR DELETE THIS
+    # take out price with no sells
+    df_by_price = df_by_price[df_by_price[data_columns.quantity] > 0.001]
+
     # Calculate price change percentage.
     # df_by_price already sorted in preprocess_by_price
     df_by_price["price_change"] = df_by_price.groupby([uid_col, "outlier_quantity"])[

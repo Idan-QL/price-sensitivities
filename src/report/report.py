@@ -149,8 +149,11 @@ def add_run(
                 len(df_results_quality) / uid_results_count * 100, 1
             ),
             "revenue_from_total_with_data": round(
-                (df_results_quality["revenue"].sum() /
-                 df_results[df_results.type == 'uid'].revenue.sum() * 100),
+                (
+                    df_results_quality["revenue"].sum()
+                    / df_results[df_results.type == "uid"].revenue.sum()
+                    * 100
+                ),
                 1,
             ),
             "uid_with_data_for_elasticity": uid_results_count,

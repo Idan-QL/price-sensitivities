@@ -59,9 +59,7 @@ def merge_with_original_uids(
     Returns:
         pd.DataFrame: The merged DataFrame with original UIDs.
     """
-    uid_group_uid_df = df_group.drop_duplicates(subset=["uid", group_col])[
-        ["uid", group_col]
-    ]
+    uid_group_uid_df = df_group.drop_duplicates(subset=["uid", group_col])[["uid", group_col]]
     return df_results.merge(uid_group_uid_df, on=group_col)
 
 
@@ -84,18 +82,14 @@ def set_result_flag(
         ~df_results_group["uid"].isin(df_results[df_results["quality_test"]]["uid"])
     ) & df_results_group["quality_test"]
     if other_df is not None:
-        condition &= ~df_results_group["uid"].isin(
-            other_df[other_df["quality_test"]]["uid"]
-        )
+        condition &= ~df_results_group["uid"].isin(other_df[other_df["quality_test"]]["uid"])
     df_results_group["result_to_push"] = condition
 
     elasticity_label = f"Elasticity {df_results_group['type'].iloc[0]}"
     df_results_group.loc[condition, "details"] += f" | {elasticity_label}"
 
 
-def process_group_segmentation(
-    df_group: pd.DataFrame, segmentation_column: str
-) -> pd.DataFrame:
+def process_group_segmentation(df_group: pd.DataFrame, segmentation_column: str) -> pd.DataFrame:
     """Process a specific group segmentation.
 
     Args:
@@ -111,9 +105,7 @@ def process_group_segmentation(
     return merge_with_original_uids(df_results_group, df_group, segmentation_column)
 
 
-def add_group_elasticity(
-    df_group: pd.DataFrame, df_results: pd.DataFrame
-) -> pd.DataFrame:
+def add_group_elasticity(df_group: pd.DataFrame, df_results: pd.DataFrame) -> pd.DataFrame:
     """Process the data to run elasticity on group 1 and 2.
 
     Args:
@@ -130,12 +122,8 @@ def add_group_elasticity(
         return df_results
 
     # Process both group segmentations
-    df_results_group_1 = process_group_segmentation(
-        df_group, "group_uid_segmentation_1"
-    )
-    df_results_group_2 = process_group_segmentation(
-        df_group, "group_uid_segmentation_2"
-    )
+    df_results_group_1 = process_group_segmentation(df_group, "group_uid_segmentation_1")
+    df_results_group_2 = process_group_segmentation(df_group, "group_uid_segmentation_2")
 
     # Add group_type column and concatenate the results
     df_results_group_1["type"] = "group 1"
@@ -147,6 +135,4 @@ def add_group_elasticity(
     set_result_flag(df_results_group_1, df_results)
     set_result_flag(df_results_group_2, df_results, df_results_group_1)
 
-    return pd.concat(
-        [df_results, df_results_group_1, df_results_group_2], ignore_index=True
-    )
+    return pd.concat([df_results, df_results_group_1, df_results_group_2], ignore_index=True)

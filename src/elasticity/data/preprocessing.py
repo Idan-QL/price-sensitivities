@@ -8,6 +8,9 @@ from typing import Optional, Tuple
 import pandas as pd
 
 from elasticity.data.configurator import DataColumns, PreprocessingParameters
+
+# from ql_toolkit.s3.pya import query_agg_day_client_data
+from elasticity.data.read import read_data_query
 from elasticity.data.utils import (
     calculate_last_values,
     get_revenue,
@@ -18,7 +21,6 @@ from elasticity.data.utils import (
     uid_with_min_conversions,
     uid_with_price_changes,
 )
-from ql_toolkit.s3.pya import query_agg_day_client_data
 
 
 def read_and_preprocess(
@@ -72,16 +74,14 @@ def read_and_preprocess(
 
         # Data retrieval with error handling
         try:
-            raw_df, total_uid, df_revenue_uid, total_revenue = (
-                progressive_monthly_aggregate(
-                    client_key=client_key,
-                    channel=channel,
-                    start_date=start_date,
-                    end_date=end_date,
-                    uids_to_filter=uids_to_filter,
-                    preprocessing_parameters=preprocessing_parameters,
-                    data_columns=data_columns,
-                )
+            raw_df, total_uid, df_revenue_uid, total_revenue = progressive_monthly_aggregate(
+                client_key=client_key,
+                channel=channel,
+                start_date=start_date,
+                end_date=end_date,
+                uids_to_filter=uids_to_filter,
+                preprocessing_parameters=preprocessing_parameters,
+                data_columns=data_columns,
             )
             # Add the last price and date by uid
             last_values_df = calculate_last_values(raw_df, data_columns)
@@ -93,9 +93,7 @@ def read_and_preprocess(
         try:
             df_by_price = preprocess_by_price(raw_df, data_columns=data_columns)
             # add last price and date
-            df_by_price = df_by_price.merge(
-                last_values_df, on=[data_columns.uid], how="left"
-            )
+            df_by_price = df_by_price.merge(last_values_df, on=[data_columns.uid], how="left")
             logging.info(f"Number of unique UID : {df_by_price.uid.nunique()}")
             # df_by_price = df_by_price[df_by_price[data_columns.quantity] >
             # preprocessing_parameters.avg_daily_sales]
@@ -176,9 +174,9 @@ def progressive_monthly_aggregate(
     approved_uids = []
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
-    dates_list = pd.date_range(
-        start=start_date_dt, end=end_date_dt, freq="ME"
-    ).strftime("%Y-%m-%d")[::-1]
+    dates_list = pd.date_range(start=start_date_dt, end=end_date_dt, freq="ME").strftime(
+        "%Y-%m-%d"
+    )[::-1]
 
     uid_col = data_columns.uid
     qtity_col = data_columns.quantity
@@ -198,18 +196,16 @@ def progressive_monthly_aggregate(
         df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
 
         if total_uid == 0:
-            total_uid, total_revenue, df_revenue_uid = get_revenue(
-                df_month, uid_col, total_uid
-            )
+            total_uid, total_revenue, df_revenue_uid = get_revenue(df_month, uid_col, total_uid)
 
         # filter out uid already approved
         df_month = df_month[~df_month[uid_col].isin(approved_uids)]
         # Concatenate df_month with rejected_data from previous months
         data_to_test = pd.concat([df_month, rejected_data])
 
-        data_to_test["outlier_quantity"] = data_to_test.groupby(uid_col)[
-            qtity_col
-        ].transform(outliers_iqr_filtered)
+        data_to_test["outlier_quantity"] = data_to_test.groupby(uid_col)[qtity_col].transform(
+            outliers_iqr_filtered
+        )
 
         uid_changes = uid_with_price_changes(
             data_to_test,
@@ -224,9 +220,7 @@ def progressive_monthly_aggregate(
             uid_col=uid_col,
             quantity_col=qtity_col,
         )
-        uid_intersection_change_conversions = list(
-            set(uid_changes) & set(uid_conversions)
-        )
+        uid_intersection_change_conversions = list(set(uid_changes) & set(uid_conversions))
         approved_uids.extend(uid_intersection_change_conversions)
 
         approved_data = data_to_test[
@@ -273,6 +267,7 @@ def read_data(
         date_read = datetime.strptime(date_read, "%Y-%m-%d").date()
     elif not isinstance(date_read, date):
         raise ValueError("Input must be a string, date, or datetime object")
+
     cs = [
         "date",
         "uid",
@@ -285,31 +280,27 @@ def read_data(
     date_params = {
         "start_date": str(date_read.replace(day=1)),
         "end_date": str(
-            date_read.replace(
-                day=calendar.monthrange(date_read.year, date_read.month)[1]
-            )
+            date_read.replace(day=calendar.monthrange(date_read.year, date_read.month)[1])
         ),
     }
 
     try:
-        # TODO: Decide with or without filter
-        df_read = query_agg_day_client_data(
+        # FOR METHOD WITH NO FILTER SET filter_units to False
+        df_read = read_data_query(
             client_key=client_key,
             channel=channel,
             date_params=date_params,
-            filter_units=False,
+            filter_units=True,
         )
-        # df_read = query_agg_day_client_data(client_key, channel, date_params, False)
-        # filter out uids already complete
         if uids_to_filter is not None:
             df_read = df_read[~df_read.uid.isin(uids_to_filter)]
 
         logging.info(
             f'Number of inventory less or equal to 0: {len(df_read[df_read["inventory"] <= 0])}'
         )
-        df_read = df_read[
-            (df_read["inventory"] > 0) | (df_read["inventory"].isna())
-        ].drop(columns=["inventory"])
+        df_read = df_read[(df_read["inventory"] > 0) | (df_read["inventory"].isna())].drop(
+            columns=["inventory"]
+        )
 
         logging.info(f'Number of negative unit: {len(df_read[df_read["units"] < 0])}')
         df_read["units"] = df_read["units"].fillna(0)

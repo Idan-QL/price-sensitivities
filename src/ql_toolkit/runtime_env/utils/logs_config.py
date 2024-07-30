@@ -1,7 +1,7 @@
 """This module contains the function to set up the logging configuration."""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from os import makedirs, path
 from sys import stdout
 
@@ -23,7 +23,7 @@ def set_up_logging(is_debug: bool = False, logs_dir_path: str = "") -> None:
     # logger = logging.getLogger(__name__)
     proj_name = app_state.project_name
     if not logs_dir_path:
-        logs_dir_path = f"./logs/{proj_name}_{datetime.now():%Y-%m-%dT%H_%M_%S}"
+        logs_dir_path = f"./logs/{proj_name}_{datetime.now(tz=timezone.utc):%Y-%m-%dT%H_%M_%S}"
     makedirs(logs_dir_path)
     log_file_name = path.join(logs_dir_path, "run_stdout.log")
     handlers_list = [logging.FileHandler(log_file_name)]

@@ -15,9 +15,7 @@ from ql_toolkit.s3.io import maybe_get_json_file
 from ql_toolkit.s3.utils import set_aws_access
 
 
-def get_google_sheet_data(
-    spreadsheet_name: str, sheet_name: str, creds_dict: dict
-) -> pd.DataFrame:
+def get_google_sheet_data(spreadsheet_name: str, sheet_name: str, creds_dict: dict) -> pd.DataFrame:
     """Retrieve data from a Google Sheet and convert it to a pandas DataFrame.
 
     Args:
@@ -38,9 +36,7 @@ def get_google_sheet_data(
     return pd.DataFrame(sheet.get_all_records())
 
 
-def get_config_from_sheet(
-    spreadsheet_name: str, sheet_name: str, data_center: str
-) -> dict:
+def get_config_from_sheet(spreadsheet_name: str, sheet_name: str, data_center: str) -> dict:
     """Retrieve and filter configuration from a Google Sheet based on data center.
 
     Args:
@@ -59,16 +55,12 @@ def get_config_from_sheet(
         )
 
         # Get the sheet into a DataFrame
-        df_google_sheet = get_google_sheet_data(
-            spreadsheet_name, sheet_name, creds_dict
-        )
+        df_google_sheet = get_google_sheet_data(spreadsheet_name, sheet_name, creds_dict)
         # Filter the DataFrame based on the data center
         df_filtered = df_google_sheet[df_google_sheet["data_center"] == data_center]
 
         # Check for multiple lines for the same client_key
-        duplicated_keys = (
-            df_filtered["client_key"].value_counts()[lambda x: x > 1].index.tolist()
-        )
+        duplicated_keys = df_filtered["client_key"].value_counts()[lambda x: x > 1].index.tolist()
         if duplicated_keys:
             sys_exit(
                 f"Spreadsheet config: Duplicate entries found for client_keys: {duplicated_keys}"
@@ -143,9 +135,7 @@ def run_setup(args_dict: dict) -> tuple[dict, dict]:
     )
 
     # Get the run configuration
-    s3_config = external_config.get_args_dict(
-        is_local=False, conf_file=args_dict["config"]
-    )
+    s3_config = external_config.get_args_dict(is_local=False, conf_file=args_dict["config"])
     if s3_config is None:
         logging.warning(
             f"Config file {args_dict['config']} not found in S3. Falling back to Google Sheet."

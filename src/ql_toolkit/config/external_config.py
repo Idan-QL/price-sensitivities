@@ -31,7 +31,7 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
                 f"Please check the command line file name provided.\nExiting!"
             )
         try:
-            with open(conf_file, "r") as file_stream:
+            with open(file=conf_file, mode="r", encoding=None) as file_stream:
                 config = yaml.safe_load(stream=file_stream)
         except FileNotFoundError:
             sys_exit(

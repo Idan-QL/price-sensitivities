@@ -14,7 +14,9 @@ import yaml
 from botocore.exceptions import ClientError
 from joblib import dump
 from pyarrow.lib import ArrowInvalid
+from pydantic import ValidationError
 
+import ql_toolkit.s3.data_classes as s3dc
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3.ls import is_file_exists
 from ql_toolkit.s3.utils import get_s3_client, get_s3_resource
@@ -98,16 +100,12 @@ def get_s3_file_contents(
                 buffer.seek(0)
                 return buffer.read().decode("utf-8")
             except UnicodeDecodeError as err:
-                logging.warning(
-                    "[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err
-                )
+                logging.warning("[- S3 I/O -] UTF-8 decoding failed for %s: %s", file_name, err)
                 # Return as binary if UTF-8 decoding fails
                 buffer.seek(0)
         return buffer
     except ClientError as err:
-        logging.warning(
-            "[- S3 I/O -] Error caught while downloading %s: %s", file_name, err
-        )
+        logging.warning("[- S3 I/O -] Error caught while downloading %s: %s", file_name, err)
         return None
 
 
@@ -234,9 +232,7 @@ def maybe_get_txt_file(
 
     if file_content and isinstance(file_content, str):
         return file_content
-    logging.error(
-        "[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name
-    )
+    logging.error("[- S3 I/O -] File %s not found or could not be decoded as UTF-8!", file_name)
 
     return ""
 
@@ -274,9 +270,7 @@ def maybe_get_pd_csv_df(
     )
 
     if file_content and isinstance(file_content, str):
-        csv_df = pd.read_csv(
-            StringIO(file_content), parse_dates=parse_dates, usecols=usecols
-        )
+        csv_df = pd.read_csv(StringIO(file_content), parse_dates=parse_dates, usecols=usecols)
         if not csv_df.empty:
             if "Unnamed: 0" in csv_df.columns:
                 csv_df = csv_df.drop(columns="Unnamed: 0")
@@ -295,7 +289,7 @@ def maybe_get_pd_parquet_file(
     s3_dir: str,
     file_name: str,
     s3_rsc: boto3.resource = None,
-    validate_datetime_index: bool = False,
+    is_validate_datetime_index: bool = False,
 ) -> pd.DataFrame:
     """Get a parquet file from S3 and optionally validate if it has a datetime index.
 
@@ -304,7 +298,7 @@ def maybe_get_pd_parquet_file(
             (without bucket name, e.g., 'forecasting/branch/default/ml_datasets/')
         file_name (str): The specific file name (e.g., 'tft_dataset.parquet')
         s3_rsc (boto3.resource, optional): An S3 resource object
-        validate_datetime_index (bool, default False): If True, validates and sets the dataframe
+        is_validate_datetime_index (bool, default False): If True, validates and sets the dataframe
             index to a datetime index if it's not already set.
 
     Returns:
@@ -322,31 +316,61 @@ def maybe_get_pd_parquet_file(
         logging.warning("[- S3 I/O -] Failed to retrieve file %s from S3.", file_name)
         return pd.DataFrame()
 
+    return load_and_validate_df(
+        buffer=buffer,
+        file_name=file_name,
+        is_validate_datetime_index=is_validate_datetime_index,
+    )
+
+
+def load_and_validate_df(
+    buffer: BytesIO, file_name: str, is_validate_datetime_index: bool
+) -> pd.DataFrame:
+    """Load a DataFrame from a given buffer and optionally validate the datetime index.
+
+    Args:
+        buffer (BytesIO): The buffer containing the file's data.
+        file_name (str): The name of the file being loaded (for logging purposes).
+        is_validate_datetime_index (bool): Whether to validate and  set the datetime index.
+
+    Returns:
+        pd.DataFrame: A DataFrame loaded from the buffer, with or without datetime index validation.
+    """
     try:
         s3_data_df = pd.read_parquet(BytesIO(buffer.getvalue()))
     except Exception as err:
-        logging.error("[- S3 I/O -] Error reading parquet file %s: %s", file_name, err)
+        logging.error(f"[- S3 I/O -] Error reading parquet file {file_name}: {err}")
         return pd.DataFrame()
 
-    if validate_datetime_index and not isinstance(s3_data_df.index, pd.DatetimeIndex):
-        if "date" in s3_data_df.columns:
-            try:
-                s3_data_df = s3_data_df.set_index(
-                    pd.to_datetime(s3_data_df["date"]), drop=True
-                )
-            except Exception as err:
-                logging.warning(
-                    "[- S3 I/O -] Failed to convert 'date' column to "
-                    "datetime index in %s: %s",
-                    file_name,
-                    err,
-                )
-        else:
-            logging.warning(
-                "[- S3 I/O -] 'date' column not found in %s to set as datetime index.",
-                file_name,
-            )
+    if is_validate_datetime_index:
+        s3_data_df = validate_datetime_index(dt_df=s3_data_df, file_name=file_name)
     return s3_data_df
+
+
+def validate_datetime_index(dt_df: pd.DataFrame, file_name: str) -> pd.DataFrame:
+    """Validate and set the DataFrame's index to a datetime index if possible.
+
+    Args:
+        dt_df (pd.DataFrame): The DataFrame to validate and modify.
+        file_name (str): The file name for logging purposes if errors occur.
+
+    Returns:
+        pd.DataFrame: The DataFrame with a datetime index set if applicable.
+    """
+    if "date" in dt_df.columns:
+        try:
+            dt_df = dt_df.set_index(pd.to_datetime(dt_df["date"]), drop=True)
+        except Exception as err:
+            logging.warning(
+                f"[- S3 I/O -] Failed to convert 'date' column to "
+                f"datetime index in {file_name}: {err}"
+            )
+    else:
+        logging.warning(
+            "[- S3 I/O -] 'date' column not found in %s to set as datetime index.",
+            file_name,
+        )
+    return dt_df
 
 
 def write_dataframe_to_s3(
@@ -382,9 +406,7 @@ def write_dataframe_to_s3(
         return
 
     # Backup existing file
-    if rename_old and is_file_exists(
-        s3_dir=s3_dir, file_name=file_name, s3_client=s3_client
-    ):
+    if rename_old and is_file_exists(s3_dir=s3_dir, file_name=file_name, s3_client=s3_client):
         _create_backup(
             backup_path=backup_path,
             bucket_name=bucket_name,
@@ -396,14 +418,10 @@ def write_dataframe_to_s3(
 
     # Write DataFrame to buffer
     buffer = BytesIO()
-    if isinstance(xdf, pd.DataFrame):
-        xdf = pl.from_pandas(xdf)
+    xdf = validate_df_is_polars(xdf=xdf)
 
     try:
-        if file_name.endswith(".parquet"):
-            xdf.write_parquet(buffer)
-        elif file_name.endswith(".csv"):
-            xdf.write_csv(buffer)
+        write_pl_df(file_name=file_name, xdf=xdf, buffer=buffer)
 
         buffer.seek(0)  # Reset buffer position to the beginning
         s3_client.put_object(Bucket=bucket_name, Key=file_path, Body=buffer.getvalue())
@@ -411,10 +429,37 @@ def write_dataframe_to_s3(
     except ArrowInvalid as err:
         logging.error("[- S3 I/O -] ArrowInvalid error caught: %s", err)
     except Exception as err:  # Catch more general exception for robustness
-        logging.error(
-            "[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err
-        )
+        logging.error("[- S3 I/O -] Error occurred while writing DataFrame to S3: %s", err)
         return
+
+
+def write_pl_df(file_name: str, xdf: pl.DataFrame, buffer: BytesIO) -> None:
+    """Write a polars DataFrame to a buffer as a parquet or CSV file.
+
+    Args:
+        file_name (str): The name of the file to write, including the file type postfix.
+        xdf (pl.DataFrame): The polars DataFrame to write.
+        buffer (BytesIO): The buffer to write the DataFrame to.
+
+    Returns:
+        None
+    """
+    if file_name.endswith(".parquet"):
+        xdf.write_parquet(buffer)
+    elif file_name.endswith(".csv"):
+        xdf.write_csv(buffer)
+
+
+def validate_df_is_polars(xdf: pd.DataFrame | pl.DataFrame) -> pl.DataFrame:
+    """Ensure the DataFrame is in polars format for writing.
+
+    Args:
+        xdf (pd.DataFrame | pl.DataFrame): The DataFrame to validate.
+
+    Returns:
+        pl.DataFrame: The DataFrame in polars format.
+    """
+    return xdf if isinstance(xdf, pl.DataFrame) else pl.from_pandas(xdf)
 
 
 def validate_request(xdf: pl.DataFrame | pd.DataFrame, file_name: str) -> bool:
@@ -428,9 +473,7 @@ def validate_request(xdf: pl.DataFrame | pd.DataFrame, file_name: str) -> bool:
         bool: True if the DataFrame and file name are valid, False otherwise.
     """
     if check_df_is_empty(xdf):
-        logging.warning(
-            "[- S3 I/O -] Provided DataFrame is empty. Aborting write operation."
-        )
+        logging.warning("[- S3 I/O -] Provided DataFrame is empty. Aborting write operation.")
         return False
 
     if not file_name.endswith((".parquet", ".csv")):
@@ -467,7 +510,8 @@ def _get_file_path(file_name: str, s3_dir: Optional[str]) -> str:
         str: The full path to the file.
     """
     if not file_name and not s3_dir:
-        raise ValueError("Either file_name or s3_dir must be provided!")
+        err_msg = "Either file_name or s3_dir must be provided!"
+        raise ValueError(err_msg)
     return file_name if not s3_dir else path.join(s3_dir, file_name)
 
 
@@ -507,13 +551,11 @@ def _create_backup(
 
 
 def upload_to_s3(
-    s3_dir: str,
-    file_name: str,
     file_obj: any,
-    is_serializable: bool = False,
     extra_args: Optional[dict] = None,
     s3_client: boto3.client = None,
     s3_rsc: boto3.resource = None,
+    **kwargs: any,
 ) -> bool:
     """Upload a file object or a serializable object to an Amazon S3 bucket.
 
@@ -531,66 +573,166 @@ def upload_to_s3(
     to enable server-side encryption, you can pass `extra_args={"ServerSideEncryption": "AES256"}`.
 
     Args:
-        s3_dir (str): The S3 directory where the file should be stored.
-        file_name (str): The name to assign to the file in S3.
         file_obj (Any): The object to be uploaded.
             Can be a file-like object or a serializable object.
-        is_serializable (bool, optional): If True, the object will be serialized before upload.
-            Default is False.
         extra_args (dict, optional): Additional arguments for the boto3 upload function.
         s3_client (boto3.client, optional): A boto3 S3 client object.
             If not provided, a new client will be created.
         s3_rsc (boto3.resource, optional): An S3 resource object.
             Only needed for serializable objects.
+        **kwargs: Variable length keyword arguments, expected to contain:
+            - s3_dir (str): The S3 directory where the file should be stored.
+            - file_name (str): The name to assign to the file in S3.
+            - is_serializable (bool, optional): If True, the object will be serialized before
+                upload. Default is False.
 
     Returns:
         bool: True if the operation was successful, False otherwise.
     """
+    try:
+        input_args = s3dc.UploadToS3(**kwargs)
+    except ValidationError as err:
+        logging.error(f"ValidationError caught: {err}")
+        raise
+
     bucket_name = app_state.bucket_name
-    file_path = _get_file_path(file_name=file_name, s3_dir=s3_dir)
+    file_path = _get_file_path(file_name=input_args.file_name, s3_dir=input_args.s3_dir)
 
     try:
         # If the file object is a string, encode it as bytes and upload directly
         if isinstance(file_obj, str):
-            if s3_client is None:
-                s3_client = get_s3_client()
-            bytes_str = BytesIO(file_obj.encode())
-            s3_client.upload_fileobj(
-                Fileobj=bytes_str,
-                Bucket=bucket_name,
-                Key=file_path,
-                ExtraArgs=extra_args,
+            is_upload_success = handle_str_file_obj(
+                file_obj=file_obj,
+                s3_client=s3_client,
+                bucket_name=bucket_name,
+                file_path=file_path,
+                extra_args=extra_args,
             )
 
         # If the file object is a serializable object, serialize it and upload to S3
-        elif is_serializable or isinstance(file_obj, (dict, list, set)):
-            if s3_rsc is None and is_serializable:
-                s3_rsc = boto3.resource("s3")
-            # Serialize the object and put in S3
-            with TemporaryFile() as buffer:
-                dump(
-                    value=file_obj, filename=buffer
-                )  # Replace with appropriate serialization function
-                buffer.seek(0)
-                s3_rsc.Object(bucket_name, file_path).put(Body=buffer.read())
+        elif input_args.is_serializable or isinstance(file_obj, (dict, list, set)):
+            is_upload_success = handle_serializable_file_obj(
+                file_obj=file_obj,
+                s3_rsc=s3_rsc,
+                bucket_name=bucket_name,
+                file_path=file_path,
+            )
         # Otherwise, upload the file-like object directly
         else:
-            if s3_client is None:
-                s3_client = boto3.client("s3")
-            # Upload the file-like object directly
-            s3_client.upload_fileobj(
-                Fileobj=file_obj,
-                Bucket=bucket_name,
-                Key=file_path,
-                ExtraArgs=extra_args,
+            is_upload_success = handle_file_like_obj(
+                file_obj=file_obj,
+                s3_client=s3_client,
+                bucket_name=bucket_name,
+                file_path=file_path,
+                extra_args=extra_args,
             )
 
-        logging.info(
-            "[- S3 I/O -] Object uploaded to: s3://%s/%s", bucket_name, file_path
-        )
-        return True
+        return is_upload_success
     except Exception as err:
         logging.error("[- S3 I/O -] Error occurred while uploading to S3: %s", err)
+        return False
+
+
+def handle_file_like_obj(
+    file_obj: any,
+    s3_client: boto3.client,
+    bucket_name: str,
+    file_path: str,
+    extra_args: Optional[dict],
+) -> bool:
+    """Handle a file-like object by uploading it to S3.
+
+    Args:
+        file_obj (Any): The file-like object to handle.
+        s3_client (boto3.client): A boto3 S3 client object.
+        bucket_name (str): The name of the S3 bucket.
+        file_path (str): The path to the file in the S3 bucket.
+        extra_args (Optional[dict]): Additional arguments for the boto3 upload function.
+
+    Returns:
+        bool: True if the operation was successful, False otherwise.
+    """
+    if s3_client is None:
+        s3_client = get_s3_client()
+    try:
+        s3_client.upload_fileobj(
+            Fileobj=file_obj,
+            Bucket=bucket_name,
+            Key=file_path,
+            ExtraArgs=extra_args,
+        )
+        logging.info(f"[- S3 I/O -] Object uploaded to: s3://{bucket_name}/{file_path}")
+        return True
+    except Exception as err:
+        logging.error(f"[- S3 I/O -] Error uploading file to S3: {err}")
+        return False
+
+
+def handle_str_file_obj(
+    file_obj: str,
+    s3_client: boto3.client,
+    bucket_name: str,
+    file_path: str,
+    extra_args: Optional[dict],
+) -> bool:
+    """Handle a string file object by encoding it as bytes and uploading it to S3.
+
+    Args:
+        file_obj (str): The string file object to handle.
+        s3_client (boto3.client): A boto3 S3 client object.
+        bucket_name (str): The name of the S3 bucket.
+        file_path (str): The path to the file in the S3 bucket.
+        extra_args (Optional[dict]): Additional arguments for the boto3 upload function.
+
+    Returns:
+        bool: True if the operation was successful, False otherwise.
+    """
+    if s3_client is None:
+        s3_client = get_s3_client()
+    bytes_str = BytesIO(file_obj.encode())
+    try:
+        s3_client.upload_fileobj(
+            Fileobj=bytes_str,
+            Bucket=bucket_name,
+            Key=file_path,
+            ExtraArgs=extra_args,
+        )
+        logging.info(f"[- S3 I/O -] Object uploaded to: s3://{bucket_name}/{file_path}")
+        return True
+    except Exception as err:
+        logging.error(f"[- S3 I/O -] Error uploading file to S3: {err}")
+        return False
+
+
+def handle_serializable_file_obj(
+    file_obj: any,
+    s3_rsc: boto3.resource,
+    bucket_name: str,
+    file_path: str,
+) -> bool:
+    """Handle a serializable file object by serializing it and uploading it to S3.
+
+    Args:
+        file_obj (Any): The serializable file object to handle.
+        s3_rsc (boto3.resource): An S3 resource object.
+        bucket_name (str): The name of the S3 bucket.
+        file_path (str): The path to the file in the S3 bucket.
+
+    Returns:
+        bool: True if the operation was successful, False otherwise.
+    """
+    if s3_rsc is None:
+        s3_rsc = boto3.resource("s3")
+    # Serialize the object and put in S3
+    try:
+        with TemporaryFile() as buffer:
+            dump(value=file_obj, filename=buffer)  # Replace with appropriate serialization function
+            buffer.seek(0)
+            s3_rsc.Object(bucket_name, file_path).put(Body=buffer.read())
+            logging.info(f"[- S3 I/O -] Object uploaded to: s3://{bucket_name}/{file_path}")
+            return True
+    except Exception as err:
+        logging.error(f"[- S3 I/O -] Error uploading serializable object to S3: {err}")
         return False
 
 

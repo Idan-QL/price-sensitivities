@@ -10,6 +10,7 @@ from datetime import datetime
 from sys import exit as sys_exit
 
 import pandas as pd
+from pydantic import ValidationError
 
 import elasticity.utils.plot_demands as plot_demands
 from elasticity.data import preprocessing
@@ -19,7 +20,8 @@ from elasticity.model.group import add_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
-from ql_toolkit.attrs.write import write_actions_list
+from ql_toolkit.attrs import data_classes as dc
+from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
@@ -123,14 +125,21 @@ def process_client_channel(
 
         if attr_name:
             logging.info(f"Running group elasticity - attr: {attr_name}")
-            # TODO: VALIDATE OR DELETE THIS
-            df_by_price_GROUP = df_by_price[df_by_price["units"] > 0.001]
-            df_group = data_for_group_elasticity(
-                df_by_price_GROUP, client_key, channel, attr_name
-            )
+
+            # FOR METHOD WITH NO FILTER (KEEP IT FOR NOW)
+            # df_by_price_GROUP = df_by_price[df_by_price["units"] > 0.001]
             # df_group = data_for_group_elasticity(
-            #     df_by_price, client_key, channel, attr_name
+            #     df_by_price_GROUP, client_key, channel, attr_name
             # )
+
+            df_group = data_for_group_elasticity(
+                df_by_price=df_by_price,
+                client_key=client_key,
+                channel=channel,
+                end_date=end_date,
+                attr_name=attr_name,
+            )
+
             df_results = add_group_elasticity(df_group, df_results)
         else:
             logging.info(f"Skipping group elasticity - attr: {attr_name}")
@@ -145,9 +154,7 @@ def process_client_channel(
         logging.info(
             f"Test high: {df_results[df_results.result_to_push].quality_test_high.value_counts()}"
         )
-        logging.info(
-            f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}"
-        )
+        logging.info(f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}")
 
         s3io.write_dataframe_to_s3(
             file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
@@ -155,20 +162,23 @@ def process_client_channel(
             s3_dir="data_science/eval_results/elasticity/",
         )
 
-        plot_demands.run_save_graph_top10(
-            df_results, df_by_price, client_key, channel, end_date
-        )
+        plot_demands.run_save_graph_top10(df_results, df_by_price, client_key, channel, end_date)
 
         actions_list = generate_actions_list(df_results, client_key, channel)
 
-        write_actions_list(
+        try:
+            input_args = dc.WriteActionsListKWArgs(
+                client_key=client_key,
+                channel=channel,
+                is_local=is_local,
+                qa_run=is_qa_run,
+            )
+        except ValidationError as err:
+            logging.error(f"ValidationError caught: {err}")
+
+        _write_actions_list(
             actions_list=actions_list,
-            client_key=client_key,
-            channel=channel,
-            qa_run=is_qa_run,
-            is_local=is_local,
-            filename_prefix=None,
-            chunk_size=5000,
+            input_args=input_args,
         )
 
         runtime = (datetime.now() - start_time).total_seconds() / 60

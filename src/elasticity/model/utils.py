@@ -283,11 +283,7 @@ def elasticity_error_propagation_linear(
     cov_ab = cov_matrix.iloc[0, 1]
 
     # Calculate the variance of elasticity using the covariance matrix and partial derivatives
-    variance = (
-        partial_a**2 * cov_aa
-        + partial_b**2 * cov_bb
-        + 2 * partial_a * partial_b * cov_ab
-    )
+    variance = partial_a**2 * cov_aa + partial_b**2 * cov_bb + 2 * partial_a * partial_b * cov_ab
 
     # Return the standard deviation (square root of the variance)
     return np.sqrt(variance)

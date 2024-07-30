@@ -71,9 +71,7 @@ def save_distribution_graph(
     # Add numbers on top of bars
     for bar, count in zip(bars, counts):
         height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2, height, count, ha="center", va="bottom"
-        )
+        ax.text(bar.get_x() + bar.get_width() / 2, height, count, ha="center", va="bottom")
 
     # Add title and labels
     title = (

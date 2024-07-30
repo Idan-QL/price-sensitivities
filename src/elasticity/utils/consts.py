@@ -36,9 +36,7 @@ MODEL_TYPE_SUFFIXE_CS = CV_SUFFIXES_CS + MODEL_SUFFIXES_CS
 
 # Generate OUTPUT_CS dynamically using list comprehensions
 OUTPUT_CS = [
-    f"{model_type}_{suffix}"
-    for model_type in MODEL_TYPES
-    for suffix in MODEL_TYPE_SUFFIXE_CS
+    f"{model_type}_{suffix}" for model_type in MODEL_TYPES for suffix in MODEL_TYPE_SUFFIXE_CS
 ]
 # Add best model-specific keys using list comprehension
 OUTPUT_CS.extend(["best_model"])

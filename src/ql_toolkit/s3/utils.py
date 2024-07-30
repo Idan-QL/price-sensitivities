@@ -55,9 +55,7 @@ def get_s3_resource() -> boto3.resource:
     secret_key = get_aws_secret_key()
     if not access_key or not secret_key:
         return boto3.resource("s3")
-    return boto3.resource(
-        "s3", aws_access_key_id=access_key, aws_secret_access_key=secret_key
-    )
+    return boto3.resource("s3", aws_access_key_id=access_key, aws_secret_access_key=secret_key)
 
 
 def get_s3_client() -> boto3.client:
@@ -74,6 +72,4 @@ def get_s3_client() -> boto3.client:
     secret_key = get_aws_secret_key()
     if not access_key or not secret_key:
         return boto3.client("s3")
-    return boto3.client(
-        "s3", aws_access_key_id=access_key, aws_secret_access_key=secret_key
-    )
+    return boto3.client("s3", aws_access_key_id=access_key, aws_secret_access_key=secret_key)

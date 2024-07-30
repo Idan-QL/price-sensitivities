@@ -32,11 +32,11 @@ def is_file_exists(s3_dir: str, file_name: str, s3_client: boto3.client = None) 
         return True
     except ClientError as err:
         if err.response["Error"]["Code"] == "404":
-            logging.error("File not found: %s", file_path)
-        elif err.response["Error"]["Code"] == 403:
-            logging.error("Unauthorized request to get file: %s", file_path)
+            logging.error(f"File not found: {file_path}")
+        elif err.response["Error"]["Code"] == "403":
+            logging.error(f"Unauthorized request to get file: {file_path}")
         else:
-            logging.error("Unknown error when reading file: %s", file_path)
+            logging.error(f"Unknown error when reading file: {file_path}")
             raise err
         return False
 
@@ -100,15 +100,11 @@ def list_dir_pages(s3_dir: str, s3_client: boto3.client = None) -> PageIterator:
     if s3_client is None:
         s3_client = get_s3_client()
     paginator = s3_client.get_paginator("list_objects_v2")
-    return paginator.paginate(
-        Bucket=app_state.bucket_name, Prefix=s3_dir, FetchOwner=False
-    )
+    return paginator.paginate(Bucket=app_state.bucket_name, Prefix=s3_dir, FetchOwner=False)
 
 
-def list_files_in_dir(
-    s3_dir: str, file_type: str = "json", s3_client: boto3.client = None
-) -> set:
-    """Get a sorted *set* of files of type "file_type" from an S3 directory.
+def list_files_in_dir(s3_dir: str, file_type: str = "json", s3_client: boto3.client = None) -> set:
+    """Get an unsorted *set* of files of type "file_type" from an S3 directory.
 
     Args:
         s3_dir (str): The S3 directory path
@@ -144,7 +140,5 @@ def folder_contents_exist(s3_dir: str) -> bool:
     s3_client = get_s3_client()
     if not s3_dir.endswith("/"):
         s3_dir += "/"
-    resp = s3_client.list_objects(
-        Bucket=bucket_name, Prefix=s3_dir, Delimiter="/", MaxKeys=1
-    )
+    resp = s3_client.list_objects(Bucket=bucket_name, Prefix=s3_dir, Delimiter="/", MaxKeys=1)
     return "Contents" in resp or "CommonPrefixes" in resp

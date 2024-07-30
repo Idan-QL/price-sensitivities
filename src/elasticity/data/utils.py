@@ -1,8 +1,8 @@
 """Module of utils."""
 
 import logging
-from datetime import datetime
-from typing import Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,9 +11,83 @@ from dateutil.relativedelta import relativedelta
 from elasticity.data.configurator import DataColumns
 
 
-def calculate_last_values(
-    input_df: pd.DataFrame, data_columns: DataColumns
-) -> pd.DataFrame:
+def calculate_date_range(
+    days_back: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Tuple[str, str]:
+    """Calculate the start and end date based on the given days_back, start_date, and end_date.
+
+    Args:
+        days_back (int): The number of days back to calculate the start date.
+        Ignored if start_date is provided.
+        start_date (str): The start date for the calculation in 'YYYY-MM-DD' format.
+        end_date (str): The end date for the calculation in 'YYYY-MM-DD' format.
+        Default is yesterday.
+
+    Returns:
+        tuple: A tuple containing the start date and end date in 'YYYY-MM-DD' format.
+
+    Example:
+        >>> calculate_date_range(days_back=7, end_date='2023-06-19')
+        ('2023-06-12', '2023-06-19')
+        >>> calculate_date_range(start_date='2023-06-12', end_date='2023-06-19')
+        ('2023-06-12', '2023-06-19')
+    """
+    if start_date is not None and days_back is not None:
+        error_message = "Both start_date and days_back cannot be provided simultaneously."
+        raise ValueError(error_message)
+
+    end_date = (
+        datetime.now(timezone.utc) - timedelta(days=1)
+        if end_date is None
+        else datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    )
+
+    if start_date is None:
+        if days_back is None:
+            error_message = "Either days_back or start_date must be provided."
+            raise ValueError(error_message)
+        start_date = end_date - timedelta(days=days_back)
+    else:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    start_date = start_date.strftime("%Y-%m-%d")
+    end_date = end_date.strftime("%Y-%m-%d")
+
+    return start_date, end_date
+
+
+def extract_date_params(
+    date_params: Optional[Dict[str, Optional[str]]] = None
+) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+    """Extract days_back, start_date, and end_date from the date_params dictionary.
+
+    Args:
+        date_params (dict): The dictionary containing date parameters.Default None
+
+    Returns:
+        tuple: A tuple containing days_back, start_date, and end_date.
+    """
+    if date_params is None:
+        date_params = {}
+    days_back = date_params.get("days_back", None)
+    start_date = date_params.get("start_date", None)
+    end_date = date_params.get("end_date", None)
+
+    # Adjust days_back to None if start_date is provided
+    if start_date is not None and days_back is not None:
+        error_message = "Both start_date and days_back cannot be provided simultaneously."
+        raise ValueError(error_message)
+    if start_date is not None and days_back is None:
+        days_back = None
+    elif start_date is None and days_back is None:
+        days_back = 7  # Default days_back if neither are provided
+
+    return days_back, start_date, end_date
+
+
+def calculate_last_values(input_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataFrame:
     """Get last price and date for each uid in a new df.
 
     Args:
@@ -193,9 +267,9 @@ def uid_with_price_changes(
     # Preprocess data
     df_by_price = preprocess_by_price(input_df=input_df, data_columns=data_columns)
 
-    # TODO: VALIDATE OR DELETE THIS
+    # FOR METHOD WITH NO FILTER (KEEP IT FOR NOW)
     # take out price with no sells
-    df_by_price = df_by_price[df_by_price[data_columns.quantity] > 0.001]
+    # df_by_price = df_by_price[df_by_price[data_columns.quantity] > 0.001]
 
     # Calculate price change percentage.
     # df_by_price already sorted in preprocess_by_price

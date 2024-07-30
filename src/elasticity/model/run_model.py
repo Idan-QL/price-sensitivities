@@ -71,9 +71,7 @@ def run_model_type(
     except Exception as e:
         logging.info(f"Error in run_model_type: {e}")
         # Set all the results to np.nan
-        for col in [
-            model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)
-        ]:
+        for col in [model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)]:
             results[col] = np.nan
     return results, median_quantity, median_price
 
@@ -134,18 +132,12 @@ def quality_test(
         if high_threshold:
             thresholds = [threshold // 2 for threshold in thresholds]
         return (
-            (
-                median_quantity < q_test_value_1
-                and best_relative_absolute_error <= thresholds[0]
-            )
+            (median_quantity < q_test_value_1 and best_relative_absolute_error <= thresholds[0])
             or (
                 q_test_value_1 <= median_quantity < q_test_value_2
                 and best_relative_absolute_error <= thresholds[1]
             )
-            or (
-                median_quantity >= q_test_value_2
-                and best_relative_absolute_error <= thresholds[2]
-            )
+            or (median_quantity >= q_test_value_2 and best_relative_absolute_error <= thresholds[2])
         )
     except ValueError as e:
         if high_threshold:
@@ -181,9 +173,7 @@ def make_level(elasticity: float) -> str:
     return f"{elasticity_level}"
 
 
-def make_details(
-    is_quality_test_passed: bool, is_high_quality_test_passed: bool
-) -> str:
+def make_details(is_quality_test_passed: bool, is_high_quality_test_passed: bool) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
     Args:
@@ -329,9 +319,7 @@ def run_experiment(
 
         results["elasticity_level"] = make_level(results["best_elasticity"])
 
-        results["details"] = make_details(
-            results["quality_test"], results["quality_test_high"]
-        )
+        results["details"] = make_details(results["quality_test"], results["quality_test_high"])
 
     return pd.DataFrame(results, index=[0])
 

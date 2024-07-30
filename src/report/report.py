@@ -17,15 +17,11 @@ def compare_model(df_results: pd.DataFrame, df_results_last_month: pd.DataFrame)
         how="left",
         suffixes=("", "_last_month"),
     )
-    df_compare["model_changes"] = (
-        df_compare["best_model"] != df_compare["best_model_last_month"]
-    )
+    df_compare["model_changes"] = df_compare["best_model"] != df_compare["best_model_last_month"]
     return df_compare[df_compare["quality_test"]]["model_changes"].sum()
 
 
-def get_last_month_results(
-    client_key: str, channel: str, end_date: str
-) -> pd.DataFrame:
+def get_last_month_results(client_key: str, channel: str, end_date: str) -> pd.DataFrame:
     """Get the results from the last month.
 
     This function retrieves the results from the last month based on the
@@ -65,9 +61,7 @@ def get_last_month_results(
     try:
         # Compute the first day of the previous month
         first_day_previous_month = (
-            (pd.to_datetime(end_date) - pd.DateOffset(months=1))
-            .replace(day=1)
-            .strftime("%Y-%m-%d")
+            (pd.to_datetime(end_date) - pd.DateOffset(months=1)).replace(day=1).strftime("%Y-%m-%d")
         )
 
         df_results_last_month = s3io.maybe_get_pd_csv_df(
@@ -120,9 +114,7 @@ def add_run(
         List
     """
     uid_results_count = df_results.uid.nunique()
-    df_results_quality = df_results[
-        df_results["quality_test"] & df_results["result_to_push"]
-    ]
+    df_results_quality = df_results[df_results["quality_test"] & df_results["result_to_push"]]
     df_results_quality_high = df_results[
         df_results["quality_test_high"] & df_results["result_to_push"]
     ]
@@ -214,9 +206,7 @@ def add_run(
     return data_report
 
 
-def add_error_run(
-    data_report: List, client_key: str, channel: str, error_counter: int
-) -> None:
+def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> None:
     """Append data to the data report list.
 
     Args:

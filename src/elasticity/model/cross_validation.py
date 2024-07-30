@@ -72,9 +72,7 @@ def cross_validation(
 
     try:
         for i in range(n_tests):
-            data_train, data_test = train_test_split(
-                data, test_size=test_size, random_state=42 + i
-            )
+            data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
 
             result = estimate_coefficients(
                 data_train,
@@ -100,9 +98,7 @@ def cross_validation(
             )
 
             normalised_rmse_test.append(
-                normalised_rmse(
-                    model_type, price_col, quantity_col, data_test, result.a, result.b
-                )
+                normalised_rmse(model_type, price_col, quantity_col, data_test, result.a, result.b)
             )
 
         if not a_lists:

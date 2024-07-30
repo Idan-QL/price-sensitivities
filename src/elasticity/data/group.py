@@ -209,64 +209,6 @@ def validate_single_word(param: str) -> None:
         )
 
 
-# def get_attrs(
-#     client_key: str,
-#     channel: str,
-#     attr_name: str,
-# ) -> pd.DataFrame:
-#     """Query 6 months of data for a specific client key and attribute name.
-
-#     Args:
-#         client_key (str): The client key to process data for.
-#         channel (str): The channel to filter data for (optional).
-#         attr_name (str): The attribute name.
-
-#     Returns:
-#         DataFrame: A DataFrame containing processed data for the client key and attribute.
-
-#     Validation:
-#     Parameter should be one word only to avoid sql injection
-#     """
-#     logging.info(f"Read 6 months attrs from athena: {attr_name}")
-#     for sqlparam in [client_key, channel, attr_name]:
-#         validate_single_word(sqlparam)
-
-#     table_name = f"AwsDataCatalog.analytics.client_key_{client_key}"
-
-#     # Six months prior to the current date - begining of the month
-#     start_date = (datetime.today().replace(day=1) - relativedelta(months=6)).strftime(
-#         "%Y-%m-%d"
-#     )
-
-#     query = f"""
-#     SELECT uid,
-#            channel,
-#            MAX(element.value) AS attr_value
-#     FROM {table_name}, UNNEST(attrs) AS t(element)
-#     WHERE element.name = %(attr_name)s
-#         AND (element.value IS NOT NULL OR CAST(element.value AS VARCHAR) != '')
-#         AND date > %(start_date)s
-#         AND channel = %(channel)s
-#     GROUP BY uid, channel;
-#     """
-
-#     cursor = connect(
-#         s3_staging_dir=app_state.s3_athena_dir,
-#         region_name=app_state.s3_region,
-#         cursor_class=PandasCursor,
-#     ).cursor()
-#     df_attrs = cursor.execute(
-#         query,
-#         parameters={
-#             "attr_name": attr_name,
-#             "channel": channel,
-#             "start_date": start_date,
-#         },
-#     ).as_pandas()
-
-#     return df_attrs.drop(["channel"], axis=1)
-
-
 def group_by_similarity(
     df: pd.DataFrame,
     median_percentage: float = 15,

@@ -8,8 +8,6 @@ from typing import Optional, Tuple
 import pandas as pd
 
 from elasticity.data.configurator import DataColumns, PreprocessingParameters
-
-# from ql_toolkit.s3.pya import query_agg_day_client_data
 from elasticity.data.read import read_data_query
 from elasticity.data.utils import (
     calculate_last_values,

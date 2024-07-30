@@ -6,21 +6,12 @@ from typing import List
 
 import pandas as pd
 
-from elasticity.utils.consts import MIN_ELASTICITY
+from elasticity.utils.consts import CODE_VERSION
 from ql_toolkit.attrs.action_list import create_actions_list
 
 
-def generate_actions_list(
-    df_results: pd.DataFrame,
-    client_key: str,
-    channel: str,
-    min_elasticity: float = MIN_ELASTICITY,
-) -> List[dict]:
+def generate_actions_list(df_results: pd.DataFrame, client_key: str, channel: str) -> List[dict]:
     """Generate actions list from the results DataFrame."""
-    df_results["cap_elasticity"] = df_results["best_elasticity"].apply(
-        lambda x: max(x, min_elasticity)
-    )
-
     # Combine best_a, best_b, and best_model into a dictionary
     df_results["qlia_elasticity_model"] = (
         df_results[["best_a", "best_b", "best_model"]]
@@ -28,10 +19,13 @@ def generate_actions_list(
         .to_dict(orient="records")
     )
 
+    # Add the code_version to each dictionary in the column
+    df_results["qlia_elasticity_model"] = df_results["qlia_elasticity_model"].apply(
+        lambda model: {**model, "code_version": CODE_VERSION}
+    )
+
     attr_cs = [
         "uid",
-        "cap_elasticity",
-        "elasticity_level",
         "qlia_elasticity_model",
         "details",
     ]
@@ -39,8 +33,6 @@ def generate_actions_list(
     df_actions["qlia_elasticity_calc_date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     attr_names = [
         "uid",
-        "elasticity_value",
-        "elasticity_level",
         "qlia_elasticity_model",
         "qlia_elasticity_details",
         "qlia_elasticity_calc_date",

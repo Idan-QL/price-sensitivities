@@ -10,6 +10,19 @@ from elasticity.utils.consts import CODE_VERSION
 from ql_toolkit.attrs.action_list import create_actions_list
 
 
+def add_code_version(model: dict) -> dict:
+    """Adds a `code_version` entry to the provided model dictionary.
+
+    Args:
+        model (dict): The dictionary representing the model to which `code_version` will be added.
+
+    Returns:
+        dict: The updated model dictionary with the `code_version` key set to `CODE_VERSION`.
+    """
+    model["code_version"] = CODE_VERSION
+    return model
+
+
 def generate_actions_list(df_results: pd.DataFrame, client_key: str, channel: str) -> List[dict]:
     """Generate actions list from the results DataFrame."""
     # Combine best_a, best_b, and best_model into a dictionary
@@ -19,9 +32,8 @@ def generate_actions_list(df_results: pd.DataFrame, client_key: str, channel: st
         .to_dict(orient="records")
     )
 
-    # Add the code_version to each dictionary in the column
     df_results["qlia_elasticity_model"] = df_results["qlia_elasticity_model"].apply(
-        lambda model: {**model, "code_version": CODE_VERSION}
+        add_code_version
     )
 
     attr_cs = [

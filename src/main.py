@@ -10,7 +10,6 @@ from datetime import datetime
 from sys import exit as sys_exit
 
 import pandas as pd
-from pydantic import ValidationError
 
 import elasticity.utils.plot_demands as plot_demands
 from elasticity.data import preprocessing
@@ -32,7 +31,7 @@ def setup_environment() -> tuple:
     """Set up the environment and return args and config.
 
     Returns:
-        tuple: args_dict, config, client_keys_map, is_local, is_qa_run
+        tuple: args_dict, client_keys_map, is_local, is_qa_run
     """
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
     logging.info("args_dict: %s", args_dict)
@@ -61,7 +60,6 @@ def setup_environment() -> tuple:
     print(config)
     return (
         args_dict,
-        config,
         client_keys_map,
         is_local,
         is_qa_run,
@@ -166,15 +164,12 @@ def process_client_channel(
 
         actions_list = generate_actions_list(df_results, client_key, channel)
 
-        try:
-            input_args = dc.WriteActionsListKWArgs(
-                client_key=client_key,
-                channel=channel,
-                is_local=is_local,
-                qa_run=is_qa_run,
-            )
-        except ValidationError as err:
-            logging.error(f"ValidationError caught: {err}")
+        input_args = dc.WriteActionsListKWArgs(
+            client_key=client_key,
+            channel=channel,
+            is_local=is_local,
+            qa_run=is_qa_run,
+        )
 
         _write_actions_list(
             actions_list=actions_list,
@@ -219,7 +214,7 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (args_dict, config, client_keys_map, is_local, is_qa_run, start_date, end_date) = (
+    (args_dict, client_keys_map, is_local, is_qa_run, start_date, end_date) = (
         setup_environment()
     )
     data_report = []

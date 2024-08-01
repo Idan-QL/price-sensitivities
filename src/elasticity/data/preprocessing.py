@@ -33,7 +33,6 @@ def read_and_preprocess(
     Optional[pd.DataFrame],
     Optional[pd.DataFrame],
     Optional[int],
-    Optional[str],
     Optional[pd.DataFrame],
     Optional[int],
 ]:

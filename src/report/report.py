@@ -94,7 +94,7 @@ def add_run(
     end_date: str,
     max_elasticity: float = 3.8,
     min_elasticity: float = -3.8,
-) -> None:
+) -> List:
     """Append data to the data report list.
 
     Args:
@@ -206,7 +206,7 @@ def add_run(
     return data_report
 
 
-def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> None:
+def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> dict:
     """Append data to the data report list.
 
     Args:
@@ -216,7 +216,7 @@ def add_error_run(data_report: List, client_key: str, channel: str, error_counte
         error_counter (int): The counter for errors.
 
     Returns:
-        None
+        List
     """
     data_report.append(
         {

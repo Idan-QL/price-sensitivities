@@ -39,7 +39,7 @@ args_kv = {
         "required": False,
     },
     "is_qa_run": {
-        "flag": "-qa",
+        "flag": "-q",
         "default": "False",
         "type": literal_eval,
         "help": "Read config from QA spreadsheet",

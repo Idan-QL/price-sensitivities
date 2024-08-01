@@ -1,6 +1,6 @@
 """Module of constants for Elasticity."""
 
-CODE_VERSION = '2.0'
+CODE_VERSION = "2.0"
 
 LINEAR = "linear"
 POWER = "power"

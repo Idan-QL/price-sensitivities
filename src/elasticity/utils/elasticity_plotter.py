@@ -151,7 +151,7 @@ class ElasticityPlotter:
         median_price_uid = dfplot[self.median_price_col].iloc[0]
         median_quantity_uid = dfplot[self.median_quantity_col].iloc[0]
 
-        fig, ax1 = plt.subplots()
+        _, ax1 = plt.subplots()
 
         sns.lineplot(data=dfplot, x="date", y=self.price_col, ax=ax1)
         ax1.set_ylabel("Price from Revenue", color="tab:blue")
@@ -205,7 +205,7 @@ class ElasticityPlotter:
 
         df_uid = df_uid.sort_values(by=self.date_col)
 
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        _, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
         if self.median_price_col not in df_uid.columns:
             df_uid[self.median_price_col] = df_uid[self.price_col].median()

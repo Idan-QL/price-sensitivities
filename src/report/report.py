@@ -206,7 +206,7 @@ def add_run(
     return data_report
 
 
-def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> dict:
+def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> List:
     """Append data to the data report list.
 
     Args:
@@ -245,3 +245,4 @@ def add_error_run(data_report: List, client_key: str, channel: str, error_counte
             "error": error_counter,
         }
     )
+    return data_report

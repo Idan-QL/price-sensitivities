@@ -118,14 +118,13 @@ def calculate_last_values(input_df: pd.DataFrame, data_columns: DataColumns) -> 
 
 
 def get_revenue(
-    df_revenue: pd.DataFrame, uid_col: str, total_uid: int
+    df_revenue: pd.DataFrame, uid_col: str
 ) -> Tuple[int, float, pd.DataFrame]:
     """Calculate the revenue and revenue percentage by uid.
 
     Args:
         df_revenue (pandas.DataFrame): The input dataframe containing the revenue data.
         uid_col (str): The name of the column representing the unique identifier.
-        total_uid (int): The total number of unique identifiers.
 
     Returns:
         tuple: A tuple containing:

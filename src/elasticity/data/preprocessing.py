@@ -128,7 +128,7 @@ def progressive_monthly_aggregate(
     uids_to_filter: Optional[str] = None,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
-) -> pd.DataFrame:
+) -> Tuple[pd.DataFrame, int, pd.DataFrame, int]:
     """Progressive aggregation of data.
 
     Perform progressive aggregation on monthly data to identify UIDs
@@ -179,6 +179,9 @@ def progressive_monthly_aggregate(
     qtity_col = data_columns.quantity
     rejected_data = pd.DataFrame()
     total_uid = 0
+    total_revenue = 0
+    df_revenue_uid = 0
+
 
     for date_month in dates_list:
         logging.info(f"reading: {date_month}")
@@ -193,7 +196,7 @@ def progressive_monthly_aggregate(
         df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
 
         if total_uid == 0:
-            total_uid, total_revenue, df_revenue_uid = get_revenue(df_month, uid_col, total_uid)
+            total_uid, total_revenue, df_revenue_uid = get_revenue(df_month, uid_col)
 
         # filter out uid already approved
         df_month = df_month[~df_month[uid_col].isin(approved_uids)]

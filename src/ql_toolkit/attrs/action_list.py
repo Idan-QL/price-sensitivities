@@ -9,19 +9,22 @@ from ql_toolkit.config.runtime_config import app_state
 
 
 def create_actions_list(
-    res_list: list, client_key: str, channel: str, attr_names: list[str]
+    res_list: list, client_key: str, channel: str, attr_names: list[str], delete_actions: bool = False,
 ) -> list:
     """Create a generic actions list.
 
     The date of the calculation is set to the current date and added to the action,
-    where the attribute is
-    internal and its name is set to f"qlia_{app_state.project_name}_calc_date".
+    where the attribute is internal and its name is set to
+    f"qlia_{app_state.project_name}_calc_date".
+    If delete_actions to True it will set this parameter to 'delete!'
+
 
     Args:
         res_list (list): List of tuples containing the data.
         client_key (str): Client key.
         channel (str): Channel.
         attr_names (list[str]): List of attribute names in the order they appear in res_list tuples.
+        delete_actions (bool): Flag to indicate if the actions are delete actions. Default is False.
 
     Returns:
         list: List of actions.
@@ -59,7 +62,11 @@ def create_actions_list(
 
         # Create a dictionary from attribute names and values in res_tup
         attr_values = dict(zip(attr_names, res_tup))
-        attr_values[f"qlia_{app_state.project_name}_calc_date"] = calc_date_str
+        # TODO: Add to ql_toolkit
+        if not delete_actions:
+            attr_values[f"qlia_{app_state.project_name}_calc_date"] = calc_date_str
+        else:
+            attr_values[f"qlia_{app_state.project_name}_calc_date"] = "delete!"
 
         # Create action using the generated dictionary
         action = create_action(

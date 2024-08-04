@@ -1,7 +1,7 @@
 """Module of group modeling."""
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple, Dict
 
 import pandas as pd
 
@@ -105,6 +105,60 @@ def process_group_segmentation(df_group: pd.DataFrame, segmentation_column: str)
     return merge_with_original_uids(df_results_group, df_group, segmentation_column)
 
 
+def generate_segmentation_dfs(df_group: pd.DataFrame, df_results: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Generate DataFrames containing counts of `elasticity_level` values grouped by segmentation columns.
+
+    This function merges two DataFrames (`df_group` and `df_results`), then counts the occurrences of
+    `elasticity_level` values for each unique value in `group_uid_segmentation_1` and `group_uid_segmentation_2`.
+    The counts are aggregated into two separate DataFrames, one for each segmentation column.
+
+    Parameters:
+    - df_group (pd.DataFrame): DataFrame with columns 'uid', 'group_uid_segmentation_1', and 'group_uid_segmentation_2'.
+    - df_results (pd.DataFrame): DataFrame with columns 'uid', 'elasticity_level', and 'quality_test'.
+
+    Returns:
+    - Tuple[pd.DataFrame, pd.DataFrame]: A tuple containing two DataFrames:
+      - df_segmentation_1: DataFrame with counts of `elasticity_level` values grouped by 'group_uid_segmentation_1'.
+      - df_segmentation_2: DataFrame with counts of `elasticity_level` values grouped by 'group_uid_segmentation_2'.
+    """
+    
+    # Merge df_group and df_results on 'uid'
+    df_group_homogenity = df_group[['uid', 'group_uid_segmentation_1', 'group_uid_segmentation_2']].drop_duplicates() \
+        .merge(df_results[['uid', 'elasticity_level', 'quality_test']], on='uid')
+
+    # Function to count occurrences of each elasticity_level, including NaNs
+    def count_elasticity(df: pd.DataFrame) -> Dict[str, int]:
+        """
+        Count occurrences of each `elasticity_level`, including NaN values.
+
+        Parameters:
+        - df (pd.DataFrame): DataFrame with 'elasticity_level' column.
+
+        Returns:
+        - Dict[str, int]: Dictionary where keys are `elasticity_level` values (including 'NaN') and values are counts.
+        """
+        counts = df['elasticity_level'].fillna('NaN').value_counts()
+        return counts.to_dict()
+
+    # Generate df_segmentation_1
+    df_segmentation_1 = df_group_homogenity.groupby('group_uid_segmentation_1').apply(
+        lambda x: pd.Series({
+            'composition_group_1': count_elasticity(x)
+        })
+    ).reset_index()
+
+    # Generate df_segmentation_2
+    df_segmentation_2 = df_group_homogenity.groupby('group_uid_segmentation_2').apply(
+        lambda x: pd.Series({
+            'composition_group_2': count_elasticity(x)
+        })
+    ).reset_index()
+    
+
+    return df_segmentation_1, df_segmentation_2
+
+
 def add_group_elasticity(df_group: pd.DataFrame, df_results: pd.DataFrame) -> pd.DataFrame:
     """Process the data to run elasticity on group 1 and 2.
 
@@ -120,10 +174,14 @@ def add_group_elasticity(df_group: pd.DataFrame, df_results: pd.DataFrame) -> pd
         logging.error("No group elasticity data available.")
         df_results["result_to_push"] = df_results["quality_test"]
         return df_results
+    
+    df_segmentation_1, df_segmentation_2 = generate_segmentation_dfs(df_group, df_results)
 
     # Process both group segmentations
-    df_results_group_1 = process_group_segmentation(df_group, "group_uid_segmentation_1")
-    df_results_group_2 = process_group_segmentation(df_group, "group_uid_segmentation_2")
+    df_results_group_1 = process_group_segmentation(df_group, "group_uid_segmentation_1").merge(
+        df_segmentation_1, on='group_uid_segmentation_1', how='left')
+    df_results_group_2 = process_group_segmentation(df_group, "group_uid_segmentation_2").merge(
+        df_segmentation_2, on='group_uid_segmentation_2', how='left')
 
     # Add group_type column and concatenate the results
     df_results_group_1["type"] = "group 1"

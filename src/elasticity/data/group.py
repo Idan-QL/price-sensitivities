@@ -13,6 +13,59 @@ from ql_toolkit.s3 import io as s3io
 from ql_toolkit.s3 import ls as s3ls
 
 
+def generate_segmentation_dfs(df_group: pd.DataFrame, df_results: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Generate DataFrames containing counts of `elasticity_level` values grouped by segmentation columns.
+
+    This function merges two DataFrames (`df_group` and `df_results`), then counts the occurrences of
+    `elasticity_level` values for each unique value in `group_uid_segmentation_1` and `group_uid_segmentation_2`.
+    The counts are aggregated into two separate DataFrames, one for each segmentation column.
+
+    Parameters:
+    - df_group (pd.DataFrame): DataFrame with columns 'uid', 'group_uid_segmentation_1', and 'group_uid_segmentation_2'.
+    - df_results (pd.DataFrame): DataFrame with columns 'uid', 'elasticity_level', and 'quality_test'.
+
+    Returns:
+    - Tuple[pd.DataFrame, pd.DataFrame]: A tuple containing two DataFrames:
+      - df_segmentation_1: DataFrame with counts of `elasticity_level` values grouped by 'group_uid_segmentation_1'.
+      - df_segmentation_2: DataFrame with counts of `elasticity_level` values grouped by 'group_uid_segmentation_2'.
+    """
+    
+    # Merge df_group and df_results on 'uid'
+    df_group_homogenity = df_group[['uid', 'group_uid_segmentation_1', 'group_uid_segmentation_2']].drop_duplicates() \
+        .merge(df_results[['uid', 'elasticity_level', 'quality_test']], on='uid')
+
+    # Function to count occurrences of each elasticity_level, including NaNs
+    def count_elasticity(df: pd.DataFrame) -> Dict[str, int]:
+        """
+        Count occurrences of each `elasticity_level`, including NaN values.
+
+        Parameters:
+        - df (pd.DataFrame): DataFrame with 'elasticity_level' column.
+
+        Returns:
+        - Dict[str, int]: Dictionary where keys are `elasticity_level` values (including 'NaN') and values are counts.
+        """
+        counts = df['elasticity_level'].fillna('NaN').value_counts()
+        return counts.to_dict()
+
+    # Generate df_segmentation_1
+    df_segmentation_1 = df_group_homogenity.groupby('group_uid_segmentation_1').apply(
+        lambda x: pd.Series({
+            'uid_elasticity': count_elasticity(x)
+        })
+    ).reset_index()
+
+    # Generate df_segmentation_2
+    df_segmentation_2 = df_group_homogenity.groupby('group_uid_segmentation_2').apply(
+        lambda x: pd.Series({
+            'uid_elasticity': count_elasticity(x)
+        })
+    ).reset_index()
+
+    return df_segmentation_1, df_segmentation_2
+
+
 def data_for_group_elasticity(
     df_by_price: pd.DataFrame,
     client_key: str,

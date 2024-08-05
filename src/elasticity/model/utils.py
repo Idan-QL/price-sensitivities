@@ -226,12 +226,12 @@ def calculate_elasticity_from_parameters(
 
 
 def calculate_elasticity_error_propagation(
-    model_type: str, a: float, b: float, cov_matrix: np.ndarray, p: float
+    model_type: str, a: float, b: float, cov_matrix: pd.DataFrame, p: float
 ) -> float:
     """Calculates the standard error of the elasticity function based on the model type.
 
     Args:
-        model_type (str): The type of model to use for calculating elasticity.
+        model_type: The type of model to use for calculating elasticity.
         a: Estimated parameter for 'a'
         b: Estimated parameter for 'b'
         cov_matrix: Covariance matrix of the parameter estimates
@@ -253,7 +253,7 @@ def calculate_elasticity_error_propagation(
 
 
 def elasticity_error_propagation_linear(
-    a: float, b: float, cov_matrix: np.ndarray, p: float
+    a: float, b: float, cov_matrix: pd.DataFrame, p: float
 ) -> float:
     """Calculate the errors of the elasticity function for a linear model.
 
@@ -283,17 +283,13 @@ def elasticity_error_propagation_linear(
     cov_ab = cov_matrix.iloc[0, 1]
 
     # Calculate the variance of elasticity using the covariance matrix and partial derivatives
-    variance = (
-        partial_a**2 * cov_aa
-        + partial_b**2 * cov_bb
-        + 2 * partial_a * partial_b * cov_ab
-    )
+    variance = partial_a**2 * cov_aa + partial_b**2 * cov_bb + 2 * partial_a * partial_b * cov_ab
 
     # Return the standard deviation (square root of the variance)
     return np.sqrt(variance)
 
 
-def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -> float:
+def elasticity_error_propagation_exponential(cov_matrix: pd.DataFrame, p: float) -> float:
     """Calculate the standard errors of the elasticity function for an exponential model.
 
     Args:
@@ -307,7 +303,7 @@ def elasticity_error_propagation_exponential(cov_matrix: np.ndarray, p: float) -
     return np.sqrt((p**2) * cov_matrix[b_label][b_label])
 
 
-def elasticity_error_propagation_power(cov_matrix: np.ndarray) -> float:
+def elasticity_error_propagation_power(cov_matrix: pd.DataFrame) -> float:
     """Calculate the standard errors of the elasticity function for a power model.
 
     Args:

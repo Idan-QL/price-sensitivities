@@ -31,7 +31,7 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
                 f"Please check the command line file name provided.\nExiting!"
             )
         try:
-            with open(conf_file, "r") as file_stream:
+            with open(file=conf_file, mode="r", encoding=None) as file_stream:
                 config = yaml.safe_load(stream=file_stream)
         except FileNotFoundError:
             sys_exit(
@@ -43,7 +43,7 @@ def get_args_dict(is_local: bool, conf_file: str) -> dict:
             s3_dir=app_state.s3_conf_dir, file_name=f"{conf_file}.yaml"
         )
     if config is None:
-        sys_exit(f"Config file {conf_file} not found.\nExiting!")
+        logging.error(f"Config file {conf_file} not found.")
     return config
 
 

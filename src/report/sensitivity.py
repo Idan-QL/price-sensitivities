@@ -12,9 +12,7 @@ def get_report(bucket: str, sensitivity_parquet: str) -> pd.DataFrame:
         f"s3://{bucket}/data_science/eval_results/elasticity/elasticity_report_2024-03-01.csv"
     )
     sensitivity_client = (
-        pd.concat(
-            [df_report[["client_key", "channel"]], df_s[["client_key", "channel"]]]
-        )
+        pd.concat([df_report[["client_key", "channel"]], df_s[["client_key", "channel"]]])
         .groupby(["client_key", "channel"])
         .size()
         .reset_index()[["client_key", "channel"]]
@@ -24,9 +22,7 @@ def get_report(bucket: str, sensitivity_parquet: str) -> pd.DataFrame:
         sensitivity_client["client_key"].tolist(),
         sensitivity_client["channel"].tolist(),
     ):
-        df_s_client = df_s[
-            (df_s["client_key"] == client_key) & (df_s["channel"] == channel)
-        ]
+        df_s_client = df_s[(df_s["client_key"] == client_key) & (df_s["channel"] == channel)]
         uid_sensitivity = df_s_client["uid"].tolist()
         try:
             df_e_client = pd.read_csv(
@@ -57,9 +53,7 @@ def get_report(bucket: str, sensitivity_parquet: str) -> pd.DataFrame:
         f"s3://{bucket}/data_science/eval_results/elasticity/elasticity_report_2024-03-01.csv"
     )
     del df_report["error"]
-    df_report_merge = df_report.merge(
-        result_df, on=["client_key", "channel"], how="outer"
-    )
+    df_report_merge = df_report.merge(result_df, on=["client_key", "channel"], how="outer")
     df_report_merge["sensitivity_from_total"] = round(
         df_report_merge["uid_with_sensitivity"] * 100 / df_report_merge["total_uid"], 2
     )
@@ -92,9 +86,7 @@ def get_report(bucket: str, sensitivity_parquet: str) -> pd.DataFrame:
             "sensitivity_from_total",
         ]
     ]
-    df_inventory.to_csv(
-        f"{bucket}_inventory_elasticity_sensitivity_March2024.csv", index=False
-    )
+    df_inventory.to_csv(f"{bucket}_inventory_elasticity_sensitivity_March2024.csv", index=False)
     return df_inventory
 
 

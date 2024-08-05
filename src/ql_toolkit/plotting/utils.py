@@ -8,8 +8,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 import seaborn as sns
-
-plt.switch_backend("agg")
+from matplotlib.figure import Figure
 
 common_kwargs = [
     "df",
@@ -26,9 +25,7 @@ common_kwargs = [
 ]
 
 
-def validate_inputs(
-    ptype: str, df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str
-) -> None:
+def validate_inputs(ptype: str, df: pd.DataFrame | pl.DataFrame | pl.LazyFrame, x_col: str) -> None:
     """Validate the inputs for the plot.
 
     Args:
@@ -42,11 +39,14 @@ def validate_inputs(
         None
     """
     if not isinstance(ptype, str):
-        raise ValueError("The value of 'ptype' must be a string")
+        err_msg = "The value of 'ptype' must be a string"
+        raise ValueError(err_msg)
     if not isinstance(df, (pd.DataFrame, pl.DataFrame, pl.LazyFrame)):
-        raise ValueError("The DataFrame must be a pandas or polars DataFrame")
+        err_msg = "The DataFrame must be a pandas or polars DataFrame"
+        raise ValueError(err_msg)
     if not isinstance(x_col, str):
-        raise ValueError("The value of 'x_col' must be a string")
+        err_msg = "The value of 'x_col' must be a string"
+        raise ValueError(err_msg)
 
 
 def convert_df(plot_df: pd.DataFrame | pl.DataFrame | pl.LazyFrame) -> pd.DataFrame:
@@ -65,9 +65,7 @@ def convert_df(plot_df: pd.DataFrame | pl.DataFrame | pl.LazyFrame) -> pd.DataFr
     return plot_df
 
 
-def set_defaults(
-    kwargs: dict[str, any], df: pd.DataFrame, x_col: str
-) -> dict[str, any]:
+def set_defaults(kwargs: dict[str, any], df: pd.DataFrame, x_col: str) -> dict[str, any]:
     """Set default values for kwargs.
 
     Args:
@@ -126,9 +124,11 @@ def universal_plot_args(
     pd_df = convert_df(pd_df)
 
     if pd_df.empty:
-        raise ValueError("The DataFrame is empty!")
+        err_msg = "The DataFrame is empty!"
+        raise ValueError(err_msg)
     if x_col not in pd_df.columns:
-        raise ValueError(f"The column '{x_col}' is not in the DataFrame")
+        err_msg = f"The column '{x_col}' is not in the DataFrame"
+        raise ValueError(err_msg)
 
     return set_defaults(kwargs=kwargs, df=pd_df, x_col=x_col)
 
@@ -144,7 +144,8 @@ def plot_box(**kwargs: dict) -> None:
         None
     """
     if kwargs["y_col"] is None:
-        raise ValueError("The variable 'y_col' is required for a box plot")
+        err_msg = "The variable 'y_col' is required for a box plot"
+        raise ValueError(err_msg)
     return sns.boxplot(
         data=kwargs["df"], x=kwargs["x_col"], y=kwargs["y_col"], hue=kwargs["hue"]
     ).set_title(kwargs["title"])
@@ -189,7 +190,8 @@ def plot_scatter(**kwargs: dict) -> None:
         None
     """
     if kwargs["y_col"] is None:
-        raise ValueError("The variable 'y_col' is required for a scatter plot")
+        err_msg = "The variable 'y_col' is required for a scatter plot"
+        raise ValueError(err_msg)
     return sns.scatterplot(
         data=kwargs["df"],
         x=kwargs["x_col"],
@@ -250,9 +252,9 @@ def plot_bar(**kwargs: dict) -> None:
     Returns:
         None
     """
-    return sns.barplot(
-        data=kwargs["df"], x=kwargs["x_col"], y=kwargs["y_col"]
-    ).set_title(kwargs["title"], fontsize=kwargs["title_font_size"])
+    return sns.barplot(data=kwargs["df"], x=kwargs["x_col"], y=kwargs["y_col"]).set_title(
+        kwargs["title"], fontsize=kwargs["title_font_size"]
+    )
 
 
 def plot_count(**kwargs: dict) -> None:
@@ -265,9 +267,9 @@ def plot_count(**kwargs: dict) -> None:
     Returns:
         None
     """
-    return sns.countplot(
-        data=kwargs["df"], x=kwargs["x_col"], hue=kwargs["hue"]
-    ).set_title(kwargs["title"])
+    return sns.countplot(data=kwargs["df"], x=kwargs["x_col"], hue=kwargs["hue"]).set_title(
+        kwargs["title"]
+    )
 
 
 def plot(
@@ -329,7 +331,7 @@ def plot(
         None: If an unrecognized plot type is specified or an error occurs.
     """
     kwargs = universal_plot_args(ptype=ptype, pd_df=df, x_col=x_col, **kwargs)
-    if ptype.lower() in ("time-series", "ts", "TS"):
+    if ptype.lower() in {"time-series", "ts", "TS"}:
         ptype = "time_series"
 
     # Mapping plot types to their corresponding functions
@@ -353,32 +355,63 @@ def plot(
 
     try:
         fig_plot = plot_func(**kwargs)
-        if kwargs["log_scale"][0]:
-            plt.xscale("log")
-        if kwargs["log_scale"][1]:
-            plt.yscale("log")
-
-        plt.xlim(kwargs["x_range"][0], kwargs["x_range"][1])
-        plt.ylim(kwargs["y_range"][0], kwargs["y_range"][1])
-
-        plt.xlabel(kwargs["x_label"])
-        plt.ylabel(kwargs["y_label"])
+        setup_plot(kwargs)
         # plt.legend(fontsize='x-large', title_fontsize=font_size)
     except ValueError as err:
         print(f"Error caught: {err}")
         return
 
-    if kwargs.get("save_fig", False):
-        file_name = kwargs.get("file_name")
-        if not file_name:
-            raise ValueError(
-                "The value of 'file_name' is required when 'save_fig' is True"
-            )
-        plt.tight_layout()
-        fig_plot.get_figure().savefig(kwargs["file_name"], bbox_inches="tight", dpi=300)
+    maybe_save_figure(fig_plot=fig_plot, kwargs=kwargs)
 
     # Show the plot after savefig is called
     plt.show()
+
+
+def setup_plot(kwargs: dict) -> None:
+    """Set up the plot with the specified parameters.
+
+    Args:
+        kwargs (dict): The keyword arguments for the plot.
+
+    Returns:
+        None
+    """
+    if any(kwargs["log_scale"]):
+        plt.xscale("log") if kwargs["log_scale"][0] else None
+        plt.yscale("log") if kwargs["log_scale"][1] else None
+
+    plt.xlim(kwargs["x_range"][0], kwargs["x_range"][1])
+    plt.ylim(kwargs["y_range"][0], kwargs["y_range"][1])
+    plt.xlabel(kwargs["x_label"])
+    plt.ylabel(kwargs["y_label"])
+
+
+def maybe_save_figure(fig_plot: Figure, kwargs: dict) -> None:
+    """Save the figure to file if the 'save_fig' parameter is set to True.
+
+    This function expects 'save_fig' and 'file_name' keys in the kwargs dictionary.
+    The 'save_fig' key should be a boolean indicating whether to save the figure,
+    and 'file_name' should be a string specifying the path where the figure will be saved.
+    Additional kwargs such as 'bbox_inches' and 'dpi' can be specified to control
+    the output format and quality.
+
+    Args:
+        fig_plot: The plot figure
+        kwargs (dict): The keyword arguments for the plot.
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: If the 'file_name' parameter is not provided when 'save_fig' is True
+    """
+    if kwargs.get("save_fig", False):
+        file_name = kwargs.get("file_name")
+        if not file_name:
+            err_msg = "The value of 'file_name' is required when 'save_fig' is True"
+            raise ValueError(err_msg)
+        plt.tight_layout()
+        fig_plot.get_figure().savefig(kwargs["file_name"], bbox_inches="tight", dpi=300)
 
 
 def plot_corr_matrix(
@@ -436,14 +469,10 @@ def get_numeric_cols_list(df: pd.DataFrame, drop_cols: Optional[list] = None) ->
     """
     if drop_cols is None:
         drop_cols = []
-    return (
-        df.drop(columns=drop_cols).select_dtypes(include=[np.number]).columns.tolist()
-    )
+    return df.drop(columns=drop_cols).select_dtypes(include=[np.number]).columns.tolist()
 
 
-def get_categorical_cols_list(
-    df: pd.DataFrame, drop_cols: Optional[list] = None
-) -> list:
+def get_categorical_cols_list(df: pd.DataFrame, drop_cols: Optional[list] = None) -> list:
     """Get a list of categorical columns from a DataFrame.
 
     Args:

@@ -2,22 +2,21 @@
 
 import json
 import logging
-from datetime import datetime
-from os import makedirs, path
-from typing import Optional
+from datetime import datetime, timezone
+from os import path
+
+from pydantic import ValidationError
 
 from ql_toolkit.attrs import action_list as al
+from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3 import io as s3io
 
 
 def write_attributes(
     res_list: list,
-    client_key: str,
-    channel: str,
     attr_names: list[str],
-    is_local: bool,
-    qa_run: bool,
+    **kwargs: any,
 ) -> None:
     """Create an actions list of results as attributes and write the list to an S3 directory.
 
@@ -25,41 +24,47 @@ def write_attributes(
 
     Args:
         res_list (list): A list of iterables containing the results
-        client_key (str): The client name
-        channel (str): The channel
         attr_names (list[str]): The names of the attributes
-        is_local (bool): Whether to write to local or s3
-        qa_run (bool): Write results to a test directory
-
+        **kwargs: Variable length keyword arguments, expected to contain:
+            - client_key (str): The client name
+            - channel (str): The channel
+            - is_local (bool): Whether to write to local or S3
+            - qa_run (bool): Write results to a test directory
     Returns:
         None
     """
+    try:
+        input_data = dc.WriteAttributesKWArgs(**kwargs)
+    except ValidationError as err:
+        logging.error(f"ValidationError caught: {err}")
+        raise
+
     logging.info("[- attrs -] Writing results...")
     actions_list = al.create_actions_list(
-        res_list=res_list, client_key=client_key, channel=channel, attr_names=attr_names
+        res_list=res_list,
+        client_key=input_data.client_key,
+        channel=input_data.channel,
+        attr_names=attr_names,
     )
-    logging.info(
-        "[- attrs -] Attributes created as an actions list. Writing to file..."
+    logging.info("[- attrs -] Attributes created as an actions list. Writing to file...")
+
+    input_args = dc.WriteActionsListKWArgs(
+        client_key=input_data.client_key,
+        channel=input_data.channel,
+        is_local=input_data.is_local,
+        qa_run=input_data.qa_run,
     )
-    write_actions_list(
+
+    _write_actions_list(
         actions_list=actions_list,
-        client_key=client_key,
-        channel=channel,
-        filename_prefix=f"{app_state.project_name}_actions",
-        is_local=is_local,
-        qa_run=qa_run,
+        input_args=input_args,
     )
     logging.info("[- attrs -] Attributes written!")
 
 
-def write_actions_list(
+def _write_actions_list(
     actions_list: list,
-    client_key: str,
-    channel: str,
-    qa_run: bool,
-    is_local: bool = False,
-    filename_prefix: Optional[str] = None,
-    chunk_size: int = 5000,
+    input_args: dc.WriteActionsListKWArgs,
 ) -> None:
     """Write actions list to file.
 
@@ -68,46 +73,49 @@ def write_actions_list(
 
     Args:
         actions_list (list): List of actions to be written to file
-        client_key (str): The retailer name
-        channel (str): The channel
-        qa_run (bool): Write results to a test directory
-        filename_prefix (str): The prefix of the file name. Defaults to None
-        is_local (bool): Whether to write to local or s3. Defaults to False.
-        chunk_size (int): The size of each chunk. Defaults to 5000.
+        input_args (WriteActionsListKWArgs): Keyword arguments for writing the actions list
+            - client_key (str): The client name
+            - channel (str): The channel
+            - is_local (bool, Default False): Whether to write to local or S3
+            - qa_run (bool): Write results to a test directory
+            - filename_prefix (str, Default None): The prefix of the file name
+            - chunk_size (int, Default 5000): The size of the chunks
 
     Returns:
         None
     """
+    filename_prefix = input_args.filename_prefix
     if filename_prefix is None:
         filename_prefix = f"{app_state.project_name}_actions"
     logging.info("Writing %s actions to file...", len(actions_list))
+    # monitor_run_dir = app_state.s3_monitoring_dir(client_key=client_key, channel=channel)
 
-    for i in range(0, len(actions_list), chunk_size):
-        chunk = actions_list[i : i + chunk_size]
+    for i in range(0, len(actions_list), input_args.chunk_size):
+        chunk = actions_list[i : i + input_args.chunk_size]
         actions_str = "\n".join(json.dumps(j) for j in chunk)
-        file_name = f"{filename_prefix}_{client_key}_{channel}_{i}_{datetime.now().isoformat()}.txt"
-        if is_local:
+        file_name = (
+            f"{filename_prefix}_{input_args.client_key}_{input_args.channel}_{i}"
+            f"_{datetime.now(tz=timezone.utc).isoformat()}.txt"
+        )
+        if input_args.is_local:
             logging.info("[- attrs -] Writing files to local folder...")
-            directory = "../artifacts/actions/"
-            if not path.exists(directory):
-                makedirs(directory)
-            with open(path.join(directory, file_name), "w") as file:
+            with open(
+                file=path.join("../artifacts/actions/", file_name),
+                mode="w",
+                encoding=None,
+            ) as file:
                 file.write(actions_str)
         else:
             s3_attrs_dir = (
                 f"spark/output/test/{app_state.project_name}/"
-                if qa_run
-                else app_state.s3_res_attrs_dir
+                if input_args.qa_run
+                else app_state.res_attrs_dir
             )
-            logging.info("[- attrs -] Writing files to S3: %s", s3_attrs_dir)
-            s3io.upload_to_s3(
-                s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str
-            )
+            logging.info(f"[- attrs -] Writing files to S3: {path.join(s3_attrs_dir, file_name)}")
+            s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)
             # if not qa_run and not is_local:
-            #     monitor_run_dir = app_state.s3_monitoring_dir(
-            #         client_key=client_key, channel=channel
-            #     )
             #     file_name = "_".join(file_name.split("_")[:-1]) + ".txt"
             #     s3io.upload_to_s3(
-            #         s3_dir=monitor_run_dir, file_name=file_name, file_obj=actions_str
-            #     )
+            #         s3_dir=monitor_run_dir,
+            #         file_name=file_name,
+            #         file_obj=actions_str)

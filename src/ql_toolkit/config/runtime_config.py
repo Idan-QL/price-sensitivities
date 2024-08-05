@@ -49,9 +49,7 @@ class AppState(metaclass=SingletonMeta):
         self.s3_res_redis_dir = path.join(self.s3_res_dir, "redis_data")
         self.s3_res_bi_ingest_dir = path.join(self.s3_ds_dir, "ingest", "bi_service")
         self.s3_res_attrs_dir = "spark/output/actions/"
-        self.s3_python_clients_map_dir = path.join(
-            self.s3_sgmkr_dir, "clients_mappings/"
-        )
+        self.s3_python_clients_map_dir = path.join(self.s3_sgmkr_dir, "clients_mappings/")
         self.s3_raw_events_dir = "raw_events/production/product_event/"
         self.analytics_cols = [
             "uid",
@@ -61,6 +59,7 @@ class AppState(metaclass=SingletonMeta):
             "units_sold",
             "inventory",
         ]
+        self.db_sets_cols = {}
 
     @property
     def project_name(self) -> str:
@@ -72,7 +71,8 @@ class AppState(metaclass=SingletonMeta):
             (str): The name of the project.
         """
         if self._project is None:
-            raise ValueError("Project name is not set!")
+            err_msg = "Project name is not set!"
+            raise ValueError(err_msg)
         return self._project
 
     @project_name.setter
@@ -95,7 +95,8 @@ class AppState(metaclass=SingletonMeta):
             (str): The name of the bucket.
         """
         if self._bucket is None:
-            raise ValueError("Bucket is not set!")
+            err_msg = "Bucket is not set!"
+            raise ValueError(err_msg)
         return self._bucket
 
     @bucket_name.setter
@@ -113,9 +114,9 @@ class AppState(metaclass=SingletonMeta):
             >>> app_state.bucket_name = "us"
 
         """
-        if data_center_or_bucket_name in ("us", "quicklizard"):
+        if data_center_or_bucket_name in {"us", "quicklizard"}:
             self._bucket = "quicklizard"
-        elif data_center_or_bucket_name in ("eu", "quicklizard-eu-central"):
+        elif data_center_or_bucket_name in {"eu", "quicklizard-eu-central"}:
             self._bucket = "quicklizard-eu-central"
 
     @property
@@ -136,7 +137,6 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join(self.s3_sgmkr_dir, "job_artifacts", self.project_name)
 
-    @property
     def s3_monitoring_dir(
         self, client_key: Optional[str] = None, channel: Optional[str] = None
     ) -> str:
@@ -150,9 +150,7 @@ class AppState(metaclass=SingletonMeta):
             (str): The S3 monitoring directory path.
         """
         if client_key is None or channel is None:
-            return path.join(
-                self.s3_sgmkr_dir, "services_monitoring", self.project_name
-            )
+            return path.join(self.s3_sgmkr_dir, "services_monitoring", self.project_name)
         if client_key is not None and channel is not None:
             return path.join(
                 self.s3_sgmkr_dir,
@@ -181,39 +179,8 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join("delivery", self.project_name)
 
-    def s3_datasets_dir(
-        self, client_key: Optional[str] = None, channel: Optional[str] = None
-    ) -> str:
-        """Property that gets the S3 datasets directory path.
-
-        Args:
-            client_key (Optional[str]): The client key. Defaults to None.
-            channel (Optional[str]): The channel. Defaults to None.
-
-        Returns:
-            (str): The S3 datasets directory path.
-        """
-        if not client_key or not channel:
-            return str(path.join(self.s3_ds_dir, "datasets"))
-        return str(
-            path.join(
-                self.s3_ds_dir, "datasets", client_key, channel, self.project_name
-            )
-        )
-
     @property
-    def s3_eval_results_dir(self) -> str:
-        """Property that gets the S3 eval result path.
-
-        Returns:
-            (str): The S3 eval result path.
-        """
-        if not self.project_name:
-            return str(path.join(self.s3_ds_dir, "eval_results"))
-        return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
-
-    @property
-    def s3_athena_dir(self) -> str:
+    def s3_athena_staging_dir(self) -> str:
         """Property that gets the S3 athena dir.
 
         Returns:
@@ -237,6 +204,71 @@ class AppState(metaclass=SingletonMeta):
         if self.bucket_name == "quicklizard-eu-central":
             return "eu-central-1"
         return ""
+
+    def s3_datasets_dir(
+        self, client_key: Optional[str] = None, channel: Optional[str] = None
+    ) -> str:
+        """Property that gets the S3 datasets directory path.
+
+        Args:
+            client_key (Optional[str]): The client key. Defaults to None.
+            channel (Optional[str]): The channel. Defaults to None.
+
+        Returns:
+            (str): The S3 datasets directory path.
+        """
+        if not client_key or not channel:
+            return str(path.join(self.s3_ds_dir, "datasets"))
+        return str(path.join(self.s3_ds_dir, "datasets", client_key, channel, self.project_name))
+
+    @property
+    def s3_eval_results_dir(
+        self, client_key: Optional[str] = None, channel: Optional[str] = None
+    ) -> str:
+        """Property that gets the S3 datasets directory path.
+
+        Args:
+            client_key (Optional[str]): The client key. Defaults to None.
+            channel (Optional[str]): The channel. Defaults to None.
+
+        Returns:
+            (str): The S3 datasets directory path.
+        """
+        if not client_key or not channel:
+            return str(path.join(self.s3_ds_dir, "eval_results"))
+        return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
+
+    @property
+    def athena_databases_dir(self) -> str:
+        """Property that gets the Athena databases directory path."""
+        return str(path.join(self.s3_ds_dir, "athena_databases", self.project_name))
+
+    @property
+    def s3_config_directory(self) -> str:
+        """Property that gets the S3 config dir.
+
+        Returns:
+            (str): The S3 config dir.
+        """
+        return "data_science/credentials/"
+
+    @property
+    def config_prod_spreadsheet(self) -> str:
+        """Property that gets the name of the prod config spreadsheet.
+
+        Returns:
+            (str): The prod config name.
+        """
+        return "DS_PROD_CONFIG"
+
+    @property
+    def config_qa_spreadsheet(self) -> str:
+        """Property that gets the name of the QA config spreadsheet.
+
+        Returns:
+            (str): The qa config name.
+        """
+        return "DS_QA_CONFIG"
 
 
 app_state = AppState()

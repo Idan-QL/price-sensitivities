@@ -19,7 +19,8 @@ from elasticity.model.group import add_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
-from ql_toolkit.attrs.write import write_actions_list
+from ql_toolkit.attrs import data_classes as dc
+from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io as s3io
@@ -30,7 +31,7 @@ def setup_environment() -> tuple:
     """Set up the environment and return args and config.
 
     Returns:
-        tuple: args_dict, config, client_keys_map, is_local, is_qa_run
+        tuple: args_dict, client_keys_map, is_local, is_qa_run
     """
     args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
     logging.info("args_dict: %s", args_dict)
@@ -56,9 +57,9 @@ def setup_environment() -> tuple:
     else:
         logging.info(" ------ Running in Production mode ------ ")
 
+    print(config)
     return (
         args_dict,
-        config,
         client_keys_map,
         is_local,
         is_qa_run,
@@ -120,18 +121,30 @@ def process_client_channel(
             weights_col="days",
         )
 
-        df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
-
         if attr_name:
             logging.info(f"Running group elasticity - attr: {attr_name}")
+
+            # FOR METHOD WITH NO FILTER (KEEP IT FOR NOW)
+            # df_by_price_GROUP = df_by_price[df_by_price["units"] > 0.001]
+            # df_group = data_for_group_elasticity(
+            #     df_by_price_GROUP, client_key, channel, attr_name
+            # )
+
             df_group = data_for_group_elasticity(
-                df_by_price, client_key, channel, attr_name
+                df_by_price=df_by_price,
+                client_key=client_key,
+                channel=channel,
+                end_date=end_date,
+                attr_name=attr_name,
             )
+
             df_results = add_group_elasticity(df_group, df_results)
         else:
             logging.info(f"Skipping group elasticity - attr: {attr_name}")
             df_results["result_to_push"] = df_results["quality_test"]
             df_results["type"] = "uid"
+
+        df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
 
         logging.info(
             f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"
@@ -139,9 +152,7 @@ def process_client_channel(
         logging.info(
             f"Test high: {df_results[df_results.result_to_push].quality_test_high.value_counts()}"
         )
-        logging.info(
-            f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}"
-        )
+        logging.info(f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}")
 
         s3io.write_dataframe_to_s3(
             file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
@@ -149,20 +160,20 @@ def process_client_channel(
             s3_dir="data_science/eval_results/elasticity/",
         )
 
-        plot_demands.run_save_graph_top10(
-            df_results, df_by_price, client_key, channel, end_date
-        )
+        plot_demands.run_save_graph_top10(df_results, df_by_price, client_key, channel, end_date)
 
         actions_list = generate_actions_list(df_results, client_key, channel)
 
-        write_actions_list(
-            actions_list=actions_list,
+        input_args = dc.WriteActionsListKWArgs(
             client_key=client_key,
             channel=channel,
-            qa_run=is_qa_run,
             is_local=is_local,
-            filename_prefix=None,
-            chunk_size=5000,
+            qa_run=is_qa_run,
+        )
+
+        _write_actions_list(
+            actions_list=actions_list,
+            input_args=input_args,
         )
 
         runtime = (datetime.now() - start_time).total_seconds() / 60
@@ -203,25 +214,26 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (args_dict, config, client_keys_map, is_local, is_qa_run, start_date, end_date) = (
-        setup_environment()
-    )
+    (args_dict, client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
     data_report = []
 
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
-        attr_name_list = client_keys_map[client_key]["attr_name"]
-        for channel, attr_name in zip(channels_list, attr_name_list):
-            data_report = process_client_channel(
-                data_report,
-                client_key,
-                channel,
-                attr_name,
-                is_local,
-                is_qa_run,
-                start_date,
-                end_date,
-            )
+        if len(client_keys_map[client_key]["attr_name"]) == 1:
+            attr_name = client_keys_map[client_key]["attr_name"][0]
+            for channel in channels_list:
+                data_report = process_client_channel(
+                    data_report,
+                    client_key,
+                    channel,
+                    attr_name,
+                    is_local,
+                    is_qa_run,
+                    start_date,
+                    end_date,
+                )
+        else:
+            logging.error(f"Error occurred for {client_key}.")
 
     report_df = pd.DataFrame(data_report)
 

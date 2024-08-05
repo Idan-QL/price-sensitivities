@@ -1,7 +1,7 @@
 """This module contains functions to write actions to a file."""
 
-# import json
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -21,6 +21,7 @@ def create_actions_list(
     where the attribute is internal and its name is set to
     f"qlia_{app_state.project_name}_calc_date".
     If delete_actions to True it will set this parameter to 'delete!'
+
 
     Args:
         res_list (list): List of tuples containing the data.
@@ -57,7 +58,7 @@ def create_actions_list(
         print(actions_list)
     """
     actions_list = []
-    calc_date_str = datetime.now().strftime(app_state.date_format)
+    calc_date_str = datetime.now(tz=timezone.utc).strftime(app_state.date_format)
 
     for res_tup in res_list:
         if not res_tup:
@@ -65,6 +66,7 @@ def create_actions_list(
 
         # Create a dictionary from attribute names and values in res_tup
         attr_values = dict(zip(attr_names, res_tup))
+        # TODO: Add to ql_toolkit
         if not delete_actions:
             attr_values[f"qlia_{app_state.project_name}_calc_date"] = calc_date_str
         else:
@@ -112,20 +114,20 @@ def create_action(
         ],
     }
 
-    for attr_name, value in attr_values.items():
-        if attr_name not in ["uid"]:  # Exclude already handled attributes
-            if isinstance(value, (list, np.ndarray)):
-                value = list_to_delimited_string(value)
-            # val = json.dumps(value)
-            # action["changes"][0]["attrs"].append({"name": attr_name, "value": val})
+    for attr_name, original_value in attr_values.items():
+        if attr_name not in {"uid"}:  # Exclude already handled attributes
+            value = (
+                list_to_delimited_string(original_value)
+                if isinstance(original_value, (list, np.ndarray))
+                else original_value
+            )
+            value = json.dumps(value)
             action["changes"][0]["attrs"].append({"name": attr_name, "value": value})
 
     return action
 
 
-def list_to_delimited_string(
-    input_list: list[int] | list[float], delimiter: str = "|"
-) -> str:
+def list_to_delimited_string(input_list: list[int] | list[float], delimiter: str = "|") -> str:
     """Converts a list into a delimited string.
 
     Args:

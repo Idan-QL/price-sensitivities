@@ -38,6 +38,13 @@ args_kv = {
         "help": "Write results to local 'artifacts' " "folder or to S3",
         "required": False,
     },
+    "is_qa_run": {
+        "flag": "-q",
+        "default": "False",
+        "type": literal_eval,
+        "help": "Read config from QA spreadsheet",
+        "required": False,
+    },
     "config": {
         "flag": "-c",
         "default": "config",

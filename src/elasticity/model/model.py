@@ -57,9 +57,7 @@ def validate_data(data: pd.DataFrame, required_columns: List[str]) -> bool:
         logging.warning(f"Missing required columns: {', '.join(missing_columns)}")
         return False
     if data.shape[0] < 3:
-        logging.warning(
-            "Insufficient data to fit the model. Need at least 3 rows of data."
-        )
+        logging.warning("Insufficient data to fit the model. Need at least 3 rows of data.")
         return False
     return True
 

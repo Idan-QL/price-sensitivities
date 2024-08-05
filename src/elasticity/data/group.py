@@ -7,11 +7,8 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-from dateutil.relativedelta import relativedelta
-from pyathena import connect
-from pyathena.pandas.cursor import PandasCursor
 
-from ql_toolkit.config.runtime_config import app_state
+from elasticity.data.read import read_data_attrs
 from ql_toolkit.s3 import io as s3io
 from ql_toolkit.s3 import ls as s3ls
 
@@ -20,6 +17,7 @@ def data_for_group_elasticity(
     df_by_price: pd.DataFrame,
     client_key: str,
     channel: str,
+    end_date: str,
     attr_name: Optional[str] = None,
 ) -> pd.DataFrame:
     """Generate group-level data for elasticity analysis.
@@ -28,6 +26,7 @@ def data_for_group_elasticity(
         df_by_price (pandas.DataFrame): DataFrame containing data grouped by price.
         client_key (str): Client key for segmentation data.
         channel (str): Channel for segmentation data.
+        end_date (str): end_date for querying athena.
         attr_name (str, optional): Column name for attribute data. Defaults None.
 
     Returns:
@@ -46,7 +45,10 @@ def data_for_group_elasticity(
     if attr_name:
         try:
             attr_col = "attr_value"
-            df_attrs = get_attrs(client_key, channel, attr_name=attr_name)
+            date_params = {"end_date": end_date}
+            df_attrs = read_data_attrs(
+                client_key, channel, attr_names=[attr_name], date_params=date_params
+            )
             df_group = df_group.merge(df_attrs, on="uid", how="left")
         except Exception as e:
             logging.error(f"Error getting attr. data: {e}")
@@ -65,9 +67,7 @@ def data_for_group_elasticity(
 
         group_mapping = {}
         for gr in df_group["sub_group_uid"].unique():
-            group_mapping_gr = group_by_similarity(
-                df_group[df_group["sub_group_uid"] == gr]
-            )
+            group_mapping_gr = group_by_similarity(df_group[df_group["sub_group_uid"] == gr])
             group_mapping = {**group_mapping, **group_mapping_gr}
 
         df_group["price_group"] = df_group["uid"].map(group_mapping)
@@ -183,9 +183,7 @@ def get_segmentation_data(
     filtered_files_list = [
         item
         for item in s3_files
-        if f"{client_key}_{channel}" in item
-        and "_consts" not in item
-        and "backups" not in item
+        if f"{client_key}_{channel}" in item and "_consts" not in item and "backups" not in item
     ]
 
     if not filtered_files_list:
@@ -209,64 +207,6 @@ def validate_single_word(param: str) -> None:
             f"Pyathena query: '{param}' must be a single word containing "
             "only alphanumeric characters and underscores."
         )
-
-
-def get_attrs(
-    client_key: str,
-    channel: str,
-    attr_name: str,
-) -> pd.DataFrame:
-    """Query 6 months of data for a specific client key and attribute name.
-
-    Args:
-        client_key (str): The client key to process data for.
-        channel (str): The channel to filter data for (optional).
-        attr_name (str): The attribute name.
-
-    Returns:
-        DataFrame: A DataFrame containing processed data for the client key and attribute.
-
-    Validation:
-    Parameter should be one word only to avoid sql injection
-    """
-    logging.info(f"Read 6 months attrs from athena: {attr_name}")
-    for sqlparam in [client_key, channel, attr_name]:
-        validate_single_word(sqlparam)
-
-    table_name = f"AwsDataCatalog.analytics.client_key_{client_key}"
-
-    # Six months prior to the current date - begining of the month
-    start_date = (datetime.today().replace(day=1) - relativedelta(months=6)).strftime(
-        "%Y-%m-%d"
-    )
-
-    query = f"""
-    SELECT uid,
-           channel,
-           MAX(element.value) AS attr_value
-    FROM {table_name}, UNNEST(attrs) AS t(element)
-    WHERE element.name = %(attr_name)s
-        AND (element.value IS NOT NULL OR CAST(element.value AS VARCHAR) != '')
-        AND date > %(start_date)s
-        AND channel = %(channel)s
-    GROUP BY uid, channel;
-    """
-
-    cursor = connect(
-        s3_staging_dir=app_state.s3_athena_dir,
-        region_name=app_state.s3_region,
-        cursor_class=PandasCursor,
-    ).cursor()
-    df_attrs = cursor.execute(
-        query,
-        parameters={
-            "attr_name": attr_name,
-            "channel": channel,
-            "start_date": start_date,
-        },
-    ).as_pandas()
-
-    return df_attrs.drop(["channel"], axis=1)
 
 
 def group_by_similarity(
@@ -324,9 +264,7 @@ def group_by_similarity(
         # Find UIDs within the threshold
         median_diff = abs(medians - medians[i])
         volatility_diff = abs(volatilities - volatilities[i])
-        mask = (median_diff <= median_threshold) & (
-            volatility_diff <= volatility_threshold
-        )
+        mask = (median_diff <= median_threshold) & (volatility_diff <= volatility_threshold)
 
         similar_uids = uids[mask & ~np.isin(uids, list(used))]
 

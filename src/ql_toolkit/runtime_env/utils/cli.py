@@ -59,9 +59,7 @@ class CliArgsParser:
         """
         for arg_name, arg_vals in self.kv.items():
             args = [f"--{arg_name}", arg_vals["flag"]]
-            kwargs = {
-                key: arg_vals[key] for key in ["default", "help", "type", "required"]
-            }
+            kwargs = {key: arg_vals[key] for key in ["default", "help", "type", "required"]}
             self.parser.add_argument(*args, **kwargs)
 
     def set_parser(self) -> None:
@@ -121,39 +119,48 @@ class Parser(CliArgsParser):
         """
         if args_dict:
             self.args_dict = args_dict
-        else:
-            if len(argv) > 1:
-                print("Reading arguments from argv")
-                self.args_dict = self.set_args_dict_from_cli()
-            else:
-                # Set reading arguments from an Estimator container
-                if path.exists("/opt/ml"):
-                    print(
-                        "Reading arguments from /opt/ml/input/config (inside container)"
-                    )
-                    # The config folder contains the "cli args" in json format
-                    self.cli_args_conf_path = "/opt/ml/input/config"
-                # Allow reading arguments from an Estimator container in 'local' mode
-                elif path.exists(self.cli_args_conf_path):
-                    print(
-                        f"Reading arguments from {self.cli_args_conf_path} (on local machine)"
-                    )
-                try:
-                    with open(
-                        path.join(self.cli_args_conf_path, "hyperparameters.json")
-                    ) as f:
-                        self.args_dict = json.load(f)
-                except FileNotFoundError as err:
-                    logging.error("Error caught: %s", err)
-                    sys_exit(
-                        "In runtime_env/cli.py: The hyperparameters.json is not "
-                        "found and no CLI args are given...\n"
-                        "Exiting!"
-                    )
+            self.validate_args()
+            return
 
-        self.validate_args()
+        self.args_dict = self.read_args_from_cli_or_json()
+
         if self.args_dict is None:
             sys_exit("No arguments found. Exiting!")
+        self.validate_args()
+
+    def read_args_from_cli_or_json(self) -> Optional[dict]:
+        """Reads arguments from the CLI or configuration file based on the environment.
+
+        Returns:
+            dict: The arguments dictionary loaded from CLI or config, or None if not found.
+        """
+        if len(argv) > 1:
+            print("Reading arguments from argv")
+            return self.set_args_dict_from_cli()
+
+        return self.read_args_from_json()
+
+    def read_args_from_json(self) -> Optional[dict]:
+        """Reads arguments from configuration files depending on the execution environment.
+
+        Returns:
+            dict: The arguments dictionary if file is found and read, otherwise None.
+        """
+        config_paths = [
+            "/opt/ml/input/config",  # Path in container
+            self.cli_args_conf_path,  # Local path
+        ]
+        for config_dir in config_paths:
+            config_file_path = path.join(config_dir, "hyperparameters.json")
+            if path.exists(config_file_path):
+                try:
+                    with open(config_file_path, "r", encoding="utf-8") as file:
+                        print(f"Reading arguments from {config_file_path}")
+                        return json.load(file)
+                except FileNotFoundError as err:
+                    logging.error(f"Error caught: {err}")
+                    sys_exit("Exiting: The hyperparameters.json is not found...\n")
+        return None
 
     def set_bool_arg(self, key: str) -> None:
         """This function sets up a bool argument.
@@ -180,9 +187,7 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = int(self.args_dict[key])
             except ValueError as err:
-                sys_exit(
-                    f"ValueError caught when trying to set up an int argument: {err}"
-                )
+                sys_exit(f"ValueError caught when trying to set up an int argument: {err}")
 
     def set_float_arg(self, key: str) -> None:
         """This function sets up a float argument.
@@ -197,22 +202,31 @@ class Parser(CliArgsParser):
             try:
                 self.args_dict[key] = float(self.args_dict[key])
             except ValueError as err:
-                sys_exit(
-                    f"ValueError caught when trying to set up an float argument: {err}"
-                )
+                sys_exit(f"ValueError caught when trying to set up an float argument: {err}")
 
     def validate_args(self) -> None:
         """This function validates the arguments given in the hyperparameters.json file.
 
+        It sets default values for arguments that are not already defined and adjusts
+        their values based on their type by calling the appropriate setter function.
+
         Returns:
             None
         """
+        # Mapping of types to their respective setter functions
+        type_function_map = {
+            bool: self.set_bool_arg,
+            int: self.set_int_arg,
+            float: self.set_float_arg,
+        }
+
         for arg_name, arg_vals in self.kv.items():
+            # Set default value if arg_name is not in args_dict
             if arg_name not in self.args_dict:
                 self.args_dict[arg_name] = arg_vals["default"]
-            if arg_vals["type"] == bool:
-                self.set_bool_arg(arg_name)
-            elif arg_vals["type"] == int:
-                self.set_int_arg(arg_name)
-            elif arg_vals["type"] == float:
-                self.set_float_arg(arg_name)
+
+            # Retrieve the function based on the type and call it
+            arg_type = arg_vals["type"]
+            setter_function = type_function_map.get(arg_type)
+            if setter_function:
+                setter_function(arg_name)

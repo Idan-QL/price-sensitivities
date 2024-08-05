@@ -124,10 +124,7 @@ def plot_quantity_and_prices_from_df(
         s=df[days_col][~outlier_mask] * 10,
         marker="+",
         color="blue",
-        label=(
-            "Actual Data (Avg units sold, size is prop. to "
-            "the nb. of days at this price"
-        ),
+        label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
         df[quantity_col][outlier_mask],  # Plot outlier points
@@ -220,10 +217,7 @@ def plot_model_and_prices_from_df(
         s=df[days_col][~outlier_mask] * 10,
         marker="+",
         color="blue",
-        label=(
-            "Actual Data (Avg units sold, size is prop. to "
-            "the nb. of days at this price"
-        ),
+        label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
         df[quantity_col][outlier_mask],  # Plot outlier points
@@ -314,10 +308,7 @@ def plot_model_and_prices(
         s=df_uid[days_col][~outlier_mask] * 10,
         marker="+",
         color="green",
-        label=(
-            "Actual Data (Avg units sold, size is prop. to "
-            "the nb. of days at this price"
-        ),
+        label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
         df_uid[quantity_col][outlier_mask],  # Plot outlier points
@@ -330,14 +321,7 @@ def plot_model_and_prices(
 
     plt.xlabel("Quantity")
     plt.ylabel("Price")
-    plt.title(
-        title
-        + label
-        + "= elasticity: "
-        + str(elasticity)
-        + " +/- "
-        + str(round(error, 2))
-    )
+    plt.title(title + label + "= elasticity: " + str(elasticity) + " +/- " + str(round(error, 2)))
     plt.grid(True)
     # Place legend outside the plot at the bottom
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
@@ -391,15 +375,11 @@ def plot_demand_curves(
         prices = np.ndarray = np.linspace(50, 100, 100)
     # Calculate quantity demanded for each price
     quantities_linear = linear_demand_equation(prices, a_linear, b_linear)
-    quantities_exponential = exponential_demand_equation(
-        prices, a_exponential, b_exponential
-    )
+    quantities_exponential = exponential_demand_equation(prices, a_exponential, b_exponential)
     quantities_power = power_demand_equation(prices, a_power, b_power)
 
     # Plot demand curves with different colors
-    plt.plot(
-        quantities_linear, prices, label="Linear Demand - Q = 10 + -0.1xP", color="blue"
-    )
+    plt.plot(quantities_linear, prices, label="Linear Demand - Q = 10 + -0.1xP", color="blue")
     plt.plot(
         quantities_exponential,
         prices,
@@ -484,14 +464,7 @@ def plot_model_and_prices_buffer(
 
     plt.xlabel("Quantity")
     plt.ylabel("Price")
-    plt.title(
-        title
-        + label
-        + "= elasticity: "
-        + str(elasticity)
-        + " +/- "
-        + str(round(error, 2))
-    )
+    plt.title(title + label + "= elasticity: " + str(elasticity) + " +/- " + str(round(error, 2)))
     plt.grid(True)
     plt.legend(loc="upper center", bbox_to_anchor=(0.5, -0.15), fancybox=True)
 
@@ -595,10 +568,7 @@ def run_save_graph_parallel(
     pool = multiprocessing.Pool()  # Use the default number of processes
     _ = pool.starmap(
         save_graph,
-        [
-            (uid, df_results, df_by_price, client_key, channel, end_date)
-            for uid in elasticity_uids
-        ],
+        [(uid, df_results, df_by_price, client_key, channel, end_date) for uid in elasticity_uids],
     )
     pool.close()
     pool.join()

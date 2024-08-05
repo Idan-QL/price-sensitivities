@@ -45,26 +45,39 @@ def get_arrow_table(
     table = None
     if s3_fs is None:
         s3_fs = s3fs.S3FileSystem()
-    # if path_or_paths is a list, then add the bucket name to each path
-    if isinstance(path_or_paths, list):
-        path_or_paths = [f"{app_state.bucket_name}/{path}" for path in path_or_paths]
-    else:
-        path_or_paths = f"{app_state.bucket_name}/{path_or_paths}"
+
+    path_or_paths = add_bucket_name_to_paths(path_or_paths)
+
     try:
-        pq_ds = pq.ParquetDataset(
-            path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters
-        )
+        pq_ds = pq.ParquetDataset(path_or_paths=path_or_paths, filesystem=s3_fs, filters=filters)
+        if columns:
+            pq_dataset_columns = pq_ds.schema.names
+            logging.info(f"Parquet dataset available columns: {pq_dataset_columns}")
+            columns = list(set(columns).intersection(set(pq_dataset_columns)))
+            logging.info(f"Reading columns: {columns}")
         table = pq_ds.read(columns=columns)
     except ValueError as err:
-        if isinstance(path_or_paths, list):
-            logging.error("ValueError caught: %s for the paths list", err)
-        else:
-            logging.error(
-                "ValueError caught: %s for %s", err, path_or_paths[0].split("/")[-1]
-            )
+        logging.error(f"ValueError caught: {err} for the paths list")
     except Exception as err:
         logging.error("Err caught: %s", err)
     return table
+
+
+def add_bucket_name_to_paths(path_or_paths: str | list[str]) -> list[str]:
+    """Returns the path_or_paths as a lit, in case it is a string.
+
+    The app_state.bucket_name is prepended to each path in the list.
+
+    Args:
+        path_or_paths (str or list[str]): The path or list of paths to the Parquet file(s) to read.
+
+    Returns:
+        list[str]: The list of paths with the bucket name prepended.
+    """
+    if not isinstance(path_or_paths, list):
+        path_or_paths = [path_or_paths]
+
+    return [f"{app_state.bucket_name}/{path}" for path in path_or_paths]
 
 
 def get_xf_from_arrow_table(

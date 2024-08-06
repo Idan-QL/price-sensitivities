@@ -1,0 +1,31 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.8.0  # Use the latest stable release
+    hooks:
+      - id: black
+        args: [ "--line-length=100" ]
+        files: \.py$
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2  # Use the latest stable version of isort
+    hooks:
+      - id: isort
+        args: [ "--profile", "black" ]
+        files: \.py$
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.6
+    hooks:
+      # Run the linter.
+      - id: ruff
+        args: [ ]
+        files: \.py$
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest with coverage
+        entry: pytest tests/ -v --cov=src/elasticity  --cov-report=xml:coverage.xml
+        language: system
+        stages: [pre-push]
+        files: \.py$

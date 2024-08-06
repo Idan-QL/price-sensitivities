@@ -1,0 +1,29 @@
+image: python:3.11.6
+
+definitions:
+  caches:
+    pytest-results:
+      path: pytest-results  # Cache for test results
+
+pipelines:
+  default:
+    - parallel:
+        - step:
+            name: Format and Lint
+            caches:
+              - pip
+            script:
+              - pip install -r pipeline_requirements.txt
+              - black src/ tests/ --line-length=100
+              - isort src/ tests/ --profile black
+              - ruff check src/ tests/
+        - step:
+            name: Run Tests
+            caches:
+              - pip
+              - pytest-results  # Cache for test results
+            script:
+              - pip install -r pipeline_requirements.txt
+              - pytest tests/ -v --junitxml=test-results/results.xml --cov=src/elasticity
+            artifacts:
+              - pytest-results/**

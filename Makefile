@@ -64,23 +64,23 @@ add-linter-dependencies:
 
 # Target for running all pre-commit checks
 .PHONY: pre-commit-check
-pre-commit-check: fmt check-linters test
+pre-commit-check: fmt-lint test
 
 # Format code using black
 .PHONY: fmt
 fmt: add-fmt-dependencies
 	@echo "\n--- Formatting ---"
 	@echo "Running black formatter..."
-	@black src/
+	@black src/ tests/ --line-length=100
 	@echo "Running isort formatter..."
-	@isort src/ --profile black
+	@isort src/ tests/ --profile black
 	@echo "--- Formatting complete! ---\n"
 
 # Test the project - placeholder
 .PHONY: test
 test:
 	@echo "\n--- Testing ---"
-	@pytest tests/
+	@pytest tests/ --cov=src/elasticity
 	@echo "--- Tests complete! ---\n"
 
 # Check code using linters
@@ -88,7 +88,7 @@ test:
 check-linters: add-linter-dependencies
 	@echo "\n--- Linting ---"
 	@echo "Running ruff linter..."
-	@ruff check src/
+	@ruff check src/ tests/
 	@echo "--- Linting complete! ---\n"
 
 # Run only fmt and check-linters
@@ -109,5 +109,3 @@ check-stale:
 	@make fmt && git diff --name-only --exit-code HEAD || ( echo "\n[ERROR]: Formatting check failed"; exit 1 )
 	@echo "No file changes found after formatting."
 	@echo "Stale file check complete!\n"
-
-.SILENT: all

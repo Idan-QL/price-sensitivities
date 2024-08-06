@@ -18,3 +18,7 @@ tests/logs
 **.csv
 dist/
 test_job.ipynb
+**.doc
+**.pdf
+.coverage
+coverage.xml

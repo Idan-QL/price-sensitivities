@@ -1,16 +1,13 @@
 """Module preprocessing for group elasticity."""
 
 import logging
-import re
-from datetime import datetime
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 
 from elasticity.data.read import read_data_attrs
-from ql_toolkit.s3 import io as s3io
-from ql_toolkit.s3 import ls as s3ls
+from ql_toolkit.s3 import s3io
 
 
 def data_for_group_elasticity(
@@ -81,83 +78,31 @@ def data_for_group_elasticity(
 
 
 def tag_segmentation(
-    df: pd.DataFrame,
-    revenue_col: str = "total_revenue",
-    rank_col: str = "ranking_score_rank",
-    uid_col: str = "uid",
-    threshold_KVI: float = 0.25,
-    threshold_SD: float = 0.75,
+    df_segmentation: pd.DataFrame, segment_col: str = "kvi_segment", uid_col: str = "uid"
 ) -> pd.DataFrame:
-    """Tags rows of the dataframe based on accumulated revenue.
+    """Tags rows of the dataframe based on segment values.
+
+    Renames the specified segment column to 'segmentation_1' and creates a new column
+    'segmentation_2' that categorizes rows based on the values in 'segmentation_1'
+    by merging KVI and SD to KVI_SD.
 
     Parameters:
-    df (pd.DataFrame): The input dataframe with columns 'uid', 'ranking_score',
-    'ranking_score_rank', and 'total_revenue'.
-    revenue_col (str): The name of the revenue column. Default is 'total_revenue'.
-    rank_col (str): The name of the rank column. Default is 'ranking_score_rank'.
-    threshold_KVI (float): The first threshold as a fraction of total revenue.
-    Default is 0.25 (25%).
-    threshold_SD (float): The second threshold as a fraction of total revenue.
-    Default is 0.75 (75%).
+    df (pd.DataFrame): The input dataframe containing the specified columns.
+    segment_col (str): The name of the segment_col. Default is 'kvi_segment'.
+    uid_col (str): The name of the uid column. Default is 'uid'.
 
     Returns:
-    pd.DataFrame: The dataframe with an additional 'tag' column.
+    pd.DataFrame: The dataframe with columns 'uid', 'segmentation_1', and 'segmentation_2'.
     """
-    # Step 1: Sort the dataframe by `ranking_score_rank`
-    df_sorted = df.sort_values(by=rank_col)
+    df_segmentation = df_segmentation.rename(columns={segment_col: "segmentation_1"})
 
-    # Step 2: Calculate cumulative revenue and determine the revenue thresholds
-    df_sorted["cumulative_revenue"] = df_sorted[revenue_col].cumsum()
-    total_revenue = df_sorted[revenue_col].sum()
-    threshold_revenue_KVI = total_revenue * threshold_KVI
-    threshold_revenue_SD = total_revenue * threshold_SD
-
-    # Step 3: Tag rows based on cumulative revenue
-    df_sorted["segmentation_1"] = pd.cut(
-        df_sorted["cumulative_revenue"],
-        bins=[-float("inf"), threshold_revenue_KVI, threshold_revenue_SD, float("inf")],
-        labels=["KVI", "SD", "PG"],
-    )
-    df_sorted["segmentation_2"] = pd.cut(
-        df_sorted["cumulative_revenue"],
-        bins=[-float("inf"), threshold_revenue_SD, float("inf")],
-        labels=["KVI_SD", "PG"],
+    df_segmentation["segmentation_2"] = np.where(
+        np.isin(df_segmentation["segmentation_1"], ["KVI", "SD"]),
+        "KVI_SD",
+        df_segmentation["segmentation_1"],
     )
 
-    return df_sorted[[uid_col, "segmentation_1", "segmentation_2"]]
-
-
-def get_latest_file(
-    file_list: list[str],
-) -> str:
-    """Gets the file path from the list with the most recent date based on the filename.
-
-    Args:
-        file_list (list[str]): A list of file paths.
-
-    Returns:
-        str: The file path with the most recent date.
-    """
-    latest_file = None
-    latest_date = None
-
-    for file in file_list:
-        # Extract the date portion from the filename
-        date_str = file.split("/")[-1].split("_")[-1].replace(".csv", "")
-
-        # Convert the date string to a datetime object
-        try:
-            date = datetime.strptime(date_str, "%Y-%m-%d")
-        except ValueError:
-            # Handle invalid date format cases (optional)
-            continue
-
-        # Update latest_file and latest_date if the current date is newer
-        if not latest_date or date > latest_date:
-            latest_file = file
-            latest_date = date
-
-    return latest_file
+    return df_segmentation[[uid_col, "segmentation_1", "segmentation_2"]]
 
 
 def get_segmentation_data(
@@ -179,34 +124,17 @@ def get_segmentation_data(
     Raises:
         FileNotFoundError: If no files are found for the given client key and channel.
     """
-    s3_files = s3ls.list_files_in_dir(s3_dir=s3_dir, file_type="csv")
-    filtered_files_list = [
-        item
-        for item in s3_files
-        if f"{client_key}_{channel}" in item and "_consts" not in item and "backups" not in item
-    ]
+    df_seg = s3io.maybe_get_pd_csv_df(
+        file_name=f"{client_key}_{channel}.csv",
+        s3_dir=s3_dir,
+        usecols=["uid", "kvi_segment"],
+    )
 
-    if not filtered_files_list:
+    if df_seg.empty:
         raise FileNotFoundError(
             f"No files found for client_key={client_key} and channel={channel} in {s3_dir}."
         )
-
-    file_name = get_latest_file(filtered_files_list)
-    df_seg = s3io.maybe_get_pd_csv_df(
-        file_name=file_name,
-        s3_dir="",
-        usecols=["uid", "ranking_score", "ranking_score_rank", "total_revenue"],
-    )
     return tag_segmentation(df_seg)
-
-
-def validate_single_word(param: str) -> None:
-    """Validate that the parameter is a valid single word."""
-    if not re.match(r"^\w+$", param):
-        raise ValueError(
-            f"Pyathena query: '{param}' must be a single word containing "
-            "only alphanumeric characters and underscores."
-        )
 
 
 def group_by_similarity(

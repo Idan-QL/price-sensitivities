@@ -11,7 +11,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from ql_toolkit.config import external_config
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env.utils import cli, logs_config
-from ql_toolkit.s3.io import maybe_get_json_file
+from ql_toolkit.s3.s3io import maybe_get_json_file
 from ql_toolkit.s3.utils import set_aws_access
 
 

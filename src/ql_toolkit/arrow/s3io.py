@@ -9,7 +9,7 @@ import s3fs
 from pyarrow import Table
 
 from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3 import io as s3io
+from ql_toolkit.s3 import s3io
 
 
 def get_arrow_table(

@@ -1,12 +1,9 @@
 """Test module of model/run_model."""
 
-from sys import path as sys_path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-sys_path.append("../src")
 from elasticity.model.run_model import run_experiment
 from elasticity.utils.consts import OUTPUT_CS
 

@@ -119,6 +119,7 @@ def add_group_elasticity(df_group: pd.DataFrame, df_results: pd.DataFrame) -> pd
     if df_group.empty:
         logging.error("No group elasticity data available.")
         df_results["result_to_push"] = df_results["quality_test"]
+        df_results["type"] = "uid"
         return df_results
 
     # Process both group segmentations

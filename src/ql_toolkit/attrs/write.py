@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from ql_toolkit.attrs import action_list as al
 from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3 import io as s3io
+from ql_toolkit.s3 import s3io
 
 
 def write_attributes(

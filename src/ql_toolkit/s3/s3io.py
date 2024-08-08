@@ -277,10 +277,15 @@ def maybe_get_pd_csv_df(
             return csv_df
         logging.warning("[- S3 I/O -] File %s is empty!", file_name)
     else:
-        logging.warning(
-            "[- S3 I/O -] File %s not found or could not be decoded as UTF-8!",
-            file_name,
-        )
+        if usecols:
+            logging.warning(
+                f"""[- S3 I/O -] File {file_name} or could not be decoded as UTF-8 or columns
+                 {usecols} not found in file!"""
+            )
+        else:
+            logging.warning(
+                f"[- S3 I/O -] File {file_name} not found or could not be decoded as UTF-8!"
+            )
 
     return pd.DataFrame()
 

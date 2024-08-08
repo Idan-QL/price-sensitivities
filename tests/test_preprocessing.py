@@ -1,8 +1,5 @@
 """Test module of preprocessing."""
 
-from sys import path as sys_path
-
-sys_path.append("../src")
 from elasticity.data.preprocessing import round_price_effect
 
 

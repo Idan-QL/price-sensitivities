@@ -195,7 +195,15 @@ def progressive_monthly_aggregate(
         df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
 
         if total_uid == 0:
-            total_uid, total_revenue, df_revenue_uid = get_revenue(df_month, uid_col)
+            # Read data without filter to get all the uid
+            df_revenue = read_data(
+                client_key,
+                channel,
+                uids_to_filter=uids_to_filter,
+                date_read=date_month,
+                filter_units=False,
+            )
+            total_uid, total_revenue, df_revenue_uid = get_revenue(df_revenue, uid_col)
 
         # filter out uid already approved
         df_month = df_month[~df_month[uid_col].isin(approved_uids)]
@@ -242,6 +250,7 @@ def read_data(
     channel: str,
     uids_to_filter: Optional[list] = None,
     date_read: str = "2024-02-01",
+    filter_units: bool = True,
 ) -> pd.DataFrame:
     """Read one month data. Filter out inventory 0 and negative unit. Option to filter one uids.
 
@@ -252,6 +261,8 @@ def read_data(
         Defaults to None.
         date_read (str, optional): The date in the format "YYYY-MM-DD".
         Defaults to "2024-02-01".
+        filter_units (bool, optional): True to get only uid with units>0.
+        Defaults to True.
 
     Returns:
         pd.DataFrame: The DataFrame containing the read data.
@@ -289,7 +300,7 @@ def read_data(
             client_key=client_key,
             channel=channel,
             date_params=date_params,
-            filter_units=True,
+            filter_units=filter_units,
         )
         if uids_to_filter is not None:
             df_read = df_read[~df_read.uid.isin(uids_to_filter)]

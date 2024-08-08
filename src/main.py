@@ -23,7 +23,7 @@ from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
-from ql_toolkit.s3 import io as s3io
+from ql_toolkit.s3 import s3io
 from report import logging_error, report, write_graphs
 
 
@@ -45,7 +45,7 @@ def setup_environment() -> tuple:
 
     try:
         is_local = args_dict["local"]
-        is_qa_run = config.get("qa_run", False)
+        is_qa_run = args_dict["is_qa_run"]
     except KeyError as err:
         logging.error(f"KeyError: {err}")
         sys_exit("Exiting!")

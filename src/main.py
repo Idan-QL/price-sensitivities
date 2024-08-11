@@ -108,6 +108,9 @@ def process_client_channel(
             )
         )
 
+        if df_by_price.empty:
+            raise ValueError("df_by_price empty")
+
         s3io.write_dataframe_to_s3(
             file_name=f"df_by_price_{client_key}_{channel}_{end_date}.parquet",
             xdf=df_by_price,
@@ -199,7 +202,7 @@ def process_client_channel(
             s3_dir=app_state.s3_eval_results_dir + "/graphs/",
         )
 
-    except (KeyError, pd.errors.EmptyDataError) as e:
+    except (KeyError, pd.errors.EmptyDataError, ValueError) as e:
         logging.error(f"Error processing {client_key} - {channel}: {e}")
         error_info = traceback.format_exc()
         logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")

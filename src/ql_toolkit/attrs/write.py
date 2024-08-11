@@ -109,7 +109,7 @@ def _write_actions_list(
             s3_attrs_dir = (
                 f"spark/output/test/{app_state.project_name}/"
                 if input_args.qa_run
-                else app_state.res_attrs_dir
+                else app_state.s3_res_attrs_dir
             )
             logging.info(f"[- attrs -] Writing files to S3: {path.join(s3_attrs_dir, file_name)}")
             s3io.upload_to_s3(s3_dir=s3_attrs_dir, file_name=file_name, file_obj=actions_str)

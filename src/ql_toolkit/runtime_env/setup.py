@@ -118,6 +118,8 @@ def run_setup(args_dict: dict) -> tuple[dict, dict]:
     # Validate the boolean CLI args
     if not isinstance(args_dict["local"], bool):
         args_dict["local"] = args_dict["local"].lower() == "true"
+    if not isinstance(args_dict["is_qa_run"], bool):
+        args_dict["is_qa_run"] = args_dict["is_qa_run"].lower() == "true"
 
     print("Job CLI args:")
     for k, v in args_dict.items():

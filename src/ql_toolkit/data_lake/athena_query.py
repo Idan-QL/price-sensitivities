@@ -21,17 +21,11 @@ class AthenaQuery:
     Attributes:
         client_key (str): The client key.
         channel (str): The channel.
-        file_name (str): The name of the SQL file containing the query, without the
-                `.sql` postfix.
         kwargs (dict): Additional keyword arguments, necessary for the formatting of the query.
     """
 
     def __init__(
-        self,
-        client_key: str,
-        channel: str,
-        file_name: str,
-        **kwargs: dict[str, Any],
+        self, client_key: str, channel: str, file_name: str, **kwargs: dict[str, Any]
     ) -> None:
         """Initialize the AthenaQuery class.
 
@@ -82,25 +76,25 @@ class AthenaQuery:
         return raw_query.format(client_key=self.client_key, channel=self.channel, **self.kwargs)
 
     @staticmethod
-    def convert_dtypes(df: pd.DataFrame) -> pd.DataFrame:
+    def convert_dtypes(data_df: pd.DataFrame) -> pd.DataFrame:
         """Convert Int64 columns to int32 and float64 columns to float32 in the DataFrame.
 
         Args:
-            df (pd.DataFrame): The DataFrame to convert.
+            data_df (pd.DataFrame): The DataFrame to convert.
 
         Returns:
             pd.DataFrame: The DataFrame with converted data types.
         """
         # Convert int64 to int32
-        int_cols = df.select_dtypes(include=["Int64"]).columns
-        df[int_cols] = df[int_cols].astype("int32")
+        int_cols = data_df.select_dtypes(include=["Int64"]).columns
+        data_df[int_cols] = data_df[int_cols].astype("int32")
 
         # Convert float64 to float32
-        float_cols = df.select_dtypes(include=["float64"]).columns
-        df[float_cols] = df[float_cols].astype("float32")
+        float_cols = data_df.select_dtypes(include=["float64"]).columns
+        data_df[float_cols] = data_df[float_cols].astype("float32")
 
         logging.info("Data types converted!")
-        return df
+        return data_df
 
     def execute_query(self) -> pd.DataFrame:
         """Execute the built query on AWS Athena and return the results as a pandas DataFrame.

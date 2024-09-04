@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from elasticity.data.read import read_data_attrs
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 
 
 def data_for_group_elasticity(

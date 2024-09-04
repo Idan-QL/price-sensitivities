@@ -11,7 +11,7 @@ import pandas as pd
 
 from elasticity.model.model import estimate_coefficients
 from elasticity.utils.consts import EXPONENTIAL, LINEAR, POWER
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 
 plt.switch_backend("agg")
 

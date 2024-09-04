@@ -5,7 +5,7 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 
 plt.switch_backend("agg")
 

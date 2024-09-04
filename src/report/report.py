@@ -6,7 +6,7 @@ from typing import List
 
 import pandas as pd
 
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 
 
 def compare_model(df_results: pd.DataFrame, df_results_last_month: pd.DataFrame) -> int:

@@ -1,15 +1,17 @@
 """This module contains functions for reading and writing Arrow tables using Polars DataFrames."""
 
 import logging
+from io import BytesIO
 from typing import Optional
 
 import polars as pl
+import pyarrow as pa
 import pyarrow.parquet as pq
 import s3fs
 from pyarrow import Table
 
 from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 
 
 def get_arrow_table(
@@ -29,9 +31,6 @@ def get_arrow_table(
         s3_fs (s3fs.S3FileSystem, default None): The S3FileSystem to read the Parquet file(s).
         columns (list[str], default None): The list of columns to read from the Parquet file(s).
         filters (list[tuple], default None): The list of filters to apply to the Parquet file(s).
-        See:
-            https://arrow.apache.org/docs/python/generated/
-            pyarrow.parquet.ParquetDataset.html#pyarrow.parquet.ParquetDataset
 
     Returns:
         pyarrow.Table: The Arrow table representing the data in the Parquet file(s).
@@ -92,15 +91,16 @@ def get_xf_from_arrow_table(
     Retrieves a Polars DataFrame or LazyFrame from an Arrow table obtained from
     Parquet file(s) located at the specified path or paths.
 
+    For more details, see:
+    https://arrow.apache.org/docs/python/generated/
+    pyarrow.parquet.ParquetDataset.html#pyarrow.parquet.ParquetDataset
+
     Args:
         path_or_paths (str or list[str]): The path or list of paths to the Parquet file(s) to read.
         is_lazy (bool): Specifies whether to return a LazyFrame (True) or DataFrame (False).
         s3_fs (s3fs.S3FileSystem, default None): The S3FileSystem to use to read Parquet file(s).
         columns (list[str], default None): The list of columns to read from the Parquet file(s).
         filters (list[tuple], default None): The list of filters to apply to the Parquet file(s).
-        See:
-            https://arrow.apache.org/docs/python/generated/
-            pyarrow.parquet.ParquetDataset.html#pyarrow.parquet.ParquetDataset
 
     Returns:
         Optional[pl.DataFrame or pl.LazyFrame]: The Polars DataFrame or LazyFrame representing
@@ -219,3 +219,44 @@ def write_xf_to_s3(
     s3io.write_dataframe_to_s3(
         file_name=path, xdf=xf, rename_old=rename_old, backup_path=backup_path
     )
+
+
+def upload_pyarrow_table_to_s3(
+    table: pa.Table,
+    s3_file_path: str,
+) -> bool:
+    """Uploads a PyArrow table to an S3 bucket as a Parquet file.
+
+    Args:
+        table: PyArrow Table to upload.
+        s3_file_path: S3 key where the file will be stored. This is the complete path excluding
+            the bucket name. It must end with .parquet.
+
+    Returns:
+        bool: True if the table was successfully uploaded, False otherwise.
+
+    Raises:
+        ValueError: If the provided path does not end with .parquet.
+    """
+    if not s3_file_path.endswith(".parquet"):
+        err_msg = "File path must end with .parquet"
+        logging.error(err_msg)
+        raise ValueError(err_msg)
+
+    # Convert PyArrow Table to Parquet and write to a BytesIO buffer
+    buffer = BytesIO()
+    pq.write_table(table=table, where=buffer)
+    buffer.seek(0)
+
+    # Create a session and resource
+    s3 = s3io.get_s3_resource()
+    bucket_name = app_state.bucket_name
+
+    # Upload the file
+    try:
+        s3.Bucket(bucket_name).put_object(Key=s3_file_path, Body=buffer.getvalue())
+        logging.info(f"Table successfully uploaded to s3://{bucket_name}/{s3_file_path}")
+        return True
+    except Exception as err:
+        logging.error(f"Failed to upload table to S3: {err}")
+        return False

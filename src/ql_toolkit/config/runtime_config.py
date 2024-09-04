@@ -59,7 +59,6 @@ class AppState(metaclass=SingletonMeta):
             "units_sold",
             "inventory",
         ]
-        self.db_sets_cols = {}
 
     @property
     def project_name(self) -> str:
@@ -137,30 +136,6 @@ class AppState(metaclass=SingletonMeta):
         """
         return path.join(self.s3_sgmkr_dir, "job_artifacts", self.project_name)
 
-    def s3_monitoring_dir(
-        self, client_key: Optional[str] = None, channel: Optional[str] = None
-    ) -> str:
-        """Property that gets the S3 monitoring directory path.
-
-        Args:
-            client_key (Optional[str]): The client key. Defaults to None.
-            channel (Optional[str]): The channel. Defaults to None.
-
-        Returns:
-            (str): The S3 monitoring directory path.
-        """
-        if client_key is None or channel is None:
-            return path.join(self.s3_sgmkr_dir, "services_monitoring", self.project_name)
-        if client_key is not None and channel is not None:
-            return path.join(
-                self.s3_sgmkr_dir,
-                "services_monitoring",
-                self.project_name,
-                client_key,
-                channel,
-            )
-        return ""
-
     @property
     def s3_conf_dir(self) -> str:
         """Property that gets the S3 config directory path.
@@ -178,6 +153,31 @@ class AppState(metaclass=SingletonMeta):
             (str): The S3 delivery directory path.
         """
         return path.join("delivery", self.project_name)
+
+    def s3_datasets_dir(
+        self, client_key: Optional[str] = None, channel: Optional[str] = None
+    ) -> str:
+        """A function that gets the S3 datasets directory path.
+
+        Args:
+            client_key (Optional[str]): The client key. Defaults to None.
+            channel (Optional[str]): The channel. Defaults to None.
+
+        Returns:
+            (str): The S3 datasets directory path.
+        """
+        if not client_key or not channel:
+            return str(path.join(self.s3_ds_dir, "datasets"))
+        return str(path.join(self.s3_ds_dir, "datasets", client_key, channel, self.project_name))
+
+    @property
+    def s3_eval_results_dir(self) -> str:
+        """Property that gets the S3 datasets directory path.
+
+        Returns:
+            (str): The S3 datasets directory path.
+        """
+        return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
 
     @property
     def s3_athena_staging_dir(self) -> str:
@@ -205,44 +205,34 @@ class AppState(metaclass=SingletonMeta):
             return "eu-central-1"
         return ""
 
-    def s3_datasets_dir(
-        self, client_key: Optional[str] = None, channel: Optional[str] = None
-    ) -> str:
-        """Property that gets the S3 datasets directory path.
-
-        Args:
-            client_key (Optional[str]): The client key. Defaults to None.
-            channel (Optional[str]): The channel. Defaults to None.
-
-        Returns:
-            (str): The S3 datasets directory path.
-        """
-        if not client_key or not channel:
-            return str(path.join(self.s3_ds_dir, "datasets"))
-        return str(path.join(self.s3_ds_dir, "datasets", client_key, channel, self.project_name))
+    @property
+    def athena_database_name(self) -> str:
+        """Property that gets the Athena database name."""
+        return "ds_sandbox"
 
     @property
-    def s3_eval_results_dir(self) -> str:
-        """Property that gets the S3 eval result path.
-
-        Returns:
-            (str): The S3 eval result path.
-        """
-        return str(path.join(self.s3_ds_dir, "eval_results", self.project_name))
+    def models_monitoring_table_name(self) -> str:
+        """Property that gets the Athena table name."""
+        return "models_monitoring"
 
     @property
-    def athena_databases_dir(self) -> str:
+    def projects_kpis_table_name(self) -> str:
+        """Property that gets the Athena table name."""
+        return "projects_kpis"
+
+    @property
+    def athena_database_s3_uri(self) -> str:
         """Property that gets the Athena databases directory path."""
-        return str(path.join(self.s3_ds_dir, "athena_databases", self.project_name))
+        return str(path.join(f"s3://{self.bucket_name}", self.s3_ds_dir, "athena_database"))
 
     @property
-    def s3_config_directory(self) -> str:
-        """Property that gets the S3 config dir.
+    def s3_vault_dir(self) -> str:
+        """Property to get the S3 vault dir.
 
         Returns:
             (str): The S3 config dir.
         """
-        return "data_science/credentials/"
+        return str(path.join(self.s3_ds_dir, "credentials"))
 
     @property
     def config_prod_spreadsheet(self) -> str:
@@ -252,15 +242,6 @@ class AppState(metaclass=SingletonMeta):
             (str): The prod config name.
         """
         return "DS_PROD_CONFIG"
-
-    @property
-    def config_qa_spreadsheet(self) -> str:
-        """Property that gets the name of the QA config spreadsheet.
-
-        Returns:
-            (str): The qa config name.
-        """
-        return "DS_QA_CONFIG"
 
 
 app_state = AppState()

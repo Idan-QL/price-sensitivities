@@ -2,6 +2,7 @@
 
 import calendar
 import logging
+import warnings
 from datetime import date, datetime
 from typing import Optional, Tuple
 
@@ -13,11 +14,17 @@ from elasticity.data.utils import (
     calculate_last_values,
     get_revenue,
     initialize_dates,
+    log_rejection_reasons,
     outliers_iqr_filtered,
     preprocess_by_price,
     round_price_effect,
     uid_with_min_conversions,
     uid_with_price_changes,
+)
+
+# Suppress only the specific divide by zero warning
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="divide by zero encountered in scalar divide"
 )
 
 
@@ -240,6 +247,13 @@ def progressive_monthly_aggregate(
 
         approved_data_list.append(approved_data)
 
+    log_rejection_reasons(
+        rejected_data=rejected_data,
+        uid_col=uid_col,
+        uid_changes=uid_changes,
+        uid_conversions=uid_conversions,
+    )
+
     result_df = pd.concat(approved_data_list)
     logging.info(f"Number of unique user IDs: {result_df.uid.nunique()}")
     return result_df, total_uid, df_revenue_uid, total_revenue
@@ -316,7 +330,7 @@ def read_data(
         df_read["units"] = df_read["units"].fillna(0)
         df_read = df_read[df_read["units"] >= 0]
     except Exception:
-        year_, month_ = date.strftime("%Y-%m").split("-")
+        year_, month_ = date_read.strftime("%Y-%m").split("-")
         logging.error(f"No data for {year_!s}_{int(month_)!s}")
         df_read = pd.DataFrame(columns=cs)
         pass

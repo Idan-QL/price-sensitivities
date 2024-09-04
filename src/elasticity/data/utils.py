@@ -2,13 +2,61 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
 from elasticity.data.configurator import DataColumns
+
+
+def get_rejection_reason(uid: str, uid_changes: List[str], uid_conversions: List[str]) -> str:
+    """Determine the rejection reason for a given UID.
+
+    Args:
+        uid (str): The UID being evaluated.
+        uid_changes (List[str]): List of UIDs with sufficient changes.
+        uid_conversions (List[str]): List of UIDs with sufficient conversions.
+
+    Returns:
+        str: The reason for rejection.
+    """
+    if uid not in uid_changes and uid not in uid_conversions:
+        return "Not enough changes and conversions days"
+    if uid not in uid_conversions:
+        return "Not enough conversions days"
+    if uid not in uid_changes:
+        return "Not enough changes"
+    return "Unknown"
+
+
+def log_rejection_reasons(
+    rejected_data: pd.DataFrame, uid_col: str, uid_changes: List[str], uid_conversions: List[str]
+) -> None:
+    """Log the rejection reasons for UIDs that do not meet the required criteria.
+
+    Args:
+        rejected_data (pd.DataFrame): DataFrame containing the rejected UIDs.
+        uid_col (str): The column name for the UID.
+        uid_changes (List[str]): List of UIDs with sufficient changes.
+        uid_conversions (List[str]): List of UIDs with sufficient conversions.
+    """
+    rejected_uids = rejected_data[uid_col].unique()
+
+    # Check if there are any rejected UIDs
+    if len(rejected_uids) == 0:
+        logging.info("No rejected UIDs found.")
+        return
+
+    rejected_uids_df = pd.DataFrame(rejected_uids, columns=[uid_col])
+    rejected_uids_df["reason"] = rejected_uids_df[uid_col].apply(
+        lambda uid: get_rejection_reason(uid, uid_changes, uid_conversions)
+    )
+
+    logging.info(
+        f"Rejected_uids_df reason: {rejected_uids_df['reason'].value_counts(dropna=False)}"
+    )
 
 
 def calculate_date_range(
@@ -398,6 +446,9 @@ def initialize_dates(
         end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
         start_date_dt = end_date_dt - relativedelta(months=11)
         start_date = str(start_date_dt.strftime("%Y-%m-%d"))
+
+    logging.info(f"start_date: {start_date}")
+    logging.info(f"end_date: {end_date}")
 
     return start_date, end_date
 

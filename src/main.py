@@ -6,8 +6,8 @@ Run with `python src/main.py -d us -c config_qa -p elasticity` from the project 
 """
 import logging
 import traceback
+import warnings
 from datetime import datetime
-from sys import exit as sys_exit
 
 import pandas as pd
 
@@ -19,12 +19,24 @@ from elasticity.model.group import add_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
+from elasticity.utils.utils import log_environment_mode, run_type
 from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
-from ql_toolkit.s3 import s3io
+from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
+
+# Suppress only the specific divide by zero warning
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="divide by zero encountered in scalar divide"
+)
+
+# Configure the root logger
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 def setup_environment() -> tuple:
@@ -33,33 +45,20 @@ def setup_environment() -> tuple:
     Returns:
         tuple: args_dict, client_keys_map, is_local, is_qa_run
     """
-    args_dict, config = setup.run_setup(args_dict=cli_default_args.args_kv)
-    logging.info("args_dict: %s", args_dict)
-    logging.info("config: %s", config)
-    client_keys_map = config["client_keys"]
-    logging.info(f"client_keys_map: {client_keys_map}")
+    config_dict, client_keys_map = setup.run_setup(
+        args_dict=cli_default_args.args_kv,
+        google_sheet_keep_cols=["client_keys", "channels", "attr_name"],
+    )
+    logging.info("config_dict: %s", config_dict)
+    logging.info("client_keys_map: %s", client_keys_map)
 
     start_date, end_date = initialize_dates()
-    logging.info(f"start_date: {start_date}")
-    logging.info(f"end_date: {end_date}")
 
-    try:
-        is_local = args_dict["local"]
-        is_qa_run = args_dict["is_qa_run"]
-    except KeyError as err:
-        logging.error(f"KeyError: {err}")
-        sys_exit("Exiting!")
+    is_local = config_dict.get("local", False)
+    is_qa_run = config_dict.get("is_qa_run", False)
+    log_environment_mode(is_local=is_local, is_qa_run=is_qa_run)
 
-    if is_local:
-        logging.info(" ------ Running locally ------ ")
-    elif is_qa_run:
-        logging.info(" ------ Running in QA mode ------ ")
-    else:
-        logging.info(" ------ Running in Production mode ------ ")
-
-    print(config)
     return (
-        args_dict,
         client_keys_map,
         is_local,
         is_qa_run,
@@ -108,8 +107,11 @@ def process_client_channel(
             )
         )
 
+        if df_by_price is None:
+            raise ValueError("Error: df_by_price is None")
+
         if df_by_price.empty:
-            raise ValueError("df_by_price empty")
+            raise ValueError("Error: df_by_price is Empty")
 
         s3io.write_dataframe_to_s3(
             file_name=f"df_by_price_{client_key}_{channel}_{end_date}.parquet",
@@ -217,33 +219,30 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (args_dict, client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
+    (client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
     data_report = []
-
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
-        if len(client_keys_map[client_key]["attr_name"]) == 1:
-            attr_name = client_keys_map[client_key]["attr_name"][0]
-            for channel in channels_list:
-                data_report = process_client_channel(
-                    data_report,
-                    client_key,
-                    channel,
-                    attr_name,
-                    is_local,
-                    is_qa_run,
-                    start_date,
-                    end_date,
-                )
-        else:
-            logging.error(f"Error occurred for {client_key}.")
+        attr_name = client_keys_map[client_key]["attr_name"]
+        for channel in channels_list:
+            data_report = process_client_channel(
+                data_report=data_report,
+                client_key=client_key,
+                channel=channel,
+                attr_name=attr_name,
+                is_local=is_local,
+                is_qa_run=is_qa_run,
+                start_date=start_date,
+                end_date=end_date,
+            )
 
     report_df = pd.DataFrame(data_report)
 
     run_date = datetime.now().strftime("%Y-%m-%d")
     year_month = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m")
+    run_type_str = run_type(is_local=is_local, is_qa_run=is_qa_run)
     s3io.write_dataframe_to_s3(
-        file_name=f"elasticity_report_{args_dict['config']}_{year_month}_{run_date}.csv",
+        file_name=f"elasticity_report_{run_type_str}_{year_month}_{run_date}.csv",
         xdf=report_df,
         s3_dir=app_state.s3_eval_results_dir,
     )

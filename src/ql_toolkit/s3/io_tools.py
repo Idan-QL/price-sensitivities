@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 import ql_toolkit.s3.data_classes as s3dc
 from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3.ls import is_file_exists
+from ql_toolkit.s3.ls_tools import is_file_exists
 from ql_toolkit.s3.utils import get_s3_client, get_s3_resource
 
 
@@ -277,15 +277,10 @@ def maybe_get_pd_csv_df(
             return csv_df
         logging.warning("[- S3 I/O -] File %s is empty!", file_name)
     else:
-        if usecols:
-            logging.warning(
-                f"""[- S3 I/O -] File {file_name} or could not be decoded as UTF-8 or columns
-                 {usecols} not found in file!"""
-            )
-        else:
-            logging.warning(
-                f"[- S3 I/O -] File {file_name} not found or could not be decoded as UTF-8!"
-            )
+        logging.warning(
+            "[- S3 I/O -] File %s not found or could not be decoded as UTF-8!",
+            file_name,
+        )
 
     return pd.DataFrame()
 
@@ -766,3 +761,37 @@ def upload_local_file_to_s3(
         logging.error("[- S3 I/O -] Error uploading file to S3: %s", err)
         return False
     return True
+
+
+def delete_s3_directory(directory_prefix: str, s3_resource: boto3.resource = None) -> None:
+    """Deletes a directory (all objects with a specific prefix) in an S3 bucket.
+
+    Args:
+        directory_prefix: Prefix of the directory to delete.
+        s3_resource: An S3 resource object. If not provided, a new S3 resource object will
+            be created.
+
+    Returns:
+        None
+    """
+    try:
+        if s3_resource is None:
+            s3_resource = get_s3_resource()
+
+        bucket_name = app_state.bucket_name
+        bucket = s3_resource.Bucket(bucket_name)
+
+        # List all objects with the given prefix
+        objects_to_delete = bucket.objects.filter(Prefix=directory_prefix)
+
+        # Delete objects
+        delete_responses = []
+        for obj in objects_to_delete:
+            delete_response = obj.delete()
+            delete_responses.append(delete_response)
+
+        logging.info(
+            f"All objects under {directory_prefix} in bucket '{bucket_name}' have " f"been deleted."
+        )
+    except Exception as err:
+        logging.error(f"Failed to delete directory {directory_prefix}: {err}")

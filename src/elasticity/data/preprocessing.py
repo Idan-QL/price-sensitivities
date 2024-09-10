@@ -31,6 +31,7 @@ warnings.filterwarnings(
 def read_and_preprocess(
     client_key: str,
     channel: str,
+    read_from_datalake: bool,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     uids_to_filter: Optional[list] = None,
@@ -48,6 +49,7 @@ def read_and_preprocess(
     Args:
         client_key (str): Client key for data retrieval.
         channel (str): Channel identifier.
+        read_from_datalake (bool): True if query from elasticity_datalake.sql.
         start_date (str, optional): Start date for data retrieval. Defaults to None.
         end_date (str, optional): End date for data retrieval. Defaults to None.
         uids_to_filter (list, optional): UID filter for data retrieval. Defaults to None.
@@ -81,6 +83,7 @@ def read_and_preprocess(
             raw_df, total_uid, df_revenue_uid, total_revenue = progressive_monthly_aggregate(
                 client_key=client_key,
                 channel=channel,
+                read_from_datalake=read_from_datalake,
                 start_date=start_date,
                 end_date=end_date,
                 uids_to_filter=uids_to_filter,
@@ -130,6 +133,7 @@ def read_and_preprocess(
 def progressive_monthly_aggregate(
     client_key: str,
     channel: str,
+    read_from_datalake: bool,
     start_date: str,
     end_date: str,
     uids_to_filter: Optional[str] = None,
@@ -153,6 +157,7 @@ def progressive_monthly_aggregate(
     Args:
         client_key (str): The client key.
         channel (str): The channel.
+        read_from_datalake (bool): True if query from elasticity_datalake.sql.
         start_date (str): The start date in the format 'YYYY-MM-DD'.
         end_date (str): The end date in the format 'YYYY-MM-DD'.
         uids_to_filter (Optional[str], optional): UIDs to filter. Defaults to None.
@@ -193,10 +198,11 @@ def progressive_monthly_aggregate(
         logging.info(f"reading: {date_month}")
 
         df_month = read_data(
-            client_key,
-            channel,
+            client_key=client_key,
+            channel=channel,
+            read_from_datalake=read_from_datalake,
             uids_to_filter=uids_to_filter,
-            date_read=date_month,
+            data_month=date_month,
         )
 
         df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
@@ -204,10 +210,11 @@ def progressive_monthly_aggregate(
         if total_uid == 0:
             # Read data without filter to get all the uid
             df_revenue = read_data(
-                client_key,
-                channel,
+                client_key=client_key,
+                channel=channel,
+                read_from_datalake=read_from_datalake,
                 uids_to_filter=uids_to_filter,
-                date_read=date_month,
+                data_month=date_month,
                 filter_units=False,
             )
             total_uid, total_revenue, df_revenue_uid = get_revenue(df_revenue, uid_col)
@@ -262,8 +269,9 @@ def progressive_monthly_aggregate(
 def read_data(
     client_key: str,
     channel: str,
+    read_from_datalake: bool,
+    data_month: str,
     uids_to_filter: Optional[list] = None,
-    date_read: str = "2024-02-01",
     filter_units: bool = True,
 ) -> pd.DataFrame:
     """Read one month data. Filter out inventory 0 and negative unit. Option to filter one uids.
@@ -271,10 +279,10 @@ def read_data(
     Args:
         client_key (str): The client key.
         channel (str): The channel.
+        read_from_datalake (bool): True if query from elasticity_datalake.sql.
+        data_month (str, optional): The month of the data in the format "YYYY-MM-DD".
         uids_to_filter (Optional[str], optional): A list of uids to filter the data.
         Defaults to None.
-        date_read (str, optional): The date in the format "YYYY-MM-DD".
-        Defaults to "2024-02-01".
         filter_units (bool, optional): True to get only uid with units>0.
         Defaults to True.
 
@@ -285,11 +293,11 @@ def read_data(
         Exception: If there is an error reading the data.
 
     """
-    if isinstance(date_read, datetime):
-        date_read = date_read.date()
-    elif isinstance(date_read, str):
-        date_read = datetime.strptime(date_read, "%Y-%m-%d").date()
-    elif not isinstance(date_read, date):
+    if isinstance(data_month, datetime):
+        data_month = data_month.date()
+    elif isinstance(data_month, str):
+        data_month = datetime.strptime(data_month, "%Y-%m-%d").date()
+    elif not isinstance(data_month, date):
         raise ValueError("Input must be a string, date, or datetime object")
 
     cs = [
@@ -302,9 +310,9 @@ def read_data(
     ]
 
     date_params = {
-        "start_date": str(date_read.replace(day=1)),
+        "start_date": str(data_month.replace(day=1)),
         "end_date": str(
-            date_read.replace(day=calendar.monthrange(date_read.year, date_read.month)[1])
+            data_month.replace(day=calendar.monthrange(data_month.year, data_month.month)[1])
         ),
     }
 
@@ -313,6 +321,7 @@ def read_data(
         df_read = read_data_query(
             client_key=client_key,
             channel=channel,
+            read_from_datalake=read_from_datalake,
             date_params=date_params,
             filter_units=filter_units,
         )
@@ -330,7 +339,7 @@ def read_data(
         df_read["units"] = df_read["units"].fillna(0)
         df_read = df_read[df_read["units"] >= 0]
     except Exception:
-        year_, month_ = date_read.strftime("%Y-%m").split("-")
+        year_, month_ = data_month.strftime("%Y-%m").split("-")
         logging.error(f"No data for {year_!s}_{int(month_)!s}")
         df_read = pd.DataFrame(columns=cs)
         pass

@@ -74,6 +74,7 @@ def process_client_channel(
     attr_name: str,
     is_local: bool,
     is_qa_run: bool,
+    read_from_datalake: bool,
     start_date: str,
     end_date: str,
 ) -> dict:
@@ -86,6 +87,7 @@ def process_client_channel(
         attr_name (str): The attr_name to read from Athena.
         is_local (bool): Flag indicating if the script is running locally.
         is_qa_run (bool): Flag indicating if the script is running in qa.
+        read_from_datalake (bool): True if query from elasticity_datalake.sql.
         start_date (str): The start_date to read data.
         end_date (str): The end_date.
 
@@ -102,6 +104,7 @@ def process_client_channel(
             preprocessing.read_and_preprocess(
                 client_key=client_key,
                 channel=channel,
+                read_from_datalake=read_from_datalake,
                 start_date=start_date,
                 end_date=end_date,
             )
@@ -224,6 +227,7 @@ def run() -> None:
     for client_key in client_keys_map:
         channels_list = client_keys_map[client_key]["channels"]
         attr_name = client_keys_map[client_key]["attr_name"]
+        read_from_datalake = client_keys_map[client_key].get("read_from_datalake", False)
         for channel in channels_list:
             data_report = process_client_channel(
                 data_report=data_report,
@@ -232,6 +236,7 @@ def run() -> None:
                 attr_name=attr_name,
                 is_local=is_local,
                 is_qa_run=is_qa_run,
+                read_from_datalake=read_from_datalake,
                 start_date=start_date,
                 end_date=end_date,
             )

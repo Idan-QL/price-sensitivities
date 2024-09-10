@@ -12,6 +12,7 @@ from ql_toolkit.data_lake.athena_query import AthenaQuery
 def read_data_query(
     client_key: str,
     channel: str,
+    read_from_datalake: bool,
     date_params: Optional[dict] = None,
     filter_units: Optional[bool] = False,
 ) -> pd.DataFrame:
@@ -20,6 +21,7 @@ def read_data_query(
     Args:
         client_key (str): The client key.
         channel (str): The channel.
+        read_from_datalake (bool): True if query from elasticity_datalake.sql.
         date_params (Optional[dict], optional): Date parameters for filtering the data.
         Defaults to None.
         filter_units (Optional[bool], optional): Whether to filter units greater than 0.
@@ -37,12 +39,30 @@ def read_data_query(
         f"end_date: {end_date} ..."
     )
 
-    filter_units_condition = "AND units > 0" if filter_units else ""
+    filter_units_condition_datalake = (
+        "AND (CASE WHEN product_events_analytics['units_sold'] IS NOT NULL "
+        "THEN CAST(product_events_analytics['units_sold'] AS DOUBLE) "
+        "ELSE CAST(product_info_analytics['units_sold'] AS DOUBLE) END > 0 )"
+    )
+
+    filter_units_condition_elasticity = "AND units > 0"
+
+    filter_units_condition = (
+        (
+            filter_units_condition_datalake
+            if read_from_datalake
+            else filter_units_condition_elasticity
+        )
+        if filter_units
+        else ""
+    )
+
+    file_name = f"elasticity{'_datalake' if read_from_datalake else ''}"
 
     athena_query = AthenaQuery(
         client_key=client_key,
         channel=channel,
-        file_name="elasticity",
+        file_name=file_name,
         start_date=start_date,
         end_date=end_date,
         filter_units_condition=filter_units_condition,

@@ -32,36 +32,30 @@ def save_distribution_graph(
         None
     """
     # Calculate the percentage of UID with elasticity out of the total UID
-    total_uid_with_elasticity = df_report["uid_with_elasticity"].sum()
-    total_uid_with_data_for_elasticity = df_report["uid_with_data_for_elasticity"].sum()
+    total_uid_with_elasticity = df_report["uids_with_elasticity"].sum()
+    uids_for_elasticity_calculation = df_report["uids_for_elasticity_calculation"].sum()
     total_percentage_all = total_uid_with_elasticity / total_uid * 100
-    total_percentage_with_data = (
-        total_uid_with_elasticity / total_uid_with_data_for_elasticity * 100
-    )
+    total_percentage_with_data = total_uid_with_elasticity / uids_for_elasticity_calculation * 100
 
     # Create a figure and axis
     fig, ax = plt.subplots()
 
-    # Data
+    # Data: updated column names based on report_row structure
     columns = [
-        "uid_with_elasticity_less_than_minus6",
-        "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8",
-        "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1",
-        "uid_with_elasticity_moreorequal_minus1_less_than_0",
-        "uid_with_elasticity_moreorequal_0_less_than_1",
-        "uid_with_elasticity_moreorequal_1_less_than_3.8",
-        "uid_with_elasticity_moreorequal_3.8_less_than_6",
-        "uid_with_elasticity_moreorequal_6",
+        "uids_below_minus6",
+        "uids_between_minus6_and_min",
+        "uids_between_min_and_minus1",
+        "uids_between_minus1_and_0",
+        "uids_equal_0",
+        "uids_above_0",
     ]
     labels = [
         "<-6",
-        "[-6;-3.8[",
-        "[-3.8;-1[",
+        "[-6;min[",
+        "[min;-1[",
         "[-1;0[",
-        "[0;1[",
-        "[1;3.8[",
-        "[3.8;6[",
-        "6+",
+        "0",
+        ">0",
     ]
     counts = [df_report[column].sum() for column in columns]
 

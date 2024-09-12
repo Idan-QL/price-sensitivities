@@ -262,6 +262,12 @@ def progressive_monthly_aggregate(
     )
 
     result_df = pd.concat(approved_data_list)
+    result_df["revenue"] = (
+        result_df["revenue"]
+        .replace([pd.NA, pd.NaT, float("inf"), -float("inf")], 0)
+        .fillna(0)
+        .astype(int)
+    )
     logging.info(f"Number of unique user IDs: {result_df.uid.nunique()}")
     return result_df, total_uid, df_revenue_uid, total_revenue
 

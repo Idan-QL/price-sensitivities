@@ -1,6 +1,7 @@
 """Module of modeling."""
 
 import logging
+import warnings
 from typing import List
 
 import numpy as np
@@ -13,6 +14,14 @@ from elasticity.model.utils import (
     calculate_elasticity_from_parameters,
     normalised_rmse,
     relative_absolute_error_calculation,
+)
+
+# Suppress only the specific divide by zero warning
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="divide by zero encountered in scalar divide"
+)
+warnings.filterwarnings(
+    "ignore", category=RuntimeWarning, message="divide by zero encountered in log"
 )
 
 

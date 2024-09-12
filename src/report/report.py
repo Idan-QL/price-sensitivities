@@ -2,7 +2,7 @@
 
 import logging
 import traceback
-from typing import List
+from typing import Dict
 
 import pandas as pd
 
@@ -82,167 +82,184 @@ def get_last_month_results(client_key: str, channel: str, end_date: str) -> pd.D
     return df_results_last_month
 
 
-def add_run(
-    data_report: List,
+def get_elasticity_ranges_counts(
+    df_filtered: pd.DataFrame, min_elasticity: float
+) -> Dict[str, int]:
+    """Calculate the count of UIDs for various elasticity ranges, ensuring integer counts.
+
+    Args:
+        df_filtered (pd.DataFrame): The DataFrame containing filtered results.
+        min_elasticity (float): The minimum elasticity threshold.
+
+    Returns:
+        Dict[str, int]: A dictionary mapping elasticity ranges to their corresponding counts.
+    """
+    return {
+        "uids_below_minus6": int(len(df_filtered[df_filtered.best_elasticity < -6])),
+        "uids_between_minus6_and_min": int(
+            len(
+                df_filtered[
+                    (df_filtered.best_elasticity >= -6)
+                    & (df_filtered.best_elasticity < min_elasticity)
+                ]
+            )
+        ),
+        "uids_between_min_and_minus1": int(
+            len(
+                df_filtered[
+                    (df_filtered.best_elasticity >= min_elasticity)
+                    & (df_filtered.best_elasticity < -1)
+                ]
+            )
+        ),
+        "uids_between_minus1_and_0": int(
+            len(
+                df_filtered[(df_filtered.best_elasticity >= -1) & (df_filtered.best_elasticity < 0)]
+            )
+        ),
+        "uids_equal_0": int(len(df_filtered[df_filtered.best_elasticity == 0])),
+        "uids_above_0": int(len(df_filtered[df_filtered.best_elasticity > 0])),
+    }
+
+
+def calculate_percentage_metrics(
+    df_filtered: pd.DataFrame, total_uid: int, total_revenue: int, unique_uid_count: int
+) -> Dict[str, float]:
+    """Calculate various percentage metrics based on UIDs and revenue.
+
+    Args:
+        df_filtered (pd.DataFrame): The DataFrame containing filtered results.
+        total_uid (int): The total number of UIDs in the dataset.
+        total_revenue (int): The total revenue used for percentage calculations.
+        unique_uid_count (int): The count of unique UIDs in the results.
+
+    Returns:
+        Dict[str, float]: A dictionary containing percentage-based metrics for UIDs and revenue.
+    """
+    return {
+        "percentage_uids_from_total": round(len(df_filtered) / total_uid * 100, 1),
+        "percentage_revenue_from_total": round(
+            df_filtered["revenue"].sum() / total_revenue * 100, 1
+        ),
+        "percentage_uids_from_filtered": round(len(df_filtered) / unique_uid_count * 100, 1),
+        "percentage_revenue_from_filtered": round(
+            df_filtered["revenue"].sum() / df_filtered["revenue"].sum() * 100,
+            1,
+        ),
+    }
+
+
+def get_model_type_counts(df_filtered: pd.DataFrame) -> Dict[str, int]:
+    """Retrieve the count of UIDs for different model types.
+
+    Args:
+        df_filtered (pd.DataFrame): The DataFrame containing filtered results.
+
+    Returns:
+        Dict[str, int]: A dictionary mapping model types to their corresponding counts.
+    """
+    model_counts = df_filtered["best_model"].value_counts()
+    return {
+        "power_model_count": model_counts.get("power", 0),
+        "exponential_model_count": model_counts.get("exponential", 0),
+        "linear_model_count": model_counts.get("linear", 0),
+    }
+
+
+def get_elasticity_type_counts(df_filtered: pd.DataFrame) -> Dict[str, int]:
+    """Retrieve the count of UIDs for different elasticity types.
+
+    Args:
+        df_filtered (pd.DataFrame): The DataFrame containing filtered results.
+
+    Returns:
+        Dict[str, int]: A dictionary mapping elasticity types to their corresponding counts.
+    """
+    type_counts = df_filtered["type"].value_counts()
+    return {
+        "uid_type_count": type_counts.get("uid", 0),
+        "group1_type_count": type_counts.get("group 1", 0),
+        "group2_type_count": type_counts.get("group 2", 0),
+    }
+
+
+def generate_run_report(
     client_key: str,
     channel: str,
     total_uid: int,
-    df_results: pd.DataFrame,
-    runtime: float,
+    results_df: pd.DataFrame,
+    runtime_duration: float,
     total_revenue: int,
-    error_counter: int,
+    error_count: int,
     end_date: str,
-    max_elasticity: float = 3.8,
     min_elasticity: float = -3.8,
-) -> List:
-    """Append data to the data report list.
+) -> pd.DataFrame:
+    """Generate a report DataFrame for the current run, ensuring appropriate types for each field.
 
     Args:
-        data_report (List): The list to append data to.
-        client_key (str): The client key.
-        channel (str): The channel.
-        total_uid (int): The total UID.
-        df_results (pd.DataFrame): The DataFrame containing results.
-        runtime (float): The runtime duration.
-        total_revenue (int): The total revenue.
-        error_counter (int): The error counter.
-        end_date (str): The end date.
-        max_elasticity (float, optional): The maximum elasticity value. Defaults to 3.8.
-        min_elasticity (float, optional): The minimum elasticity value. Defaults to -3.8.
+        client_key (str): The client key identifying the customer.
+        channel (str): The channel associated with the client.
+        total_uid (int): The total number of UIDs in the run.
+        results_df (pd.DataFrame): The DataFrame containing the run results.
+        runtime_duration (float): The runtime duration in seconds.
+        total_revenue (int): The total revenue for the client.
+        error_count (int): The number of errors encountered during the run.
+        end_date (str): The date marking the end of the run period.
+        min_elasticity (float, optional): The minimum elasticity threshold. Defaults to -3.8.
 
     Returns:
-        List
+        pd.DataFrame: A single-row DataFrame containing the calculated metrics for the run.
     """
-    uid_results_count = df_results.uid.nunique()
-    df_results_quality = df_results[df_results["quality_test"] & df_results["result_to_push"]]
-    df_results_quality_high = df_results[
-        df_results["quality_test_high"] & df_results["result_to_push"]
+    unique_uid_count = results_df.uid.nunique()
+
+    # Filter results based on conditions
+    filtered_results = results_df[results_df["quality_test"] & results_df["result_to_push"]]
+    high_quality_results = results_df[
+        results_df["quality_test_high"] & results_df["result_to_push"]
     ]
-    best_model_counts = df_results_quality["best_model"].value_counts()
-    elasticity_type_counts = df_results_quality["type"].value_counts()
 
+    # Handle model changes if applicable
     model_changes = None
-    df_lastmonth = get_last_month_results(client_key, channel, end_date)
-    if not df_lastmonth.empty:
-        model_changes = compare_model(df_results, df_lastmonth)
+    last_month_results = get_last_month_results(client_key, channel, end_date)
+    if last_month_results is not None and not last_month_results.empty:
+        model_changes = compare_model(results_df, last_month_results)
 
-    data_report.append(
+    # Calculate various metrics and ensure correct types
+    elasticity_counts = get_elasticity_ranges_counts(filtered_results, min_elasticity)
+    percentage_metrics = calculate_percentage_metrics(
+        filtered_results, total_uid, total_revenue, unique_uid_count
+    )
+    model_type_counts = get_model_type_counts(filtered_results)
+    elasticity_type_counts = get_elasticity_type_counts(filtered_results)
+
+    # Prepare the report row
+    report_row = {
+        "client_key": client_key,
+        "channel": channel,
+        "total_uid": total_uid,
+        "uids_with_elasticity": len(filtered_results),
+        "uids_with_high_quality_elasticity": len(high_quality_results),
+        **percentage_metrics,
+        "uids_for_elasticity_calculation": unique_uid_count,
+        **elasticity_counts,
+        **elasticity_type_counts,
+        **model_type_counts,
+        "runtime_duration": runtime_duration,
+        "model_changes": model_changes,
+        "error_count": error_count,
+    }
+
+    # Convert to DataFrame and ensure correct types for numeric columns
+    df_report = pd.DataFrame([report_row])
+
+    # Cast specific columns to their correct types, ensuring float32 for floats and int for integers
+    return df_report.astype(
         {
-            "client_key": client_key,
-            "channel": channel,
-            "total_uid": total_uid,
-            "uid_with_elasticity": len(df_results_quality),
-            "uid_with_elasticity_high_quality": len(df_results_quality_high),
-            "uids_from_total": round(len(df_results_quality) / total_uid * 100, 1),
-            "revenue_from_total": round(
-                df_results_quality["revenue"].sum() / total_revenue * 100, 1
-            ),
-            "uids_from_total_with_data": round(
-                len(df_results_quality) / uid_results_count * 100, 1
-            ),
-            "revenue_from_total_with_data": round(
-                (
-                    df_results_quality["revenue"].sum()
-                    / df_results[df_results.type == "uid"].revenue.sum()
-                    * 100
-                ),
-                1,
-            ),
-            "uid_with_data_for_elasticity": uid_results_count,
-            "uid_with_elasticity_less_than_minus6": len(
-                df_results_quality[df_results_quality.best_elasticity < -6]
-            ),
-            "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= -6)
-                    & (df_results_quality.best_elasticity < min_elasticity)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= min_elasticity)
-                    & (df_results_quality.best_elasticity < -1)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_minus1_less_than_0": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= -1)
-                    & (df_results_quality.best_elasticity < 0)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_0_less_than_1": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= 0)
-                    & (df_results_quality.best_elasticity < 1)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_1_less_than_3.8": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= 1)
-                    & (df_results_quality.best_elasticity < max_elasticity)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_3.8_less_than_6": len(
-                df_results_quality[
-                    (df_results_quality.best_elasticity >= max_elasticity)
-                    & (df_results_quality.best_elasticity < 6)
-                ]
-            ),
-            "uid_with_elasticity_moreorequal_6": len(
-                df_results_quality[df_results_quality.best_elasticity >= 6]
-            ),
-            "type_uid": elasticity_type_counts.get("uid", 0),
-            "type_group1": elasticity_type_counts.get("group 1", 0),
-            "type_group2": elasticity_type_counts.get("group 2", 0),
-            "best_model_power_count": best_model_counts.get("power", 0),
-            "best_model_exponential_count": best_model_counts.get("exponential", 0),
-            "best_model_linear_count": best_model_counts.get("linear", 0),
-            "runtime_duration": runtime,
-            "model_changes": model_changes,
-            "error": error_counter,
+            "total_uid": "int",
+            "uids_with_elasticity": "int",
+            "uids_with_high_quality_elasticity": "int",
+            "uids_for_elasticity_calculation": "int",
+            "runtime_duration": "float32",
+            "error_count": "int",
         }
     )
-
-    return data_report
-
-
-def add_error_run(data_report: List, client_key: str, channel: str, error_counter: int) -> List:
-    """Append data to the data report list.
-
-    Args:
-        data_report (List): The list to append data to.
-        client_key (str): The client key.
-        channel (str): The channel.
-        error_counter (int): The counter for errors.
-
-    Returns:
-        List
-    """
-    data_report.append(
-        {
-            "client_key": client_key,
-            "channel": channel,
-            "total_uid": None,
-            "uid_with_elasticity": None,
-            "uids_from_total": None,
-            "revenue_from_total": None,
-            "uids_from_total_with_data": None,
-            "revenue_from_total_with_data": None,
-            "uid_with_data_for_elasticity": None,
-            "uid_with_elasticity_less_than_minus6": None,
-            "uid_with_elasticity_moreorequal_minus6_less_than_minus3.8": None,
-            "uid_with_elasticity_moreorequal_minus3.8_less_than_minus1": None,
-            "uid_with_elasticity_moreorequal_minus1_less_than_0": None,
-            "uid_with_elasticity_moreorequal_0_less_than_1": None,
-            "uid_with_elasticity_moreorequal_1_less_than_3.8": None,
-            "uid_with_elasticity_moreorequal_3.8_less_than_6": None,
-            "uid_with_elasticity_moreorequal_6": None,
-            "best_model_power_count": None,
-            "best_model_exponential_count": None,
-            "best_model_linear_count": None,
-            "runtime_duration": None,
-            "model_changes": None,
-            "error": error_counter,
-        }
-    )
-    return data_report

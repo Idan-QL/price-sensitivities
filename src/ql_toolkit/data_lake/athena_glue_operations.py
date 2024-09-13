@@ -357,7 +357,6 @@ class AthenaDataManager:
         if self.partition_exists():
             self.delete_partition()
             s3io.delete_s3_directory(directory_prefix=self.partition_path)
-            print("partition delete")
 
         data_df = self.transform_schema_to_map_columns(data_df)
 

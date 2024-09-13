@@ -1,12 +1,53 @@
 """Module of report."""
 
 import logging
-import traceback
 from typing import Dict
 
 import pandas as pd
 
-from ql_toolkit.s3 import io_tools as s3io
+from ql_toolkit.data_lake.athena_query import AthenaQuery
+
+
+def get_previous_month_df(client_key: str, channel: str, end_date: str) -> pd.DataFrame:
+    """Get the results from the last month.
+
+    This function retrieves the results from the last month based on the
+    provided end date, client key, and channel.
+
+    Args:
+        client_key (str): The client key.
+        channel (str): The channel.
+        end_date (str): The end date.
+
+    Returns:
+        pd.DataFrame: The results from the last month as a pandas DataFrame.
+    """
+    # Compute the last day of the previous month
+    previous_data_date = (pd.to_datetime(end_date).replace(day=1) - pd.DateOffset(days=1)).strftime(
+        "%Y-%m-%d"
+    )
+
+    logging.info(
+        f"Reading previous best_model from models_monitoring for client: {client_key}; "
+        f"channel: {channel};"
+        f"last_month_end_date: {previous_data_date};"
+        f"end_date: {end_date} ..."
+    )
+
+    file_name = "elasticity_best_model"
+
+    athena_query = AthenaQuery(
+        client_key=client_key,
+        channel=channel,
+        file_name=file_name,
+        previous_data_date=previous_data_date,
+    )
+
+    data_df = athena_query.execute_query()
+    logging.info(
+        f"Finishing reading previous best_model from models_monitoring. Shape: {data_df.shape}"
+    )
+    return data_df
 
 
 def compare_model(df_results: pd.DataFrame, df_results_last_month: pd.DataFrame) -> int:
@@ -19,67 +60,6 @@ def compare_model(df_results: pd.DataFrame, df_results_last_month: pd.DataFrame)
     )
     df_compare["model_changes"] = df_compare["best_model"] != df_compare["best_model_last_month"]
     return df_compare[df_compare["quality_test"]]["model_changes"].sum()
-
-
-def get_last_month_results(client_key: str, channel: str, end_date: str) -> pd.DataFrame:
-    """Get the results from the last month.
-
-    This function retrieves the results from the last month based on the
-    provided end date, client key, and channel.
-    # TODO: change only to last month in one month as
-    # we just changed to save the file as end of the month
-
-    Args:
-        client_key (str): The client key.
-        channel (str): The channel.
-        end_date (str): The end date.
-
-    Returns:
-        pd.DataFrame: The results from the last month as a pandas DataFrame.
-    """
-    # Compute the last day of the previous month in one line
-    last_month_end_date = (
-        pd.to_datetime(end_date).replace(day=1) - pd.DateOffset(days=1)
-    ).strftime("%Y-%m-%d")
-
-    # Try reading the results from the last day of the previous month
-    try:
-        df_results_last_month = s3io.maybe_get_pd_csv_df(
-            file_name=f"elasticity_{client_key}_{channel}_{last_month_end_date}.csv",
-            s3_dir="data_science/eval_results/elasticity/",
-        )
-    except Exception:
-        logging.error(traceback.format_exc())
-        logging.error(
-            "No results found for last month (end date) %s - %s - %s",
-            client_key,
-            channel,
-            last_month_end_date,
-        )
-
-    # Try reading the results from the first day of the previous month
-    try:
-        # Compute the first day of the previous month
-        first_day_previous_month = (
-            (pd.to_datetime(end_date) - pd.DateOffset(months=1)).replace(day=1).strftime("%Y-%m-%d")
-        )
-
-        df_results_last_month = s3io.maybe_get_pd_csv_df(
-            file_name=f"elasticity_{client_key}_{channel}_{first_day_previous_month}.csv",
-            s3_dir="data_science/eval_results/elasticity/",
-        )
-    except Exception:
-        logging.error(traceback.format_exc())
-        logging.error(
-            "No results found for last month (start date) %s - %s - %s",
-            client_key,
-            channel,
-            first_day_previous_month,
-        )
-        # Return an empty DF
-        df_results_last_month = pd.DataFrame()
-
-    return df_results_last_month
 
 
 def get_elasticity_ranges_counts(
@@ -220,9 +200,9 @@ def generate_run_report(
 
     # Handle model changes if applicable
     model_changes = None
-    last_month_results = get_last_month_results(client_key, channel, end_date)
-    if last_month_results is not None and not last_month_results.empty:
-        model_changes = compare_model(results_df, last_month_results)
+    previous_month_results = get_previous_month_df(client_key, channel, end_date)
+    if previous_month_results is not None and not previous_month_results.empty:
+        model_changes = compare_model(results_df, previous_month_results)
 
     # Calculate various metrics and ensure correct types
     elasticity_counts = get_elasticity_ranges_counts(filtered_results, min_elasticity)

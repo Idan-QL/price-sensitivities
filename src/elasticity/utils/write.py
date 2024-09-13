@@ -90,11 +90,12 @@ def upload_elasticity_data_to_athena(
         table_name=table_name,
         client_key=client_key,
         channel=channel,
-        date=end_date,
+        date=datetime.today().date().strftime("%Y-%m-%d"),
     )
 
     # Define columns to add if missing
     columns_to_add = {
+        "data_date": end_date,
         "date": datetime.today().date(),
         "project_name": app_state.project_name,
         "client_key": client_key,
@@ -102,10 +103,10 @@ def upload_elasticity_data_to_athena(
     }
 
     # Add missing columns to df_upload
-    df_upload = add_missing_columns(df_upload, columns_to_add)
+    df_upload = add_missing_columns(df=df_upload, columns=columns_to_add)
 
     # Clean numeric columns
-    df_upload = clean_numeric_columns(df_upload)
+    df_upload = clean_numeric_columns(df=df_upload)
 
     # Initialize AthenaDataManager
     athena_data_manager = AthenaDataManager(

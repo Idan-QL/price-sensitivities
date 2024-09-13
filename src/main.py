@@ -221,20 +221,6 @@ def process_client_channel(
         error_info = traceback.format_exc()
         logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")
 
-        # data_report = report.generate_error_report(
-        #     client_key=client_key,
-        #     channel=channel,
-        #     error_count=error_counter.error_count,
-        # )
-
-        # upload_elasticity_data_to_athena(
-        # client_key=client_key,
-        # channel=channel,
-        # end_date=end_date,
-        # df_upload=data_report,
-        # table_name=app_state.projects_kpis_table_name,
-        # )
-
     return
 
 
@@ -242,9 +228,11 @@ def run() -> None:
     """Main function to run the elasticity job."""
     (client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
     for client_key in client_keys_map:
+
         channels_list = client_keys_map[client_key]["channels"]
         attr_name = client_keys_map[client_key]["attr_name"]
         read_from_datalake = client_keys_map[client_key].get("read_from_datalake", False)
+
         for channel in channels_list:
             process_client_channel(
                 client_key=client_key,

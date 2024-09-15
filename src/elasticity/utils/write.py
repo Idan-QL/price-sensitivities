@@ -8,7 +8,6 @@ import pandas as pd
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.data_lake.athena_glue_operations import AthenaDataManager
 from ql_toolkit.data_lake.data_classes import GlueDBKeys
-from ql_toolkit.s3.io_tools import write_dataframe_to_s3
 
 
 def add_missing_columns(df: pd.DataFrame, columns: dict) -> pd.DataFrame:
@@ -117,11 +116,3 @@ def upload_elasticity_data_to_athena(
 
     # Upload DataFrame to Athena partition
     athena_data_manager.upload_dataframe_to_partition(data_df=df_upload)
-
-    # Write CSV file - interim solution for CSMs
-    write_dataframe_to_s3(
-        file_name=f"{client_key}_{channel}_{table_name}_{end_date}.csv",
-        xdf=df_upload,
-        s3_dir=app_state.s3_eval_results_dir,
-        rename_old=False,
-    )

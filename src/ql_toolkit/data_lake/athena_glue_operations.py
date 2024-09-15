@@ -318,8 +318,9 @@ class AthenaDataManager:
         int_columns = data_df.select_dtypes(include=["int32", "int64"]).columns.difference(
             fixed_columns
         )
-        bool_columns = data_df.select_dtypes(include=["bool"]).columns
-        string_columns = data_df.select_dtypes(include=["object"]).columns.difference(fixed_columns)
+        string_columns = data_df.select_dtypes(include=["object", "bool"]).columns.difference(
+            fixed_columns
+        )
 
         # Create maps for additional columns
         floats_map = data_df[float_columns].apply(
@@ -329,10 +330,10 @@ class AthenaDataManager:
             lambda row: {col: row[col] for col in int_columns if pd.notna(row[col])}, axis=1
         )
         # Handle boolean values within strings_map
-        strings_map = data_df[string_columns.union(bool_columns)].apply(
+        strings_map = data_df[string_columns].apply(
             lambda row: {
                 col: str(row[col]) if isinstance(row[col], bool) else row[col]
-                for col in string_columns.union(bool_columns)
+                for col in string_columns
                 if pd.notna(row[col])
             },
             axis=1,

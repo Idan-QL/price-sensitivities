@@ -67,13 +67,20 @@ def get_elasticity_ranges_counts(
 ) -> Dict[str, int]:
     """Calculate the count of UIDs for various elasticity ranges, ensuring integer counts.
 
+    Raises an error if null values are present in the 'best_elasticity' column.
+
     Args:
         df_filtered (pd.DataFrame): The DataFrame containing filtered results.
         min_elasticity (float): The minimum elasticity threshold.
 
     Returns:
         Dict[str, int]: A dictionary mapping elasticity ranges to their corresponding counts.
+
+    Raises:
+        ValueError: If the 'best_elasticity' column contains null values.
     """
+    if df_filtered["best_elasticity"].isna().any():
+        raise ValueError("Null values found in 'best_elasticity' column.")
     return {
         "uids_below_minus6": int(len(df_filtered[df_filtered.best_elasticity < -6])),
         "uids_between_minus6_and_min": int(
@@ -103,27 +110,35 @@ def get_elasticity_ranges_counts(
 
 
 def calculate_percentage_metrics(
-    df_filtered: pd.DataFrame, total_uid: int, total_revenue: int, unique_uid_count: int
+    df_valid_elasticity: pd.DataFrame,
+    total_uid: int,
+    total_revenue: int,
+    uids_with_elasticity_data: int,
+    total_revenue_with_elasticity_data: int,
 ) -> Dict[str, float]:
     """Calculate various percentage metrics based on UIDs and revenue.
 
     Args:
-        df_filtered (pd.DataFrame): The DataFrame containing filtered results.
+        df_valid_elasticity (pd.DataFrame): The DataFrame containing filtered results.
         total_uid (int): The total number of UIDs in the dataset.
-        total_revenue (int): The total revenue used for percentage calculations.
-        unique_uid_count (int): The count of unique UIDs in the results.
+        total_revenue (int): The total revenue from all uid.
+        uids_with_elasticity_data (int): The count of unique UIDs in the results.
+        total_revenue_with_elasticity_data (int): The total revenue from uids with data
+        for elasticity.
 
     Returns:
         Dict[str, float]: A dictionary containing percentage-based metrics for UIDs and revenue.
     """
     return {
-        "percentage_uids_from_total": round(len(df_filtered) / total_uid * 100, 1),
+        "percentage_uids_from_total": round(len(df_valid_elasticity) / total_uid * 100, 1),
         "percentage_revenue_from_total": round(
-            df_filtered["revenue"].sum() / total_revenue * 100, 1
+            df_valid_elasticity["revenue"].sum() / total_revenue * 100, 1
         ),
-        "percentage_uids_from_filtered": round(len(df_filtered) / unique_uid_count * 100, 1),
-        "percentage_revenue_from_filtered": round(
-            df_filtered["revenue"].sum() / df_filtered["revenue"].sum() * 100,
+        "percentage_uids_with_elasticity_data": round(
+            len(df_valid_elasticity) / uids_with_elasticity_data * 100, 1
+        ),
+        "percentage_revenue_with_elasticity_data": round(
+            df_valid_elasticity["revenue"].sum() / total_revenue_with_elasticity_data * 100,
             1,
         ),
     }
@@ -190,10 +205,11 @@ def generate_run_report(
     Returns:
         pd.DataFrame: A single-row DataFrame containing the calculated metrics for the run.
     """
-    unique_uid_count = results_df.uid.nunique()
+    uids_with_elasticity_data = results_df.uid.nunique()
+    total_revenue_with_data = results_df[results_df.type == "uid"].revenue.sum()
 
     # Filter results based on conditions
-    filtered_results = results_df[results_df["quality_test"] & results_df["result_to_push"]]
+    df_valid_elasticity = results_df[results_df["quality_test"] & results_df["result_to_push"]]
     high_quality_results = results_df[
         results_df["quality_test_high"] & results_df["result_to_push"]
     ]
@@ -205,22 +221,26 @@ def generate_run_report(
         model_changes = compare_model(results_df, previous_month_results)
 
     # Calculate various metrics and ensure correct types
-    elasticity_counts = get_elasticity_ranges_counts(filtered_results, min_elasticity)
+    elasticity_counts = get_elasticity_ranges_counts(df_valid_elasticity, min_elasticity)
     percentage_metrics = calculate_percentage_metrics(
-        filtered_results, total_uid, total_revenue, unique_uid_count
+        df_valid_elasticity,
+        total_uid,
+        total_revenue,
+        uids_with_elasticity_data,
+        total_revenue_with_data,
     )
-    model_type_counts = get_model_type_counts(filtered_results)
-    elasticity_type_counts = get_elasticity_type_counts(filtered_results)
+    model_type_counts = get_model_type_counts(df_valid_elasticity)
+    elasticity_type_counts = get_elasticity_type_counts(df_valid_elasticity)
 
     # Prepare the report row
     report_row = {
         "client_key": client_key,
         "channel": channel,
         "total_uid": total_uid,
-        "uids_with_elasticity": len(filtered_results),
+        "uids_with_elasticity": len(df_valid_elasticity),
         "uids_with_high_quality_elasticity": len(high_quality_results),
         **percentage_metrics,
-        "uids_for_elasticity_calculation": unique_uid_count,
+        "uids_with_elasticity_data": uids_with_elasticity_data,
         **elasticity_counts,
         **elasticity_type_counts,
         **model_type_counts,
@@ -235,11 +255,11 @@ def generate_run_report(
     # Cast specific columns to their correct types, ensuring float32 for floats and int for integers
     return df_report.astype(
         {
-            "total_uid": "int",
-            "uids_with_elasticity": "int",
-            "uids_with_high_quality_elasticity": "int",
-            "uids_for_elasticity_calculation": "int",
+            "total_uid": "int32",
+            "uids_with_elasticity": "int32",
+            "uids_with_high_quality_elasticity": "int32",
+            "uids_with_elasticity_data": "int32",
             "runtime_duration": "float32",
-            "error_count": "int",
+            "error_count": "int32",
         }
     )

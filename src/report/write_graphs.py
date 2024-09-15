@@ -33,7 +33,7 @@ def save_distribution_graph(
     """
     # Calculate the percentage of UID with elasticity out of the total UID
     total_uid_with_elasticity = df_report["uids_with_elasticity"].sum()
-    uids_for_elasticity_calculation = df_report["uids_for_elasticity_calculation"].sum()
+    uids_for_elasticity_calculation = df_report["uids_with_elasticity_data"].sum()
     total_percentage_all = total_uid_with_elasticity / total_uid * 100
     total_percentage_with_data = total_uid_with_elasticity / uids_for_elasticity_calculation * 100
 

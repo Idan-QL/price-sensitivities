@@ -185,7 +185,7 @@ def get_revenue(df_revenue: pd.DataFrame, uid_col: str) -> Tuple[int, float, pd.
     total_revenue = df_revenue["revenue"].sum()
 
     df_revenue_uid = df_revenue.groupby(uid_col)["revenue"].sum().reset_index()
-    df_revenue_uid["revenue"] = df_revenue_uid["revenue"].astype(int)
+    df_revenue_uid["revenue"] = df_revenue_uid["revenue"].astype("float32")
     df_revenue_uid["revenue_percentage"] = (df_revenue_uid["revenue"] / total_revenue).astype(
         "float32"
     )

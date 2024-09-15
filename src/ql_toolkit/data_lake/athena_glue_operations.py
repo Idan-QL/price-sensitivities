@@ -285,6 +285,46 @@ class AthenaDataManager:
         except Exception as err:
             logging.error(f"Error deleting partition from table '{self.table_name}': {err}")
 
+    def create_map_column(self, data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
+        """Create a map column from specified columns in the DataFrame.
+
+        Args:
+            data_df (pd.DataFrame): The original DataFrame.
+            columns (List[str]): List of column names to include in the map.
+
+        Returns:
+            pd.Series: A Series where each entry is a map for the specified columns.
+                       If no columns exist, returns an empty map for each row.
+        """
+        if not columns.empty:
+            return data_df[columns].apply(
+                lambda row: {col: row[col] for col in columns if pd.notna(row[col])}, axis=1
+            )
+        return pd.Series([{}] * len(data_df))
+
+    def create_strings_map_column(self, data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
+        """Create a map column for string values, converting booleans to strings.
+
+        Args:
+            data_df (pd.DataFrame): The original DataFrame.
+            columns (List[str]): List of column names to include in the map.
+
+        Returns:
+            pd.Series: A Series where each entry is a map for the specified columns,
+                       with boolean values converted to strings.
+                       If no columns exist, returns an empty map for each row.
+        """
+        if not columns.empty:
+            return data_df[columns].apply(
+                lambda row: {
+                    col: str(row[col]) if isinstance(row[col], bool) else row[col]
+                    for col in columns
+                    if pd.notna(row[col])
+                },
+                axis=1,
+            )
+        return pd.Series([{}] * len(data_df))
+
     def transform_schema_to_map_columns(self, data_df: pd.DataFrame) -> pd.DataFrame:
         """Transform the schema of a DataFrame to have map columns.
 
@@ -323,21 +363,9 @@ class AthenaDataManager:
         )
 
         # Create maps for additional columns
-        floats_map = data_df[float_columns].apply(
-            lambda row: {col: row[col] for col in float_columns if pd.notna(row[col])}, axis=1
-        )
-        ints_map = data_df[int_columns].apply(
-            lambda row: {col: row[col] for col in int_columns if pd.notna(row[col])}, axis=1
-        )
-        # Handle boolean values within strings_map
-        strings_map = data_df[string_columns].apply(
-            lambda row: {
-                col: str(row[col]) if isinstance(row[col], bool) else row[col]
-                for col in string_columns
-                if pd.notna(row[col])
-            },
-            axis=1,
-        )
+        floats_map = self.create_map_column(data_df, float_columns)
+        ints_map = self.create_map_column(data_df, int_columns)
+        strings_map = self.create_strings_map_column(data_df, string_columns)
 
         # Create a new DataFrame with the flexible schema
         flexible_df = data_df[fixed_columns].copy()

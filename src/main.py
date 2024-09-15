@@ -164,12 +164,6 @@ def process_client_channel(
             table_name=app_state.models_monitoring_table_name,  # projects_kpis_table_name,
         )
 
-        s3io.write_dataframe_to_s3(
-            file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
-            xdf=df_results,
-            s3_dir="data_science/eval_results/elasticity/",
-        )
-
         plot_demands.run_save_graph_top10(df_results, df_by_price, client_key, channel, end_date)
 
         actions_list = generate_actions_list(df_results, client_key, channel)

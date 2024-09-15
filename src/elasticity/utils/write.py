@@ -41,7 +41,7 @@ def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
                       numeric columns converted to integer type where possible.
     """
     numeric_cols = df.select_dtypes(include=[float, int]).columns
-    df[numeric_cols] = df[numeric_cols].replace([pd.NA, pd.NaT, float("inf"), -float("inf")], 0)
+    df[numeric_cols] = df[numeric_cols].replace([pd.NA, float("inf"), -float("inf")], 0)
 
     converted_cols = []  # List to store columns that are converted to int
 

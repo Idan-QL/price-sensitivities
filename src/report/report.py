@@ -121,14 +121,30 @@ def calculate_percentage_metrics(
     Args:
         df_valid_elasticity (pd.DataFrame): The DataFrame containing filtered results.
         total_uid (int): The total number of UIDs in the dataset.
-        total_revenue (int): The total revenue from all uid.
+        total_revenue (int): The total revenue from all UIDs.
         uids_with_elasticity_data (int): The count of unique UIDs in the results.
-        total_revenue_with_elasticity_data (int): The total revenue from uids with data
+        total_revenue_with_elasticity_data (int): The total revenue from UIDs with data
         for elasticity.
 
     Returns:
         Dict[str, float]: A dictionary containing percentage-based metrics for UIDs and revenue.
+        If total_revenue or total_revenue_with_elasticity_data is non-positive, all percentages
+        are set to 0 and an error is logged.
     """
+    if total_revenue <= 0 or total_revenue_with_elasticity_data <= 0:
+        logging.error(
+            "Invalid revenue values: total_revenue=%s, total_revenue_with_elasticity_data=%s. "
+            "Metrics will return 0.",
+            total_revenue,
+            total_revenue_with_elasticity_data,
+        )
+        return {
+            "percentage_uids_from_total": 0.0,
+            "percentage_revenue_from_total": 0.0,
+            "percentage_uids_with_elasticity_data": 0.0,
+            "percentage_revenue_with_elasticity_data": 0.0,
+        }
+
     return {
         "percentage_uids_from_total": round(len(df_valid_elasticity) / total_uid * 100, 1),
         "percentage_revenue_from_total": round(

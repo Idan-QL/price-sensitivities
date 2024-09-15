@@ -19,13 +19,13 @@ from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
 from elasticity.utils.utils import log_environment_mode
-from elasticity.utils.write import upload_elasticity_data_to_athena
 from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
+from report.write import upload_elasticity_data_to_athena
 
 # Configure the root logger
 logging.basicConfig(

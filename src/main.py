@@ -6,7 +6,6 @@ Run with `python src/main.py -d us -c config_qa -p elasticity` from the project 
 """
 import logging
 import traceback
-import warnings
 from datetime import datetime
 
 import pandas as pd
@@ -19,18 +18,14 @@ from elasticity.model.group import add_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import generate_actions_list
-from elasticity.utils.utils import log_environment_mode, run_type
+from elasticity.utils.utils import log_environment_mode
+from elasticity.utils.write import upload_elasticity_data_to_athena
 from ql_toolkit.attrs import data_classes as dc
 from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
 from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
-
-# Suppress only the specific divide by zero warning
-warnings.filterwarnings(
-    "ignore", category=RuntimeWarning, message="divide by zero encountered in scalar divide"
-)
 
 # Configure the root logger
 logging.basicConfig(
@@ -68,7 +63,6 @@ def setup_environment() -> tuple:
 
 
 def process_client_channel(
-    data_report: list,
     client_key: str,
     channel: str,
     attr_name: str,
@@ -162,10 +156,12 @@ def process_client_channel(
         )
         logging.info(f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}")
 
-        s3io.write_dataframe_to_s3(
-            file_name=f"elasticity_{client_key}_{channel}_{end_date}.csv",
-            xdf=df_results,
-            s3_dir="data_science/eval_results/elasticity/",
+        upload_elasticity_data_to_athena(
+            client_key=client_key,
+            channel=channel,
+            end_date=end_date,
+            df_upload=df_results,
+            table_name=app_state.models_monitoring_table_name,  # projects_kpis_table_name,
         )
 
         plot_demands.run_save_graph_top10(df_results, df_by_price, client_key, channel, end_date)
@@ -184,25 +180,32 @@ def process_client_channel(
             input_args=input_args,
         )
 
-        runtime = (datetime.now() - start_time).total_seconds() / 60
+        runtime_duration = (datetime.now() - start_time).total_seconds() / 60
 
-        data_report = report.add_run(
-            data_report=data_report,
+        data_report = report.generate_run_report(
             client_key=client_key,
             channel=channel,
             total_uid=total_end_date_uid,
-            df_results=df_results,
+            results_df=df_results,
+            runtime_duration=runtime_duration,
             total_revenue=total_revenue,
-            runtime=runtime,
-            error_counter=error_counter.error_count,
+            error_count=error_counter.error_count,
             end_date=end_date,
+        )
+
+        upload_elasticity_data_to_athena(
+            client_key=client_key,
+            channel=channel,
+            end_date=end_date,
+            df_upload=data_report,
+            table_name=app_state.projects_kpis_table_name,
         )
 
         write_graphs.save_distribution_graph(
             client_key=client_key,
             channel=channel,
             total_uid=total_end_date_uid,
-            df_report=pd.DataFrame([data_report[-1]]),
+            df_report=data_report,
             end_date=end_date,
             s3_dir=app_state.s3_eval_results_dir + "/graphs/",
         )
@@ -211,26 +214,21 @@ def process_client_channel(
         logging.error(f"Error processing {client_key} - {channel}: {e}")
         error_info = traceback.format_exc()
         logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")
-        data_report = report.add_error_run(
-            data_report=data_report,
-            client_key=client_key,
-            channel=channel,
-            error_counter=error_counter.error_count,
-        )
-    return data_report
+
+    return
 
 
 def run() -> None:
     """Main function to run the elasticity job."""
     (client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
-    data_report = []
     for client_key in client_keys_map:
+
         channels_list = client_keys_map[client_key]["channels"]
         attr_name = client_keys_map[client_key]["attr_name"]
         read_from_datalake = client_keys_map[client_key].get("read_from_datalake", False)
+
         for channel in channels_list:
-            data_report = process_client_channel(
-                data_report=data_report,
+            process_client_channel(
                 client_key=client_key,
                 channel=channel,
                 attr_name=attr_name,
@@ -240,17 +238,6 @@ def run() -> None:
                 start_date=start_date,
                 end_date=end_date,
             )
-
-    report_df = pd.DataFrame(data_report)
-
-    run_date = datetime.now().strftime("%Y-%m-%d")
-    year_month = datetime.strptime(end_date, "%Y-%m-%d").strftime("%Y-%m")
-    run_type_str = run_type(is_local=is_local, is_qa_run=is_qa_run)
-    s3io.write_dataframe_to_s3(
-        file_name=f"elasticity_report_{run_type_str}_{year_month}_{run_date}.csv",
-        xdf=report_df,
-        s3_dir=app_state.s3_eval_results_dir,
-    )
 
 
 if __name__ == "__main__":

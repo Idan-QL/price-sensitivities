@@ -1,7 +1,7 @@
 """Modul of cross-validation function."""
 
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -42,6 +42,7 @@ def cross_validation(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    competitor_price_col: Optional[str] = None,
     n_tests: int = 3,
 ) -> CrossValidationResult:
     """Perform cross-validation.
@@ -55,6 +56,8 @@ def cross_validation(
         Defaults to "quantity".
         weights_col (str, optional): The name of the column containing weights. Defaults to "days".
         n_tests (int, optional): The number of cross-validation tests to perform. Defaults to 3.
+        competitor_price_col (str, optional): The name of the column representing the
+                                        competitor price. Defaults to None.
 
     Returns:
         CrossValidationResult: An instance of CrossValidationResult containing the mean relative
@@ -80,6 +83,7 @@ def cross_validation(
                 price_col=price_col,
                 quantity_col=quantity_col,
                 weights_col=weights_col,
+                competitor_price_col=competitor_price_col,
             )
 
             if any(value == float("inf") for value in result.model_dump().values()):

@@ -2,7 +2,7 @@
 
 import logging
 import multiprocessing
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,9 @@ def run_model_type(
     price_col: str,
     quantity_col: str,
     weights_col: str,
+    competitor_price_col: Optional[str] = None,
 ) -> Tuple[dict, float, float]:
-    """Calculate cross-validation and regression results.
+    """Calculate cross-validation and regression results, including optional avg_competitor_price.
 
     Args:
         data (pd.DataFrame): The input data.
@@ -37,6 +38,8 @@ def run_model_type(
         price_col (str): The name of the column containing the prices.
         quantity_col (str): The name of the column containing the quantities.
         weights_col (str): The name of the column containing the weights.
+        competitor_price_col (str, optional): The name of the column containing the
+        competitor price. Defaults to None.
 
     Returns:
         dict: A dictionary containing the calculated results.
@@ -49,16 +52,20 @@ def run_model_type(
     results = {}
     median_price = data[price_col].median()
     median_quantity = data[quantity_col].median()
+
     try:
+        # Pass the competitor_price_col if it exists to cross_validation
         cv_result = cross_validation(
-            data, model_type, test_size, price_col, quantity_col, weights_col
+            data, model_type, test_size, price_col, quantity_col, weights_col, competitor_price_col
         )
+        # Pass the competitor_price_col if it exists to estimate_coefficients
         estimation_result = estimate_coefficients(
             data,
             model_type,
             price_col=price_col,
             quantity_col=quantity_col,
             weights_col=weights_col,
+            competitor_price_col=competitor_price_col,
         )
         # Store the results in a dictionary
         for suffix in CV_SUFFIXES_CS:
@@ -73,6 +80,7 @@ def run_model_type(
         # Set all the results to np.nan
         for col in [model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)]:
             results[col] = np.nan
+
     return results, median_quantity, median_price
 
 
@@ -206,8 +214,11 @@ def run_experiment(
     max_pvalue: float = 0.05,
     threshold_best_model_cv_or_refit: int = 7,
     quality_test_error_col: str = "best_relative_absolute_error",
+    competitor_price_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """Run experiment and return results DataFrame.
+
+    optionally using avg_competitor_price as a covariate.
 
     This function evaluates multiple regression models using cross-validation and
     coefficient estimation. It selects the best model based on the lowest
@@ -227,29 +238,8 @@ def run_experiment(
         cv test score or refit. Defaults to 7.
         quality_test_error_col (str, optional): Column name for the quality test error.
         Defaults to "best_relative_absolute_error".
-
-    The function follows these steps:
-    1. Initialize a dictionary `results` to store results and variables to track the best model
-    and error.
-    2. Iterate over each model type in MODEL_TYPES.
-       - For each model type, perform cross-validation and coefficient estimation using
-       `run_model_type`.
-       - Update `results` with the model-specific results.
-       - if len(data)>'threshold_best_model_cv_or_refit, best_model_error_col from CV test
-       otherwise from refit error
-       - Check if the current model has the lowest 'best_model_error_col', meets the p-value
-       criterion, and has a non-negative error.
-       - If the current model is better than the previous best, update `best_model` and
-       `best_error`.
-    3. If no model meets the criteria, log the information, assign NaN values for model-specific
-    results,
-    and set quality test flags to False.
-    4. If a best model is found:
-       - Assign best model-specific results to the final results.
-       - Perform quality tests to determine if the model meets high, medium, or low quality
-       standards.
-       - Generate a detailed message based on the quality tests and elasticity.
-    5. Convert the `results` dictionary to a DataFrame and return it.
+        competitor_price_col (str, optional): Column name for competitor price, if any.
+        Defaults to None.
 
     Returns:
         pd.DataFrame: Results of the experiment.
@@ -261,7 +251,13 @@ def run_experiment(
 
     for model_type in MODEL_TYPES:
         model_results, median_quantity, median_price = run_model_type(
-            data, model_type, test_size, price_col, quantity_col, weights_col
+            data,
+            model_type,
+            test_size,
+            price_col,
+            quantity_col,
+            weights_col,
+            competitor_price_col=competitor_price_col,
         )
 
         if len(data) > threshold_best_model_cv_or_refit:
@@ -332,6 +328,7 @@ def run_experiment_for_uid(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    competitor_price_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """Run experiment for a specific user ID.
 
@@ -344,6 +341,8 @@ def run_experiment_for_uid(
         price_col (str, optional): The column name for the price data. Defaults to "price".
         quantity_col (str, optional): The column name for the quantity data. Defaults to "quantity".
         weights_col (str, optional): The column name for the weights data. Defaults to "days".
+        competitor_price_col (str, optional): Column name for competitor price, if any.
+        Defaults to None.
 
     Returns:
         pd.DataFrame: The results of the experiment for the specified user ID.
@@ -356,6 +355,7 @@ def run_experiment_for_uid(
             price_col=price_col,
             quantity_col=quantity_col,
             weights_col=weights_col,
+            competitor_price_col=competitor_price_col,
         )
     except Exception as e:
         logging.info(f"Error for UID {uid}: {e}")
@@ -372,6 +372,7 @@ def run_experiment_for_uids_parallel(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    competitor_price_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """Run experiment for multiple UID in parallel.
 
@@ -386,6 +387,8 @@ def run_experiment_for_uids_parallel(
         Defaults to "quantity".
         weights_col (str, optional): The name of the column containing the weights data.
         Defaults to "days".
+        competitor_price_col (str, optional): Column name for competitor price, if any.
+        Defaults to None.
 
     Returns:
         pd.DataFrame: The concatenated DataFrame containing the results of the experiments
@@ -399,7 +402,16 @@ def run_experiment_for_uids_parallel(
     results_list = pool.starmap(
         run_experiment_for_uid,
         [
-            (uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col)
+            (
+                uid,
+                df_input,
+                test_size,
+                uid_col,
+                price_col,
+                quantity_col,
+                weights_col,
+                competitor_price_col,
+            )
             for uid in unique_uids
         ],
     )
@@ -415,6 +427,7 @@ def run_experiment_for_uids_not_parallel(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    competitor_price_col: Optional[str] = None,
 ) -> pd.DataFrame:
     """Run experiment for multiple user IDs (not in parallel).
 
@@ -430,6 +443,8 @@ def run_experiment_for_uids_not_parallel(
         Defaults to "quantity".
         weights_col (str, optional): The name of the column containing the weights data.
         Defaults to "days".
+        competitor_price_col (str, optional): Column name for competitor price, if any.
+        Defaults to None.
 
     Returns:
         pd.DataFrame: The concatenated DataFrame of results for each user ID.
@@ -440,7 +455,14 @@ def run_experiment_for_uids_not_parallel(
     unique_uids = df_input[uid_col].unique()
     for uid in unique_uids:
         results_df = run_experiment_for_uid(
-            uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col
+            uid,
+            df_input,
+            test_size,
+            uid_col,
+            price_col,
+            quantity_col,
+            weights_col,
+            competitor_price_col,
         )
         results_list.append(results_df)
     return pd.concat(results_list)

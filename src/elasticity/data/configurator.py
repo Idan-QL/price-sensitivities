@@ -14,6 +14,7 @@ class DataColumns(BaseModel):
         quantity (Optional[str]): The column name for the quantity.
         date (Optional[str]): The column name for the date.
         weight (Optional[str]): The column name for the weight.
+        avg_competitor_price (str): Column name for average competitor price.
     """
 
     uid: Optional[str] = "uid"
@@ -21,6 +22,7 @@ class DataColumns(BaseModel):
     quantity: Optional[str] = "units"
     date: Optional[str] = "date"
     weight: Optional[str] = "days"
+    avg_competitor_price: Optional[str] = "avg_competitor_price"
 
 
 class PreprocessingParameters(BaseModel):

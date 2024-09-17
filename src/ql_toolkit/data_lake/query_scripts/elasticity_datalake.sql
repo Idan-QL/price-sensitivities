@@ -93,7 +93,11 @@ SELECT
         THEN 'product_events_analytics taken, but it has the smaller number'
         ELSE 'product_info_analytics taken'
     END AS source,
-    inventory
+    inventory,
+    competitors_statistics['average'] as avg_competitor_price
+    -- ((WHEN product_events_analytics['units_sold'] IS NOT NULL 
+    --     THEN CAST(product_events_shelf_price_stats['most_units_sold'] AS DOUBLE)
+    --     ELSE CAST(product_info_shelf_price_stats['most_units_sold'] AS DOUBLE)) - competitors_statistics['average']) AS shelf_price_competitors_diff
 FROM datalake_v1_poc.product_extended_daily
 WHERE date BETWEEN date('{start_date}') AND date('{end_date}')
 AND channel = '{channel}'

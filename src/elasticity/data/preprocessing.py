@@ -301,14 +301,7 @@ def read_data(
     elif not isinstance(data_month, date):
         raise ValueError("Input must be a string, date, or datetime object")
 
-    cs = [
-        "date",
-        "uid",
-        "shelf_price",
-        "units",
-        "price",
-        "inventory",
-    ]
+    cs = ["date", "uid", "shelf_price", "units", "price", "inventory", "avg_competitor_price"]
 
     date_params = {
         "start_date": str(data_month.replace(day=1)),

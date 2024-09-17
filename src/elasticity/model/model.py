@@ -1,7 +1,7 @@
 """Module of modeling."""
 
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -87,8 +87,11 @@ def fit_model(
     price_col: str,
     quantity_col: str,
     weights_col: str,
+    competitor_price_col: Optional[str] = None,
 ) -> sm.WLS:
     """Fit a weighted least squares (WLS) model.
+
+    with an optional avg_competitor_price as a covariate.
 
     Args:
         data (pd.DataFrame): The input data.
@@ -96,20 +99,31 @@ def fit_model(
         price_col (str): The name of the column representing price.
         quantity_col (str): The name of the column representing quantity.
         weights_col (str): The name of the column representing weights.
+        competitor_price_col (str, optional): The name of the column representing competitor price.
+                                              Defaults to None.
 
     Returns:
         sm.WLS: The fitted WLS model.
     """
-    x = sm.add_constant(data[[price_col]])
+    # Include competitor price column if provided
+    if competitor_price_col:
+        x = sm.add_constant(data[[price_col, competitor_price_col]])
+    else:
+        x = sm.add_constant(data[[price_col]])
+
     y = data[quantity_col]
     weights = data[weights_col]
 
+    # Apply log transformations for specific model types
     if model_type == "power":
         y = np.log(y)
         x[price_col] = np.log(x[price_col])
+        if competitor_price_col:
+            x[competitor_price_col] = np.log(x[competitor_price_col])
     elif model_type == "exponential":
         y = np.log(y)
 
+    # Fit WLS model
     return sm.WLS(y, x, weights=weights).fit()
 
 
@@ -119,8 +133,11 @@ def estimate_coefficients(
     price_col: str = "price",
     quantity_col: str = "quantity",
     weights_col: str = "days",
+    competitor_price_col: Optional[str] = None,
 ) -> EstimationResult:
     """Estimate coefficients for demand model using log transformation if nonlinear.
+
+    with an optional avg_competitor_price as a covariate.
 
     Args:
         data (pd.DataFrame): The input data containing the price and quantity columns.
@@ -132,6 +149,8 @@ def estimate_coefficients(
                                       that represents the quantity. Defaults to "quantity".
         weights_col (str, optional): The name of the column in the data frame
                                      that represents the weights. Defaults to "days".
+        competitor_price_col (str, optional): The name of the column representing the
+                                              competitor price. Defaults to None.
 
     Returns:
         EstimationResult: An instance of EstimationResult containing the estimated coefficients
@@ -140,13 +159,22 @@ def estimate_coefficients(
     """
     try:
         # Validate the input data
-        if not validate_data(data, [price_col, quantity_col, weights_col]):
+        required_cols = [price_col, quantity_col, weights_col]
+        if competitor_price_col:
+            required_cols.append(competitor_price_col)
+
+        if not validate_data(data, required_cols):
             return EstimationResult()
-        if not check_positive_values(data, [price_col, quantity_col]):
+        if not check_positive_values(
+            data,
+            [price_col, quantity_col] + ([competitor_price_col] if competitor_price_col else []),
+        ):
             return EstimationResult()
 
-        # Fit the model
-        model = fit_model(data, model_type, price_col, quantity_col, weights_col)
+        # Fit the model with or without competitor price
+        model = fit_model(
+            data, model_type, price_col, quantity_col, weights_col, competitor_price_col
+        )
 
         # Extract metrics and perform calculations
         pvalue = model.f_pvalue
@@ -157,11 +185,11 @@ def estimate_coefficients(
         elasticity_error_propagation = calculate_elasticity_error_propagation(
             model_type,
             model.params.iloc[0],
-            model.params.iloc[1],
+            model.params.iloc[1] if len(model.params) > 1 else None,
             cov_matrix,
             last_price,
         )
-        a, b = model.params.iloc[0], model.params.iloc[1]
+        a, b = model.params.iloc[0], model.params.iloc[1] if len(model.params) > 1 else None
         aic = model.aic
         elasticity = calculate_elasticity_from_parameters(model_type, a, b, last_price)
         relative_absolute_error = relative_absolute_error_calculation(

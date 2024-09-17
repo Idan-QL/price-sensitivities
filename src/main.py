@@ -121,6 +121,7 @@ def process_client_channel(
             price_col="round_price",
             quantity_col="units",
             weights_col="days",
+            competitor_price_col="avg_competitor_price",
         )
 
         if attr_name:

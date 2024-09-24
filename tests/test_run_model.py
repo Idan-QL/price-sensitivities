@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from elasticity.data.configurator import DataColumns
 from elasticity.model.run_model import run_experiment
 from elasticity.utils.consts import OUTPUT_CS
 
@@ -12,8 +13,8 @@ from elasticity.utils.consts import OUTPUT_CS
 def test_run_experiment(sample_data: pd.DataFrame) -> None:
     """Test run_experiment function with sample data."""
     # Call the function under test
-    result = run_experiment(sample_data)
-
+    data_columns = DataColumns()
+    result = run_experiment(data=sample_data, data_columns=data_columns)
     # Assert that the result is a DataFrame
     assert isinstance(result, pd.DataFrame)
     assert set(result.columns) == set(OUTPUT_CS)

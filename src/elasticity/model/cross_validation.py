@@ -8,6 +8,7 @@ import pandas as pd
 from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 
+from elasticity.data.configurator import DataColumns
 from elasticity.model.model import estimate_coefficients
 from elasticity.model.utils import normalised_rmse, relative_absolute_error_calculation
 
@@ -38,10 +39,8 @@ class CrossValidationResult(BaseModel):
 def cross_validation(
     data: pd.DataFrame,
     model_type: str,
+    data_columns: DataColumns,
     test_size: float = 0.1,
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
     n_tests: int = 3,
 ) -> CrossValidationResult:
     """Perform cross-validation.
@@ -49,11 +48,8 @@ def cross_validation(
     Args:
         data (pd.DataFrame): The input data for cross-validation.
         model_type (str): The type of model to use for estimation.
+        data_columns (DataColumns): Configuration for data columns.
         test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
-        price_col (str, optional): The name of the column containing prices. Defaults to "price".
-        quantity_col (str, optional): The name of the column containing quantities.
-        Defaults to "quantity".
-        weights_col (str, optional): The name of the column containing weights. Defaults to "days".
         n_tests (int, optional): The number of cross-validation tests to perform. Defaults to 3.
 
     Returns:
@@ -75,11 +71,7 @@ def cross_validation(
             data_train, data_test = train_test_split(data, test_size=test_size, random_state=42 + i)
 
             result = estimate_coefficients(
-                data_train,
-                model_type,
-                price_col=price_col,
-                quantity_col=quantity_col,
-                weights_col=weights_col,
+                data=data_train, model_type=model_type, data_columns=data_columns
             )
 
             if any(value == float("inf") for value in result.model_dump().values()):
@@ -93,12 +85,22 @@ def cross_validation(
 
             relative_absolute_errors_test.append(
                 relative_absolute_error_calculation(
-                    model_type, price_col, quantity_col, data_test, result.a, result.b
+                    model_type=model_type,
+                    data_columns=data_columns,
+                    data_test=data_test,
+                    a_linear=result.a,
+                    b_linear=result.b,
                 )
             )
 
             normalised_rmse_test.append(
-                normalised_rmse(model_type, price_col, quantity_col, data_test, result.a, result.b)
+                normalised_rmse(
+                    model_type=model_type,
+                    data_columns=data_columns,
+                    data_test=data_test,
+                    a_linear=result.a,
+                    b_linear=result.b,
+                )
             )
 
         if not a_lists:

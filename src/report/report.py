@@ -5,6 +5,7 @@ from typing import Dict
 
 import pandas as pd
 
+from elasticity.data.configurator import DataFetchParameters
 from ql_toolkit.data_lake.athena_query import AthenaQuery
 
 
@@ -195,8 +196,7 @@ def get_elasticity_type_counts(df_filtered: pd.DataFrame) -> Dict[str, int]:
 
 
 def generate_run_report(
-    client_key: str,
-    channel: str,
+    data_fetch_params: DataFetchParameters,
     total_uid: int,
     results_df: pd.DataFrame,
     runtime_duration: float,
@@ -208,8 +208,7 @@ def generate_run_report(
     """Generate a report DataFrame for the current run, ensuring appropriate types for each field.
 
     Args:
-        client_key (str): The client key identifying the customer.
-        channel (str): The channel associated with the client.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         total_uid (int): The total number of UIDs in the run.
         results_df (pd.DataFrame): The DataFrame containing the run results.
         runtime_duration (float): The runtime duration in seconds.
@@ -232,7 +231,11 @@ def generate_run_report(
 
     # Handle model changes if applicable
     model_changes = None
-    previous_month_results = get_previous_month_df(client_key, channel, end_date)
+    previous_month_results = get_previous_month_df(
+        client_key=data_fetch_params.client_key,
+        channel=data_fetch_params.channel,
+        end_date=end_date,
+    )
     if previous_month_results is not None and not previous_month_results.empty:
         model_changes = compare_model(results_df, previous_month_results)
 
@@ -250,8 +253,8 @@ def generate_run_report(
 
     # Prepare the report row
     report_row = {
-        "client_key": client_key,
-        "channel": channel,
+        "client_key": data_fetch_params.client_key,
+        "channel": data_fetch_params.channel,
         "total_uid": total_uid,
         "uids_with_elasticity": len(df_valid_elasticity),
         "uids_with_high_quality_elasticity": len(high_quality_results),

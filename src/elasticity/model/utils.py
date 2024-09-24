@@ -3,11 +3,12 @@
 import numpy as np
 import pandas as pd
 
+from elasticity.data.configurator import DataColumns
+
 
 def normalised_rmse(
     model_type: str,
-    price_col: str,
-    quantity_col: str,
+    data_columns: DataColumns,
     data_test: pd.DataFrame,
     a_linear: float,
     b_linear: float,
@@ -16,8 +17,7 @@ def normalised_rmse(
 
     Args:
         model_type (str): The type of model being used.
-        price_col (str): The column name for the price data.
-        quantity_col (str): The column name for the quantity data.
+        data_columns (DataColumns): Configuration for data columns.
         data_test (pd.DataFrame): The test dataset containing price and quantity data.
         a_linear (float): The coefficient 'a_linear' used in the quantity calculation.
         b_linear (float): The coefficient 'b_linear' used in the quantity calculation.
@@ -27,9 +27,11 @@ def normalised_rmse(
 
     """
     predicted_quantity = np.vectorize(
-        lambda p: calculate_quantity_from_price(p, a_linear, b_linear, model_type)
-    )(data_test[price_col])
-    mean_squared_error = np.mean((data_test[quantity_col] - predicted_quantity) ** 2)
+        lambda p: calculate_quantity_from_price(
+            price=p, a_linear=a_linear, b_linear=b_linear, model_type=model_type
+        )
+    )(data_test[data_columns.round_price])
+    mean_squared_error = np.mean((data_test[data_columns.quantity] - predicted_quantity) ** 2)
     rmse = np.sqrt(mean_squared_error)
     median_predicted_quantity = np.median(predicted_quantity)
     return round(rmse / median_predicted_quantity, 4)
@@ -37,8 +39,7 @@ def normalised_rmse(
 
 def relative_absolute_error_calculation(
     model_type: str,
-    price_col: str,
-    quantity_col: str,
+    data_columns: DataColumns,
     data_test: pd.DataFrame,
     a_linear: float,
     b_linear: float,
@@ -47,8 +48,7 @@ def relative_absolute_error_calculation(
 
     Args:
         model_type (str): The type of the model.
-        price_col (str): The name of the column containing the prices.
-        quantity_col (str): The name of the column containing the quantities.
+        data_columns (DataColumns): Configuration for data columns.
         data_test (pandas.DataFrame): The test dataset.
         a_linear (float): The coefficient 'a_linear' used in the quantity calculation.
         b_linear (float): The coefficient 'b_linear' used in the quantity calculation.
@@ -57,12 +57,14 @@ def relative_absolute_error_calculation(
     - relative_absolute_error (float): The relative absolute error.
     """
     predicted_quantity = np.vectorize(
-        lambda p: calculate_quantity_from_price(p, a_linear, b_linear, model_type)
-    )(data_test[price_col])
+        lambda p: calculate_quantity_from_price(
+            price=p, a_linear=a_linear, b_linear=b_linear, model_type=model_type
+        )
+    )(data_test[data_columns.round_price])
 
-    absolute_errors = np.abs(data_test[quantity_col] - predicted_quantity)
+    absolute_errors = np.abs(data_test[data_columns.quantity] - predicted_quantity)
     normaliser = np.maximum.reduce(
-        [np.abs(data_test[quantity_col].values), np.abs(predicted_quantity)]
+        [np.abs(data_test[data_columns.quantity].values), np.abs(predicted_quantity)]
     )
     return np.mean(absolute_errors / normaliser) * 100
 
@@ -87,7 +89,10 @@ def calculate_quantity_from_price(
         return power_demand(price, a_linear, b_linear)
     if model_type == "exponential":
         return exponential_demand(price, a_linear, b_linear)
-    raise ValueError("Invalid model type. Use 'linear', 'power', or 'exponential'.")
+    raise ValueError(
+        "Calculate_quantity_from_price: Invalid model type. Use 'linear',"
+        " 'power', or 'exponential'."
+    )
 
 
 def linear_demand(price: float, a_linear: float, b_linear: float) -> float:
@@ -221,7 +226,10 @@ def calculate_elasticity_from_parameters(
     elif model_type == "exponential":
         elasticity = exponential_elasticity(price, b)
     else:
-        raise ValueError("Invalid model type. Use 'linear', 'power', or 'exponential'.")
+        raise ValueError(
+            "calculate_elasticity_from_parameters: Invalid model type. Use 'linear',"
+            " 'power', or 'exponential'."
+        )
     return round(elasticity, 2)
 
 

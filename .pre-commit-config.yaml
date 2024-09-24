@@ -27,5 +27,6 @@ repos:
         name: pytest with coverage
         entry: pytest tests/ -v --cov=src/elasticity  --cov-report=xml:coverage.xml
         language: system
-        stages: [pre-push]
+        stages: [pre-commit, pre-push]
         files: \.py$
+        pass_filenames: false

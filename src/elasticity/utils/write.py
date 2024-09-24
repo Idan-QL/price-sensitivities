@@ -5,6 +5,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from elasticity.data.configurator import DataFetchParameters
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.data_lake.athena_glue_operations import AthenaDataManager
 from ql_toolkit.data_lake.data_classes import GlueDBKeys
@@ -69,13 +70,12 @@ def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def upload_elasticity_data_to_athena(
-    client_key: str, channel: str, end_date: str, df_upload: pd.DataFrame, table_name: str
+    data_fetch_params: DataFetchParameters, end_date: str, df_upload: pd.DataFrame, table_name: str
 ) -> None:
     """Upload elasticity data to an Athena partition using AthenaDataManager.
 
     Args:
-        client_key (str): The client key to be used for partitioning.
-        channel (str): The channel to be used for partitioning.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         end_date (str): The date to be used for partitioning.
         df_upload (pd.DataFrame): The DataFrame containing elasticity data.
         table_name (str): The name of the Glue table.
@@ -87,8 +87,8 @@ def upload_elasticity_data_to_athena(
     glue_db_keys = GlueDBKeys(
         database_name=app_state.athena_database_name,
         table_name=table_name,
-        client_key=client_key,
-        channel=channel,
+        client_key=data_fetch_params.client_key,
+        channel=data_fetch_params.channel,
         date=datetime.today().date().strftime("%Y-%m-%d"),
     )
 
@@ -97,8 +97,8 @@ def upload_elasticity_data_to_athena(
         "data_date": end_date,
         "date": datetime.today().date(),
         "project_name": app_state.project_name,
-        "client_key": client_key,
-        "channel": channel,
+        "client_key": data_fetch_params.client_key,
+        "channel": data_fetch_params.channel,
     }
 
     # Add missing columns to df_upload

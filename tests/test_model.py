@@ -3,6 +3,7 @@
 import pandas as pd
 import pytest
 
+from elasticity.data.configurator import DataColumns
 from elasticity.model.model import estimate_coefficients
 
 
@@ -23,7 +24,10 @@ def test_estimate_coefficients_linear(sample_data: pd.DataFrame) -> None:
         AssertionError: If the rounded result does not match the expected result.
     """
     model_type = "linear"
-    estimation_results = estimate_coefficients(sample_data, model_type)
+    data_columns = DataColumns()
+    estimation_results = estimate_coefficients(
+        data=sample_data, model_type=model_type, data_columns=data_columns
+    )
     assert round(estimation_results.a, 1) == 120.0
     assert round(estimation_results.b, 1) == -2.0
     assert round(estimation_results.pvalue, 1) == 0.0
@@ -53,7 +57,10 @@ def test_estimate_coefficients_power(sample_data: pd.DataFrame) -> None:
         AssertionError: If the rounded result does not match the expected result.
     """
     model_type = "power"
-    estimation_results = estimate_coefficients(sample_data, model_type)
+    data_columns = DataColumns()
+    estimation_results = estimate_coefficients(
+        data=sample_data, model_type=model_type, data_columns=data_columns
+    )
     assert round(estimation_results.a, 1) == 7.7
     assert round(estimation_results.b, 1) == -1.1
     assert round(estimation_results.pvalue, 1) == 0.0
@@ -82,7 +89,10 @@ def test_estimate_coefficients_exponential(sample_data: pd.DataFrame) -> None:
         AssertionError: If the rounded result does not match the expected result.
     """
     model_type = "exponential"
-    estimation_results = estimate_coefficients(sample_data, model_type)
+    data_columns = DataColumns()
+    estimation_results = estimate_coefficients(
+        data=sample_data, model_type=model_type, data_columns=data_columns
+    )
     assert round(estimation_results.a, 1) == 5.3
     assert round(estimation_results.b, 1) == -0.0
     assert round(estimation_results.pvalue, 1) == 0.0

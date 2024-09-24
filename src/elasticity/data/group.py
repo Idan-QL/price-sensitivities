@@ -1,51 +1,43 @@
 """Module preprocessing for group elasticity."""
 
 import logging
-from typing import Optional
 
 import numpy as np
 import pandas as pd
 
+from elasticity.data.configurator import DataFetchParameters
 from elasticity.data.read import read_data_attrs
 from ql_toolkit.s3 import io_tools as s3io
 
 
 def data_for_group_elasticity(
-    df_by_price: pd.DataFrame,
-    client_key: str,
-    channel: str,
-    end_date: str,
-    attr_name: Optional[str] = None,
+    df_by_price: pd.DataFrame, data_fetch_params: DataFetchParameters, end_date: str
 ) -> pd.DataFrame:
     """Generate group-level data for elasticity analysis.
 
     Args:
         df_by_price (pandas.DataFrame): DataFrame containing data grouped by price.
-        client_key (str): Client key for segmentation data.
-        channel (str): Channel for segmentation data.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         end_date (str): end_date for querying athena.
-        attr_name (str, optional): Column name for attribute data. Defaults None.
 
     Returns:
         pandas.DataFrame: DataFrame with group-level data for elasticity analysis.
-                          If an error occurs in retrieving segmentation or attribute data,
-                          an empty DataFrame is returned.
+                          If an error occurs in retrieving segmentation or attribute
+                          data, an empty DataFrame is returned.
     """
     try:
-        df_seg = get_segmentation_data(client_key, channel)
+        df_seg = get_segmentation_data(data_fetch_params.client_key, data_fetch_params.channel)
     except Exception as e:
         logging.error(f"Error getting segmentation data: {e}")
         return pd.DataFrame()
 
     df_group = df_by_price.merge(df_seg, on="uid", how="left")
 
-    if attr_name:
+    if data_fetch_params.attr_name:
         try:
             attr_col = "attr_value"
             date_params = {"end_date": end_date}
-            df_attrs = read_data_attrs(
-                client_key, channel, attr_names=[attr_name], date_params=date_params
-            )
+            df_attrs = read_data_attrs(data_fetch_params=data_fetch_params, date_params=date_params)
             df_group = df_group.merge(df_attrs, on="uid", how="left")
         except Exception as e:
             logging.error(f"Error getting attr. data: {e}")
@@ -54,7 +46,7 @@ def data_for_group_elasticity(
     for segmentation_col in ["segmentation_1", "segmentation_2"]:
         sub_group_cols = [segmentation_col]
         group_cols = [segmentation_col, "price_group"]
-        if attr_name:
+        if data_fetch_params.attr_name:
             sub_group_cols.append(attr_col)
             group_cols.append(attr_col)
 

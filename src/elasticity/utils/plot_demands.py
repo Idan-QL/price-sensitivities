@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from elasticity.data.configurator import DataColumns, DataFetchParameters
 from elasticity.model.model import estimate_coefficients
 from elasticity.utils.consts import EXPONENTIAL, LINEAR, POWER
 from ql_toolkit.s3 import io_tools as s3io
@@ -88,12 +89,7 @@ def generate_data(
 
 
 def plot_quantity_and_prices_from_df(
-    df: pd.DataFrame,
-    title: str = "",
-    quantity_col: str = "quantity",
-    price_col: str = "price",
-    days_col: str = "days",
-    outlier_col: str = "outlier_quantity",
+    df: pd.DataFrame, data_columns: DataColumns, title: str = ""
 ) -> None:
     """Plot quantity and prices from the DataFrame with outlier differentiation.
 
@@ -104,32 +100,26 @@ def plot_quantity_and_prices_from_df(
 
     Args:
         df (pd.DataFrame): The input DataFrame containing the data to plot.
+        data_columns (DataColumns): Configuration for data columns.
         title (str, optional): The title of the plot. Defaults to an empty string.
-        quantity_col (str, optional): The column name for quantities in the DataFrame.
-        Defaults to "quantity".
-        price_col (str, optional): The column name for prices in the DataFrame. Defaults to "price".
-        days_col (str, optional): The column name for the number of days in the DataFrame.
-        Defaults to "days".
-        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
-        Defaults to "outlier_quantity".
 
     Returns:
         None: This function does not return any value. It only creates a plot.
 
     """
-    outlier_mask = df[outlier_col]  # Boolean mask for outliers
+    outlier_mask = df[data_columns.outlier_quantity]  # Boolean mask for outliers
     plt.scatter(
-        df[quantity_col][~outlier_mask],  # Plot non-outlier points
-        df[price_col][~outlier_mask],
-        s=df[days_col][~outlier_mask] * 10,
+        df[data_columns.quantity][~outlier_mask],  # Plot non-outlier points
+        df[data_columns.round_price][~outlier_mask],
+        s=df[data_columns.weight][~outlier_mask] * 10,
         marker="+",
         color="blue",
         label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
-        df[quantity_col][outlier_mask],  # Plot outlier points
-        df[price_col][outlier_mask],
-        s=df[days_col][outlier_mask] * 10,
+        df[data_columns.quantity][outlier_mask],  # Plot outlier points
+        df[data_columns.round_price][outlier_mask],
+        s=df[data_columns.weight][outlier_mask] * 10,
         marker="+",
         color="red",  # Change color for outliers
         label="Outlier Data",
@@ -147,12 +137,9 @@ def plot_quantity_and_prices_from_df(
 
 def plot_model_and_prices_from_df(
     df: pd.DataFrame,
+    data_columns: DataColumns,
     model_type: str = LINEAR,
     title: str = "",
-    quantity_col: str = "quantity",
-    price_col: str = "price",
-    days_col: str = "days",
-    outlier_col: str = "outlier_quantity",
 ) -> None:
     """Plot demand curves from model results and actual data.
 
@@ -163,16 +150,9 @@ def plot_model_and_prices_from_df(
 
     Args:
         df (pd.DataFrame): The input DataFrame containing the data to plot.
+        data_columns (DataColumns): Configuration for data columns.
         model_type (str, optional): The type of demand model to fit. Defaults to LINEAR.
         title (str, optional): The title of the plot. Defaults to an empty string.
-        quantity_col (str, optional): The column name for quantities in the DataFrame.
-        Defaults to "quantity".
-        price_col (str, optional): The column name for prices in the DataFrame.
-        Defaults to "price".
-        days_col (str, optional): The column name for the number of days in the DataFrame.
-        Defaults to "days".
-        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
-        Defaults to "outlier_quantity".
 
     Returns:
         None: This function does not return any value. It only creates a plot.
@@ -183,12 +163,10 @@ def plot_model_and_prices_from_df(
     estimation_result = estimate_coefficients(
         data=df,
         model_type=model_type,
-        price_col=price_col,
-        quantity_col=quantity_col,
-        weights_col=days_col,
+        data_columns=data_columns,
     )
 
-    prices = df[price_col]
+    prices = df[data_columns.round]
 
     if model_type == POWER:
         quantities = power_demand_equation(
@@ -208,21 +186,21 @@ def plot_model_and_prices_from_df(
     else:
         logging.info("typo in model type, power, exponential or linear")
 
-    outlier_mask = df[outlier_col]  # Boolean mask for outliers
+    outlier_mask = df[data_columns.outlier_quantity]  # Boolean mask for outliers
 
     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
     plt.scatter(
-        df[quantity_col][~outlier_mask],  # Plot non-outlier points
-        df[price_col][~outlier_mask],
-        s=df[days_col][~outlier_mask] * 10,
+        df[data_columns.quantity][~outlier_mask],  # Plot non-outlier points
+        df[data_columns.round_price][~outlier_mask],
+        s=df[data_columns.weight][~outlier_mask] * 10,
         marker="+",
         color="blue",
         label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
-        df[quantity_col][outlier_mask],  # Plot outlier points
-        df[price_col][outlier_mask],
-        s=df[days_col][outlier_mask] * 10,
+        df[data_columns.quantity][outlier_mask],  # Plot outlier points
+        df[data_columns.round_price][outlier_mask],
+        s=df[data_columns.weight][outlier_mask] * 10,
         marker="+",
         color="red",  # Change color for outliers
         label="Outlier Data",
@@ -249,11 +227,8 @@ def plot_model_and_prices(
     df_results: pd.DataFrame,
     df_data: pd.DataFrame,
     uid: str,
+    data_columns: DataColumns,
     title: str = "",
-    quantity_col: str = "quantity",
-    price_col: str = "price",
-    days_col: str = "days",
-    outlier_col: str = "outlier_quantity",
 ) -> None:
     """Plot demand curves from model results and actual data for a specific UID.
 
@@ -265,15 +240,8 @@ def plot_model_and_prices(
         df_results (pd.DataFrame): The DataFrame containing the model results.
         df_data (pd.DataFrame): The DataFrame containing the actual data.
         uid (str): The unique identifier for the data to be plotted.
+        data_columns (DataColumns): Configuration for data columns.
         title (str, optional): The title of the plot. Defaults to an empty string.
-        quantity_col (str, optional): The column name for quantities in the DataFrame.
-        Defaults to "quantity".
-        price_col (str, optional): The column name for prices in the DataFrame.
-        Defaults to "price".
-        days_col (str, optional): The column name for the number of days in the DataFrame.
-        Defaults to "days".
-        outlier_col (str, optional): The column name for the outlier boolean mask in the DataFrame.
-        Defaults to "outlier_quantity".
 
     Returns:
         None: This function does not return any value. It only creates a plot.
@@ -285,7 +253,9 @@ def plot_model_and_prices(
     model_type = df_results_uid["best_model"].iloc[0]
     elasticity = df_results_uid["best_elasticity"].iloc[0]
     error = df_results_uid["best_elasticity_error_propagation"].iloc[0]
-    prices = np.linspace(df_uid[price_col].min(), df_uid[price_col].max(), 100)
+    prices = np.linspace(
+        df_uid[data_columns.round_price].min(), df_uid[data_columns.round_price].max(), 100
+    )
 
     if model_type == POWER:
         quantities = power_demand_equation(prices, np.exp(a_linear), b_linear)
@@ -299,21 +269,21 @@ def plot_model_and_prices(
     else:
         logging.info("typo in model type, power, exponential or linear")
 
-    outlier_mask = df_uid[outlier_col]  # Boolean mask for outliers
+    outlier_mask = df_uid[data_columns.outlier_quantity]  # Boolean mask for outliers
 
     plt.plot(quantities, prices, color="blue", label="Quicklizard Model")
     plt.scatter(
-        df_uid[quantity_col][~outlier_mask],  # Plot non-outlier points
-        df_uid[price_col][~outlier_mask],
-        s=df_uid[days_col][~outlier_mask] * 10,
+        df_uid[data_columns.quantity][~outlier_mask],  # Plot non-outlier points
+        df_uid[data_columns.round_price][~outlier_mask],
+        s=df_uid[data_columns.weight][~outlier_mask] * 10,
         marker="+",
         color="green",
         label=("Actual Data (Avg units sold, size is prop. to " "the nb. of days at this price"),
     )
     plt.scatter(
-        df_uid[quantity_col][outlier_mask],  # Plot outlier points
-        df_uid[price_col][outlier_mask],
-        s=df_uid[days_col][outlier_mask] * 10,
+        df_uid[data_columns.quantity][outlier_mask],  # Plot outlier points
+        df_uid[data_columns.round_price][outlier_mask],
+        s=df_uid[data_columns.weight][outlier_mask] * 10,
         marker="+",
         color="red",  # Change color for outliers
         label="Outlier Data",
@@ -513,8 +483,7 @@ def save_graph(
 def run_save_graph_top10(
     df_results: pd.DataFrame,
     df_by_price: pd.DataFrame,
-    client_key: str,
-    channel: str,
+    data_fetch_params: DataFetchParameters,
     end_date: str,
 ) -> None:
     """Run save_graph function in parallel for UIDs based on sorting criteria.
@@ -522,8 +491,7 @@ def run_save_graph_top10(
     Args:
         df_results (Any): DataFrame containing results.
         df_by_price (Any): DataFrame containing prices.
-        client_key (str): Key identifying the client.
-        channel (str): Channel identifier.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         end_date (str): End date for the graph.
 
     Returns:
@@ -536,7 +504,14 @@ def run_save_graph_top10(
     )
 
     for uid in elasticity_uids_top10:
-        save_graph(uid, df_results, df_by_price, client_key, channel, end_date)
+        save_graph(
+            uid=uid,
+            df_results=df_results,
+            df_by_price=df_by_price,
+            client_key=data_fetch_params.client_key,
+            channel=data_fetch_params.channel,
+            end_date=end_date,
+        )
 
 
 def run_save_graph_parallel(

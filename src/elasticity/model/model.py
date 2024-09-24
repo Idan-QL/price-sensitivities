@@ -8,6 +8,7 @@ import pandas as pd
 import statsmodels.api as sm
 from pydantic import BaseModel
 
+from elasticity.data.configurator import DataColumns
 from elasticity.model.utils import (
     calculate_elasticity_error_propagation,
     calculate_elasticity_from_parameters,
@@ -81,32 +82,24 @@ def check_positive_values(data: pd.DataFrame, columns: List[str]) -> bool:
     return True
 
 
-def fit_model(
-    data: pd.DataFrame,
-    model_type: str,
-    price_col: str,
-    quantity_col: str,
-    weights_col: str,
-) -> sm.WLS:
+def fit_model(data: pd.DataFrame, model_type: str, data_columns: DataColumns) -> sm.WLS:
     """Fit a weighted least squares (WLS) model.
 
     Args:
         data (pd.DataFrame): The input data.
         model_type (str): The type of demand model to fit.
-        price_col (str): The name of the column representing price.
-        quantity_col (str): The name of the column representing quantity.
-        weights_col (str): The name of the column representing weights.
+        data_columns (DataColumns): Configuration for data columns.
 
     Returns:
         sm.WLS: The fitted WLS model.
     """
-    x = sm.add_constant(data[[price_col]])
-    y = data[quantity_col]
-    weights = data[weights_col]
+    x = sm.add_constant(data[[data_columns.round_price]])
+    y = data[data_columns.quantity]
+    weights = data[data_columns.weight]
 
     if model_type == "power":
         y = np.log(y)
-        x[price_col] = np.log(x[price_col])
+        x[data_columns.round_price] = np.log(x[data_columns.round_price])
     elif model_type == "exponential":
         y = np.log(y)
 
@@ -114,11 +107,7 @@ def fit_model(
 
 
 def estimate_coefficients(
-    data: pd.DataFrame,
-    model_type: str,
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
+    data: pd.DataFrame, model_type: str, data_columns: DataColumns
 ) -> EstimationResult:
     """Estimate coefficients for demand model using log transformation if nonlinear.
 
@@ -126,12 +115,7 @@ def estimate_coefficients(
         data (pd.DataFrame): The input data containing the price and quantity columns.
         model_type (str): The type of demand model to use.
                           Valid options are "power" and "exponential".
-        price_col (str, optional): The name of the column in the data frame
-                                   that represents the price. Defaults to "price".
-        quantity_col (str, optional): The name of the column in the data frame
-                                      that represents the quantity. Defaults to "quantity".
-        weights_col (str, optional): The name of the column in the data frame
-                                     that represents the weights. Defaults to "days".
+        data_columns (DataColumns): Configuration for data columns.
 
     Returns:
         EstimationResult: An instance of EstimationResult containing the estimated coefficients
@@ -140,34 +124,39 @@ def estimate_coefficients(
     """
     try:
         # Validate the input data
-        if not validate_data(data, [price_col, quantity_col, weights_col]):
+        if not validate_data(
+            data, [data_columns.round_price, data_columns.quantity, data_columns.weight]
+        ):
             return EstimationResult()
-        if not check_positive_values(data, [price_col, quantity_col]):
+        if not check_positive_values(data, [data_columns.round_price, data_columns.quantity]):
             return EstimationResult()
 
         # Fit the model
-        model = fit_model(data, model_type, price_col, quantity_col, weights_col)
+        model = fit_model(data=data, model_type=model_type, data_columns=data_columns)
 
         # Extract metrics and perform calculations
         pvalue = model.f_pvalue
         r2 = model.rsquared
         cov_matrix = model.cov_params()
         last_price = data["last_price"].median()
-
         elasticity_error_propagation = calculate_elasticity_error_propagation(
-            model_type,
-            model.params.iloc[0],
-            model.params.iloc[1],
-            cov_matrix,
-            last_price,
+            model_type=model_type,
+            a=model.params.iloc[0],
+            b=model.params.iloc[1],
+            cov_matrix=cov_matrix,
+            p=last_price,
         )
         a, b = model.params.iloc[0], model.params.iloc[1]
         aic = model.aic
-        elasticity = calculate_elasticity_from_parameters(model_type, a, b, last_price)
-        relative_absolute_error = relative_absolute_error_calculation(
-            model_type, price_col, quantity_col, data, a, b
+        elasticity = calculate_elasticity_from_parameters(
+            model_type=model_type, a=a, b=b, price=last_price
         )
-        norm_rmse = normalised_rmse(model_type, price_col, quantity_col, data, a, b)
+        relative_absolute_error = relative_absolute_error_calculation(
+            model_type=model_type, data_columns=data_columns, data_test=data, a_linear=a, b_linear=b
+        )
+        norm_rmse = normalised_rmse(
+            model_type=model_type, data_columns=data_columns, data_test=data, a_linear=a, b_linear=b
+        )
 
         # Return results as an instance of EstimationResult
         return EstimationResult(

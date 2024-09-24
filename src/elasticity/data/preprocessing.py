@@ -3,24 +3,35 @@
 import calendar
 import logging
 import warnings
-from datetime import date, datetime
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import pandas as pd
+from pydantic import ValidationError
 
-from elasticity.data.configurator import DataColumns, PreprocessingParameters
+from elasticity.data.configurator import (
+    DataColumns,
+    DataFetchParameters,
+    DateRange,
+    PreprocessingParameters,
+)
 from elasticity.data.read import read_data_query
 from elasticity.data.utils import (
     calculate_last_values,
+    clean_inventory_data,
+    clean_quantity_data,
+    create_date_list,
+    filter_data_by_uids,
     get_revenue,
+    get_uid_changes_and_conversions,
     initialize_dates,
     log_rejection_reasons,
     outliers_iqr_filtered,
+    parse_data_month,
     preprocess_by_price,
     round_price_effect,
-    uid_with_min_conversions,
-    uid_with_price_changes,
 )
+from ql_toolkit.config.runtime_config import app_state
+from ql_toolkit.s3 import io_tools as s3io
 
 # Suppress only the specific divide by zero warning
 warnings.filterwarnings(
@@ -28,13 +39,69 @@ warnings.filterwarnings(
 )
 
 
+def run_preprocessing(
+    data_fetch_params: DataFetchParameters, date_range: DateRange, data_columns: DataColumns
+) -> tuple:
+    """Preprocess and load the required data.
+
+    Args:
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching such as
+        client key, channel, and attribute name.
+        date_range (DateRange): The date range for fetching the data.
+        data_columns (DataColumns): Configuration for column mappings used in the
+        preprocessing step.
+
+    Returns:
+        tuple: A tuple containing:
+            - df_by_price (pd.DataFrame): The DataFrame containing price data.
+            - df_revenue_uid (pd.DataFrame): The DataFrame containing revenue data by UID.
+            - total_end_date_uid (int): The total number of UIDs for the end date.
+            - total_revenue (float): The total revenue calculated from the data.
+    """
+    df_by_price, _, total_end_date_uid, df_revenue_uid, total_revenue = read_and_preprocess(
+        data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+    )
+
+    if df_by_price is None or df_by_price.empty:
+        raise ValueError("Error: df_by_price is None or Empty")
+
+    return df_by_price, df_revenue_uid, total_end_date_uid, total_revenue
+
+
+def save_preprocess_to_s3(
+    df_by_price: pd.DataFrame,
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
+    is_qa_run: bool,
+) -> None:
+    """Save the processed data to S3.
+
+    Args:
+        df_by_price (pd.DataFrame): The DataFrame containing price data.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching
+        such as client key, channel, and attribute name.
+        date_range (DateRange): The date range for fetching the data.
+        is_qa_run (bool): Flag indicating if the script is running in QA environment.
+
+    Returns:
+        None
+    """
+    file_name_suffix = "_qa" if is_qa_run else ""
+    file_name = (
+        f"df_by_price_{data_fetch_params.client_key}_{data_fetch_params.channel}_"
+        f"{date_range.end_date}{file_name_suffix}.parquet"
+    )
+
+    s3io.write_dataframe_to_s3(
+        file_name=file_name,
+        xdf=df_by_price,
+        s3_dir=app_state.s3_eval_results_dir,
+    )
+
+
 def read_and_preprocess(
-    client_key: str,
-    channel: str,
-    read_from_datalake: bool,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    uids_to_filter: Optional[list] = None,
+    data_fetch_params: DataFetchParameters,
+    date_range: Optional[DateRange] = None,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
 ) -> Tuple[
@@ -44,272 +111,199 @@ def read_and_preprocess(
     Optional[pd.DataFrame],
     Optional[int],
 ]:
-    """Reads and preprocesses the DataFrame.
+    """Reads and preprocesses data, handling errors and logging information throughout the process.
 
     Args:
-        client_key (str): Client key for data retrieval.
-        channel (str): Channel identifier.
-        read_from_datalake (bool): True if query from elasticity_datalake.sql.
-        start_date (str, optional): Start date for data retrieval. Defaults to None.
-        end_date (str, optional): End date for data retrieval. Defaults to None.
-        uids_to_filter (list, optional): UID filter for data retrieval. Defaults to None.
-        preprocessing_parameters (PreprocessingParameters, optional): Preprocessing parameters.
-        Defaults to PreprocessingParameters().
-        data_columns (DataColumns, optional): Data columns configuration. Defaults to DataColumns().
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
+        date_range (Optional[DateRange]): Date range for filtering data.
+        preprocessing_parameters (Optional[PreprocessingParameters]): Parameters for preprocessing.
+        data_columns (Optional[DataColumns]): Configuration of data columns.
 
     Returns:
-        tuple: A tuple containing:
-            - df_by_price (pd.DataFrame): DataFrame grouped by price.
-            - df (pd.DataFrame): Original DataFrame.
-            - total_uid (int): Total number of unique IDs.
-            - df_revenue_uid (pd.DataFrame): DataFrame containing revenue and UID.
-            - total_revenue (int): Total revenue.
-            Returns None for these values in case of error.
+        Tuple: Processed data and statistics.
     """
-    # Initialize default parameters if not provided
-    if preprocessing_parameters is None:
-        preprocessing_parameters = PreprocessingParameters()
-    if data_columns is None:
-        data_columns = DataColumns()
+    preprocessing_parameters = preprocessing_parameters or PreprocessingParameters()
+    data_columns = data_columns or DataColumns()
 
     try:
-        # Initialize dates and validate formats
-        start_date, end_date = initialize_dates(start_date, end_date)
-        logging.info(f"start_date: {start_date}")
-        logging.info(f"end_date: {end_date}")
+        date_range = initialize_dates(date_range=date_range)
+        logging.info(f"Start date: {date_range.start_date}, End date: {date_range.end_date}")
 
-        # Data retrieval with error handling
-        try:
-            raw_df, total_uid, df_revenue_uid, total_revenue = progressive_monthly_aggregate(
-                client_key=client_key,
-                channel=channel,
-                read_from_datalake=read_from_datalake,
-                start_date=start_date,
-                end_date=end_date,
-                uids_to_filter=uids_to_filter,
-                preprocessing_parameters=preprocessing_parameters,
-                data_columns=data_columns,
-            )
-            # Add the last price and date by uid
-            last_values_df = calculate_last_values(raw_df, data_columns)
-        except Exception as e:
-            logging.error(f"Error fetching data: {e}")
+        raw_df, total_uid, df_revenue_uid, total_revenue = fetch_data(
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            preprocessing_parameters=preprocessing_parameters,
+            data_columns=data_columns,
+        )
+        if raw_df is None:
             return None, None, None, None, None
 
-        # Data preprocessing
-        try:
-            df_by_price = preprocess_by_price(raw_df, data_columns=data_columns)
-            # add last price and date
-            df_by_price = df_by_price.merge(last_values_df, on=[data_columns.uid], how="left")
-            logging.info(f"Number of unique UID : {df_by_price.uid.nunique()}")
-            # df_by_price = df_by_price[df_by_price[data_columns.quantity] >
-            # preprocessing_parameters.avg_daily_sales]
-            # uid_ok = (df_by_price.groupby('uid').units.count()[df_by_price.groupby('uid').
-            # units.count()>5]).index.tolist()
-            # df_by_price = df_by_price[df_by_price.uid.isin(uid_ok)]
-            # logging.info(f"Number of unique UID after filter avg_daily_sales :
-            # {df_by_price.uid.nunique()}")
-            outliers_count = df_by_price[df_by_price["outlier_quantity"]].uid.nunique()
-            logging.info(f"Number of uid with outliers: {outliers_count}")
-        except Exception as e:
-            logging.error(f"Error during preprocessing by price: {e}")
-            return None, raw_df, total_uid, df_revenue_uid, total_revenue
-
-        logging.info(f"start_date: {start_date}")
-        logging.info(f"end_date: {end_date}")
-        logging.info(f"Total number of uid: {total_uid}")
-        logging.info(f"total_revenue: {total_revenue}")
+        df_by_price = preprocess_data(raw_df=raw_df, data_columns=data_columns)
 
         return df_by_price, raw_df, total_uid, df_revenue_uid, total_revenue
 
-    except ValueError as e:
-        logging.error(f"ValueError: {e}")
+    except ValidationError as e:
+        logging.error(f"Validation error: {e}")
         return None, None, None, None, None
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
         return None, None, None, None, None
 
 
+def fetch_data(
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
+    preprocessing_parameters: PreprocessingParameters,
+    data_columns: DataColumns,
+) -> Tuple[Optional[pd.DataFrame], Optional[int], Optional[pd.DataFrame], Optional[int]]:
+    """Handles data fetching and returns necessary components."""
+    try:
+        return progressive_monthly_aggregate(
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            preprocessing_parameters=preprocessing_parameters,
+            data_columns=data_columns,
+        )
+    except Exception as e:
+        logging.error(f"Error retrieving data: {e}")
+        return None, None, None, None
+
+
+def preprocess_data(raw_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataFrame:
+    """Preprocesses the data after fetching."""
+    try:
+        df_by_price = preprocess_by_price(input_df=raw_df, data_columns=data_columns)
+        last_values_df = calculate_last_values(input_df=raw_df, data_columns=data_columns)
+        df_by_price = df_by_price.merge(last_values_df, on=[data_columns.uid], how="left")
+        logging.info(f"Number of unique UIDs: {df_by_price[data_columns.uid].nunique()}")
+
+        outliers_count = df_by_price[df_by_price["outlier_quantity"]][data_columns.uid].nunique()
+        logging.info(f"Number of UIDs with outliers: {outliers_count}")
+
+        return df_by_price
+
+    except Exception as e:
+        logging.error(f"Error during preprocessing by price: {e}")
+        raise
+
+
 def progressive_monthly_aggregate(
-    client_key: str,
-    channel: str,
-    read_from_datalake: bool,
-    start_date: str,
-    end_date: str,
-    uids_to_filter: Optional[str] = None,
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
 ) -> Tuple[pd.DataFrame, int, pd.DataFrame, int]:
-    """Progressive aggregation of data.
-
-    Perform progressive aggregation on monthly data to identify UIDs
-    with sufficient conversions and price changes for elasticity calculation.
-
-    Starting from end_date:
-        - Read data
-        - tag outliers
-        - Save data of uids passing the min price changes and number of days with conversions
-        to approved_data and uids to approved_uids
-        - Save the other uids to rejected_data
-        - reading next month of data, concat with rejected_data and test
-        Loop until start_date to find more uid for elasticity by adding history
+    """Perform progressive aggregation on monthly data.
 
     Args:
-        client_key (str): The client key.
-        channel (str): The channel.
-        read_from_datalake (bool): True if query from elasticity_datalake.sql.
-        start_date (str): The start date in the format 'YYYY-MM-DD'.
-        end_date (str): The end date in the format 'YYYY-MM-DD'.
-        uids_to_filter (Optional[str], optional): UIDs to filter. Defaults to None.
-        preprocessing_parameters (PreprocessingParameters, optional): Preprocessing parameters.
-            Defaults to PreprocessingParameters().
-        data_columns (DataColumns, optional): Data columns configuration.
-            Defaults to DataColumns().
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
+        date_range (DateRange): The date range for fetching the data.
+        preprocessing_parameters (Optional[PreprocessingParameters]): Preprocessing parameters.
+        data_columns (Optional[DataColumns]): Configuration for data columns.
 
     Returns:
-        Tuple[pd.DataFrame, int, pd.DataFrame, int]: A tuple containing:
-            - The aggregated result dataframe.
-            - Total number of unique user IDs considered.
-            - DataFrame containing revenue information.
-            - Total revenue.
+        Tuple: Aggregated data and statistics.
     """
-    # Initialize default parameters if not provided
-    if preprocessing_parameters is None:
-        preprocessing_parameters = PreprocessingParameters()
-    if data_columns is None:
-        data_columns = DataColumns()
+    preprocessing_parameters = preprocessing_parameters or PreprocessingParameters()
+    data_columns = data_columns or DataColumns()
 
-    approved_data_list = []
-    approved_uids = []
-    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
-    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
-    dates_list = pd.date_range(start=start_date_dt, end=end_date_dt, freq="ME").strftime(
-        "%Y-%m-%d"
-    )[::-1]
+    approved_data_list, approved_uids = [], []
+    dates_list = create_date_list(date_range=date_range)
 
-    uid_col = data_columns.uid
-    qtity_col = data_columns.quantity
+    total_uid, total_revenue, df_revenue_uid = 0, 0, 0
     rejected_data = pd.DataFrame()
-    total_uid = 0
-    total_revenue = 0
-    df_revenue_uid = 0
 
     for date_month in dates_list:
-        logging.info(f"reading: {date_month}")
-
-        df_month = read_data(
-            client_key=client_key,
-            channel=channel,
-            read_from_datalake=read_from_datalake,
-            uids_to_filter=uids_to_filter,
-            data_month=date_month,
+        _, rejected_data, approved_data = process_month_data(
+            date_month=date_month,
+            data_fetch_params=data_fetch_params,
+            preprocessing_parameters=preprocessing_parameters,
+            data_columns=data_columns,
+            approved_uids=approved_uids,
+            rejected_data=rejected_data,
         )
-
-        df_month[data_columns.price] = df_month["shelf_price"].apply(round_price_effect)
+        approved_data_list.append(approved_data)
 
         if total_uid == 0:
             # Read data without filter to get all the uid
             df_revenue = read_data(
-                client_key=client_key,
-                channel=channel,
-                read_from_datalake=read_from_datalake,
-                uids_to_filter=uids_to_filter,
+                data_fetch_params=data_fetch_params,
                 data_month=date_month,
+                data_columns=data_columns,
                 filter_units=False,
             )
-            total_uid, total_revenue, df_revenue_uid = get_revenue(df_revenue, uid_col)
-
-        # filter out uid already approved
-        df_month = df_month[~df_month[uid_col].isin(approved_uids)]
-        # Concatenate df_month with rejected_data from previous months
-        data_to_test = pd.concat([df_month, rejected_data])
-
-        data_to_test["outlier_quantity"] = data_to_test.groupby(uid_col)[qtity_col].transform(
-            outliers_iqr_filtered
-        )
-
-        uid_changes = uid_with_price_changes(
-            data_to_test,
-            price_changes=preprocessing_parameters.price_changes,
-            threshold=preprocessing_parameters.threshold,
-            data_columns=data_columns,
-        )
-
-        uid_conversions = uid_with_min_conversions(
-            data_to_test,
-            min_conversions_days=preprocessing_parameters.min_conversions_days,
-            uid_col=uid_col,
-            quantity_col=qtity_col,
-        )
-        uid_intersection_change_conversions = list(set(uid_changes) & set(uid_conversions))
-        approved_uids.extend(uid_intersection_change_conversions)
-
-        approved_data = data_to_test[
-            data_to_test[uid_col].isin(uid_intersection_change_conversions)
-        ]
-        # logging.info(f"number of uid ok: {len(approved_uids)}")
-        rejected_data = data_to_test[
-            ~data_to_test[uid_col].isin(uid_intersection_change_conversions)
-        ]
-
-        approved_data_list.append(approved_data)
+            total_uid, total_revenue, df_revenue_uid = get_revenue(
+                df_revenue=df_revenue, data_columns=data_columns
+            )
 
     log_rejection_reasons(
         rejected_data=rejected_data,
-        uid_col=uid_col,
-        uid_changes=uid_changes,
-        uid_conversions=uid_conversions,
+        preprocessing_parameters=preprocessing_parameters,
+        data_columns=data_columns,
     )
 
     result_df = pd.concat(approved_data_list)
-    result_df["revenue"] = result_df["revenue"].fillna(0).astype("float32")
-    logging.info(f"Number of unique user IDs: {result_df.uid.nunique()}")
+    result_df[data_columns.revenue] = result_df[data_columns.revenue].fillna(0).astype("float32")
+    logging.info(f"Number of unique user IDs: {result_df[data_columns.uid].nunique()}")
+
     return result_df, total_uid, df_revenue_uid, total_revenue
 
 
+def process_month_data(
+    data_fetch_params: DataFetchParameters,
+    date_month: str,
+    preprocessing_parameters: PreprocessingParameters,
+    data_columns: DataColumns,
+    approved_uids: List[str],
+    rejected_data: pd.DataFrame,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Processes data for a single month, filters approved and rejected UIDs."""
+    df_month = read_data(
+        data_fetch_params=data_fetch_params, data_month=date_month, data_columns=data_columns
+    )
+
+    data_to_test = pd.concat([df_month, rejected_data])
+    data_to_test["outlier_quantity"] = data_to_test.groupby(data_columns.uid)[
+        data_columns.quantity
+    ].transform(outliers_iqr_filtered)
+
+    uid_changes, uid_conversions = get_uid_changes_and_conversions(
+        data_to_test=data_to_test,
+        preprocessing_parameters=preprocessing_parameters,
+        data_columns=data_columns,
+    )
+    approved_uids_month = list(set(uid_changes) & set(uid_conversions))
+    approved_uids.extend(approved_uids_month)
+
+    approved_data = data_to_test[data_to_test[data_columns.uid].isin(approved_uids_month)]
+    rejected_data = data_to_test[~data_to_test[data_columns.uid].isin(approved_uids_month)]
+
+    return df_month, rejected_data, approved_data
+
+
 def read_data(
-    client_key: str,
-    channel: str,
-    read_from_datalake: bool,
+    data_fetch_params: DataFetchParameters,
     data_month: str,
-    uids_to_filter: Optional[list] = None,
+    data_columns: DataColumns,
     filter_units: bool = True,
 ) -> pd.DataFrame:
-    """Read one month data. Filter out inventory 0 and negative unit. Option to filter one uids.
+    """Read one month of data. Filter out inventory <= 0 and negative units. Optionally filter UIDs.
 
     Args:
-        client_key (str): The client key.
-        channel (str): The channel.
-        read_from_datalake (bool): True if query from elasticity_datalake.sql.
-        data_month (str, optional): The month of the data in the format "YYYY-MM-DD".
-        uids_to_filter (Optional[str], optional): A list of uids to filter the data.
-        Defaults to None.
-        filter_units (bool, optional): True to get only uid with units>0.
-        Defaults to True.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching such as
+        client key, channel, and attribute name.
+        data_month (str): The month of the data in "YYYY-MM-DD" format.
+        data_columns (DataColumns): Configuration of data columns.
+        filter_units (bool): True to get only rows where units > 0 (defaults to True).
 
     Returns:
-        pd.DataFrame: The DataFrame containing the read data.
+        pd.DataFrame: The DataFrame containing the filtered data.
 
     Raises:
+        ValueError: If data_month is not a valid type.
         Exception: If there is an error reading the data.
-
     """
-    if isinstance(data_month, datetime):
-        data_month = data_month.date()
-    elif isinstance(data_month, str):
-        data_month = datetime.strptime(data_month, "%Y-%m-%d").date()
-    elif not isinstance(data_month, date):
-        raise ValueError("Input must be a string, date, or datetime object")
-
-    cs = [
-        "date",
-        "uid",
-        "shelf_price",
-        "units",
-        "price",
-        "inventory",
-    ]
-
+    data_month = parse_data_month(data_month)
     date_params = {
         "start_date": str(data_month.replace(day=1)),
         "end_date": str(
@@ -318,30 +312,32 @@ def read_data(
     }
 
     try:
-        # FOR METHOD WITH NO FILTER SET filter_units to False
         df_read = read_data_query(
-            client_key=client_key,
-            channel=channel,
-            read_from_datalake=read_from_datalake,
+            data_fetch_params=data_fetch_params,
             date_params=date_params,
             filter_units=filter_units,
+            data_columns=data_columns,
         )
-        if uids_to_filter is not None:
-            df_read = df_read[~df_read.uid.isin(uids_to_filter)]
+        df_read = filter_data_by_uids(
+            df=df_read, uids_to_filter=data_fetch_params.uids_to_filter, uid_column=data_columns.uid
+        )
+        df_read[data_columns.round_price] = df_read[data_columns.shelf_price].apply(
+            round_price_effect
+        )
+        df_read = clean_inventory_data(df_input=df_read, inventory_column=data_columns.inventory)
+        df_read = clean_quantity_data(df_input=df_read, quantity_column=data_columns.quantity)
 
-        logging.info(
-            f'Number of inventory less or equal to 0: {len(df_read[df_read["inventory"] <= 0])}'
-        )
-        df_read = df_read[(df_read["inventory"] > 0) | (df_read["inventory"].isna())].drop(
-            columns=["inventory"]
+    except Exception as e:
+        logging.error(f"No data available for {data_month.strftime('%Y-%m')}: {e!s}")
+        df_read = pd.DataFrame(
+            columns=[
+                data_columns.uid,
+                data_columns.date,
+                data_columns.shelf_price,
+                data_columns.quantity,
+                data_columns.revenue,
+                data_columns.round_price,
+            ]
         )
 
-        logging.info(f'Number of negative unit: {len(df_read[df_read["units"] < 0])}')
-        df_read["units"] = df_read["units"].fillna(0)
-        df_read = df_read[df_read["units"] >= 0]
-    except Exception:
-        year_, month_ = data_month.strftime("%Y-%m").split("-")
-        logging.error(f"No data for {year_!s}_{int(month_)!s}")
-        df_read = pd.DataFrame(columns=cs)
-        pass
     return df_read

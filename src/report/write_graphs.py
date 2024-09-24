@@ -5,14 +5,14 @@ from io import BytesIO
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from elasticity.data.configurator import DataFetchParameters
 from ql_toolkit.s3 import io_tools as s3io
 
 plt.switch_backend("agg")
 
 
 def save_distribution_graph(
-    client_key: str,
-    channel: str,
+    data_fetch_params: DataFetchParameters,
     total_uid: int,
     df_report: pd.DataFrame,
     end_date: str,
@@ -21,8 +21,7 @@ def save_distribution_graph(
     """Save a graph representing the distribution of UID with elasticity.
 
     Args:
-        client_key (str): The client key.
-        channel (str): The channel.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         total_uid (int): The total number of UID.
         df_report (pd.DataFrame): DataFrame containing the report results.
         end_date (str): The end date.
@@ -69,7 +68,7 @@ def save_distribution_graph(
 
     # Add title and labels
     title = (
-        f"{client_key}-{channel}-{total_uid} skus\n"
+        f"{data_fetch_params.client_key}-{data_fetch_params.channel}-{total_uid} skus\n"
         f"{total_uid_with_elasticity} skus with elasticity "
         f"({total_percentage_all:.1f}% from total skus, "
         f"{total_percentage_with_data:.1f}% from skus with data)"
@@ -84,7 +83,9 @@ def save_distribution_graph(
     buffer.seek(0)
 
     # Upload the plot to S3
-    file_name = f"distribution_{client_key}_{channel}_{end_date}.png"
+    file_name = (
+        f"distribution_{data_fetch_params.client_key}_{data_fetch_params.channel}_{end_date}.png"
+    )
 
     s3io.upload_to_s3(s3_dir=s3_dir, file_name=file_name, file_obj=buffer)
 

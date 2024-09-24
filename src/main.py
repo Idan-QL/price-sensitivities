@@ -11,20 +11,24 @@ from datetime import datetime
 import pandas as pd
 
 import elasticity.utils.plot_demands as plot_demands
-from elasticity.data import preprocessing
-from elasticity.data.group import data_for_group_elasticity
+from elasticity.data.configurator import DataColumns, DataFetchParameters, DateRange
+from elasticity.data.preprocessing import run_preprocessing, save_preprocess_to_s3
+
+# from elasticity.data.group import data_for_group_elasticity
 from elasticity.data.utils import initialize_dates
-from elasticity.model.group import add_group_elasticity
+from elasticity.model.group import handle_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
-from elasticity.utils.elasticity_action_list import generate_actions_list
+from elasticity.utils.elasticity_action_list import process_actions_list
 from elasticity.utils.utils import log_environment_mode
 from elasticity.utils.write import upload_elasticity_data_to_athena
-from ql_toolkit.attrs import data_classes as dc
-from ql_toolkit.attrs.write import _write_actions_list
+
+# from ql_toolkit.attrs import data_classes as dc
+# from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.runtime_env import setup
-from ql_toolkit.s3 import io_tools as s3io
+
+# from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
 
 # Configure the root logger
@@ -47,171 +51,146 @@ def setup_environment() -> tuple:
     logging.info("config_dict: %s", config_dict)
     logging.info("client_keys_map: %s", client_keys_map)
 
-    start_date, end_date = initialize_dates()
+    date_range = initialize_dates()
 
     is_local = config_dict.get("local", False)
     is_qa_run = config_dict.get("is_qa_run", False)
     log_environment_mode(is_local=is_local, is_qa_run=is_qa_run)
 
-    return (
-        client_keys_map,
-        is_local,
-        is_qa_run,
-        start_date,
-        end_date,
+    return (client_keys_map, is_local, is_qa_run, date_range)
+
+
+def log_quality_tests(df_results: pd.DataFrame) -> None:
+    """Log the results of the quality tests.
+
+    Args:
+        df_results (pd.DataFrame): The DataFrame containing experiment results.
+
+    Returns:
+        None
+    """
+    logging.info(
+        f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"
     )
+    logging.info(
+        f"Test high: {df_results[df_results.result_to_push].quality_test_high.value_counts()}"
+    )
+    logging.info(f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}")
 
 
 def process_client_channel(
-    client_key: str,
-    channel: str,
-    attr_name: str,
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
     is_local: bool,
     is_qa_run: bool,
-    read_from_datalake: bool,
-    start_date: str,
-    end_date: str,
-) -> dict:
-    """Process a client and channel and return the results.
+) -> None:
+    """Process a client and channel.
 
     Args:
-        data_report (list): List of the data report by client/channel
-        client_key (str): The client key.
-        channel (str): The channel.
-        attr_name (str): The attr_name to read from Athena.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
+        date_range (DateRange): The date range for fetching the data.
         is_local (bool): Flag indicating if the script is running locally.
         is_qa_run (bool): Flag indicating if the script is running in qa.
-        read_from_datalake (bool): True if query from elasticity_datalake.sql.
-        start_date (str): The start_date to read data.
-        end_date (str): The end_date.
 
     Returns:
         dict: The results of processing.
     """
     error_counter = logging_error.ErrorCounter()
     logging.getLogger().addHandler(error_counter)
+
+    data_columns = DataColumns()
+    logging.info(
+        f"Processing {data_fetch_params.client_key} - {data_fetch_params.channel}"
+        f"- attr: {data_fetch_params.attr_name}"
+    )
+
+    start_time = datetime.now()
     try:
-        logging.info(f"Processing {client_key} - {channel} - attr: {attr_name}")
-        start_time = datetime.now()
-
-        df_by_price, _, total_end_date_uid, df_revenue_uid, total_revenue = (
-            preprocessing.read_and_preprocess(
-                client_key=client_key,
-                channel=channel,
-                read_from_datalake=read_from_datalake,
-                start_date=start_date,
-                end_date=end_date,
-            )
+        # Step 1: Preprocessing and data loading
+        df_by_price, df_revenue_uid, total_end_date_uid, total_revenue = run_preprocessing(
+            data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
         )
 
-        if df_by_price is None:
-            raise ValueError("Error: df_by_price is None")
-
-        if df_by_price.empty:
-            raise ValueError("Error: df_by_price is Empty")
-
-        s3io.write_dataframe_to_s3(
-            file_name=f"df_by_price_{client_key}_{channel}_{end_date}.parquet",
-            xdf=df_by_price,
-            s3_dir="data_science/eval_results/elasticity/",
+        # Step 2: Save the data to S3
+        save_preprocess_to_s3(
+            df_by_price=df_by_price,
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            is_qa_run=is_qa_run,
         )
 
+        # Step 3: Run the experiment
         df_results = run_experiment_for_uids_parallel(
-            df_by_price[~df_by_price["outlier_quantity"]],
-            price_col="round_price",
-            quantity_col="units",
-            weights_col="days",
+            df_input=df_by_price[~df_by_price["outlier_quantity"]], data_columns=data_columns
         )
 
-        if attr_name:
-            logging.info(f"Running group elasticity - attr: {attr_name}")
+        # Step 4: Handle group elasticity if needed
+        df_results = handle_group_elasticity(
+            df_by_price=df_by_price,
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            df_results=df_results,
+            data_columns=data_columns,
+        )
 
-            # FOR METHOD WITH NO FILTER (KEEP IT FOR NOW)
-            # df_by_price_GROUP = df_by_price[df_by_price["units"] > 0.001]
-            # df_group = data_for_group_elasticity(
-            #     df_by_price_GROUP, client_key, channel, attr_name
-            # )
-
-            df_group = data_for_group_elasticity(
-                df_by_price=df_by_price,
-                client_key=client_key,
-                channel=channel,
-                end_date=end_date,
-                attr_name=attr_name,
-            )
-
-            df_results = add_group_elasticity(df_group, df_results)
-        else:
-            logging.info(f"Skipping group elasticity - attr: {attr_name}")
-            df_results["result_to_push"] = df_results["quality_test"]
-            df_results["type"] = "uid"
-
+        # Step 5: Merge with revenue data
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
+        log_quality_tests(df_results=df_results)
 
-        logging.info(
-            f"Quality test: {df_results[df_results.result_to_push].quality_test.value_counts()}"
-        )
-        logging.info(
-            f"Test high: {df_results[df_results.result_to_push].quality_test_high.value_counts()}"
-        )
-        logging.info(f"Type: {df_results[df_results.result_to_push]['type'].value_counts()}")
-
+        # Step 6: Action list and upload to athena
         upload_elasticity_data_to_athena(
-            client_key=client_key,
-            channel=channel,
-            end_date=end_date,
+            data_fetch_params=data_fetch_params,
+            end_date=date_range.end_date,
             df_upload=df_results,
-            table_name=app_state.models_monitoring_table_name,  # projects_kpis_table_name,
+            table_name=app_state.models_monitoring_table_name,
         )
-
-        plot_demands.run_save_graph_top10(df_results, df_by_price, client_key, channel, end_date)
-
-        actions_list = generate_actions_list(df_results, client_key, channel)
-
-        input_args = dc.WriteActionsListKWArgs(
-            client_key=client_key,
-            channel=channel,
+        process_actions_list(
+            df_results=df_results,
+            data_fetch_params=data_fetch_params,
             is_local=is_local,
-            qa_run=is_qa_run,
+            is_qa_run=is_qa_run,
         )
 
-        _write_actions_list(
-            actions_list=actions_list,
-            input_args=input_args,
+        # Step 7: Save graphs
+        plot_demands.run_save_graph_top10(
+            df_results=df_results,
+            df_by_price=df_by_price,
+            data_fetch_params=data_fetch_params,
+            end_date=date_range.end_date,
         )
 
+        # Step 8: Build and save report to Athena
         runtime_duration = (datetime.now() - start_time).total_seconds() / 60
 
         data_report = report.generate_run_report(
-            client_key=client_key,
-            channel=channel,
+            data_fetch_params=data_fetch_params,
             total_uid=total_end_date_uid,
             results_df=df_results,
             runtime_duration=runtime_duration,
             total_revenue=total_revenue,
             error_count=error_counter.error_count,
-            end_date=end_date,
+            end_date=date_range.end_date,
+        )
+
+        write_graphs.save_distribution_graph(
+            data_fetch_params=data_fetch_params,
+            total_uid=total_end_date_uid,
+            df_report=data_report,
+            end_date=date_range.end_date,
+            s3_dir=app_state.s3_eval_results_dir + "/graphs/",
         )
 
         upload_elasticity_data_to_athena(
-            client_key=client_key,
-            channel=channel,
-            end_date=end_date,
+            data_fetch_params=data_fetch_params,
+            end_date=date_range.end_date,
             df_upload=data_report,
             table_name=app_state.projects_kpis_table_name,
         )
 
-        write_graphs.save_distribution_graph(
-            client_key=client_key,
-            channel=channel,
-            total_uid=total_end_date_uid,
-            df_report=data_report,
-            end_date=end_date,
-            s3_dir=app_state.s3_eval_results_dir + "/graphs/",
-        )
-
     except (KeyError, pd.errors.EmptyDataError, ValueError) as e:
-        logging.error(f"Error processing {client_key} - {channel}: {e}")
+        logging.error(
+            f"Error processing {data_fetch_params.client_key} - {data_fetch_params.channel}: {e}"
+        )
         error_info = traceback.format_exc()
         logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")
 
@@ -220,7 +199,7 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (client_keys_map, is_local, is_qa_run, start_date, end_date) = setup_environment()
+    (client_keys_map, is_local, is_qa_run, date_range) = setup_environment()
     for client_key in client_keys_map:
 
         channels_list = client_keys_map[client_key]["channels"]
@@ -228,15 +207,18 @@ def run() -> None:
         read_from_datalake = client_keys_map[client_key].get("read_from_datalake", False)
 
         for channel in channels_list:
-            process_client_channel(
+            data_fetch_params = DataFetchParameters(
                 client_key=client_key,
                 channel=channel,
                 attr_name=attr_name,
+                read_from_datalake=read_from_datalake,
+            )
+
+            process_client_channel(
+                data_fetch_params=data_fetch_params,
+                date_range=date_range,
                 is_local=is_local,
                 is_qa_run=is_qa_run,
-                read_from_datalake=read_from_datalake,
-                start_date=start_date,
-                end_date=end_date,
             )
 
 

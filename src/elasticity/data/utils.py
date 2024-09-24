@@ -1,14 +1,114 @@
 """Module of utils."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from elasticity.data.configurator import DataColumns
+from elasticity.data.configurator import DataColumns, DateRange, PreprocessingParameters
+
+
+def parse_data_month(data_month: str) -> date:
+    """Parse the data_month input into a date object.
+
+    Args:
+        data_month (str): The month of the data in "YYYY-MM-DD" format or a date object.
+
+    Returns:
+        date: The parsed date.
+
+    Raises:
+        ValueError: If the input is not a string, date, or datetime object.
+    """
+    if isinstance(data_month, datetime):
+        return data_month.date()
+    if isinstance(data_month, str):
+        return datetime.strptime(data_month, "%Y-%m-%d").date()
+    if isinstance(data_month, date):
+        return data_month
+    raise ValueError("Input must be a string, date, or datetime object")
+
+
+def filter_data_by_uids(
+    df: pd.DataFrame, uids_to_filter: Optional[List[str]], uid_column: str
+) -> pd.DataFrame:
+    """Filter the DataFrame to exclude specific UIDs.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame.
+        uids_to_filter (Optional[List[str]]): A list of UIDs to filter out.
+        uid_column (str): The column name for UIDs in the DataFrame.
+
+    Returns:
+        pd.DataFrame: The filtered DataFrame.
+    """
+    if uids_to_filter is not None:
+        return df[~df[uid_column].isin(uids_to_filter)]
+    return df
+
+
+def clean_inventory_data(df_input: pd.DataFrame, inventory_column: str) -> pd.DataFrame:
+    """Remove rows with inventory <= 0 and drop the inventory column.
+
+    Args:
+        df_input (pd.DataFrame): The input DataFrame.
+        inventory_column (str): The column name for inventory.
+
+    Returns:
+        pd.DataFrame: The cleaned DataFrame.
+    """
+    logging.info(f"Number of inventory <= 0: {len(df_input[df_input[inventory_column] <= 0])}")
+    return df_input[(df_input[inventory_column] > 0) | (df_input[inventory_column].isna())].drop(
+        columns=[inventory_column]
+    )
+
+
+def clean_quantity_data(df_input: pd.DataFrame, quantity_column: str) -> pd.DataFrame:
+    """Filter out rows with negative quantities and fill missing values with 0.
+
+    Args:
+        df_input (pd.DataFrame): The input DataFrame.
+        quantity_column (str): The column name for units/quantity.
+
+    Returns:
+        pd.DataFrame: The cleaned DataFrame.
+    """
+    logging.info(f"Number of negative units: {len(df_input[df_input[quantity_column] < 0])}")
+    df_input[quantity_column] = df_input[quantity_column].fillna(0)
+    return df_input[df_input[quantity_column] >= 0]
+
+
+def get_uid_changes_and_conversions(
+    data_to_test: pd.DataFrame,
+    preprocessing_parameters: PreprocessingParameters,
+    data_columns: DataColumns,
+) -> Tuple[List[str], List[str]]:
+    """Identifies UIDs with price changes and sufficient conversions."""
+    uid_changes = uid_with_price_changes(
+        input_df=data_to_test,
+        price_changes=preprocessing_parameters.price_changes,
+        threshold=preprocessing_parameters.threshold,
+        data_columns=data_columns,
+    )
+
+    uid_conversions = uid_with_min_conversions(
+        input_df=data_to_test,
+        min_conversions_days=preprocessing_parameters.min_conversions_days,
+        uid_col=data_columns.uid,
+        quantity_col=data_columns.quantity,
+    )
+
+    return uid_changes, uid_conversions
+
+
+def create_date_list(date_range: DateRange) -> List[str]:
+    """Creates a list of dates to iterate over."""
+    start_date_dt = datetime.strptime(date_range.start_date, "%Y-%m-%d").date()
+    end_date_dt = datetime.strptime(date_range.end_date, "%Y-%m-%d").date()
+    return pd.date_range(start=start_date_dt, end=end_date_dt, freq="ME").strftime("%Y-%m-%d")[::-1]
 
 
 def get_rejection_reason(uid: str, uid_changes: List[str], uid_conversions: List[str]) -> str:
@@ -32,25 +132,34 @@ def get_rejection_reason(uid: str, uid_changes: List[str], uid_conversions: List
 
 
 def log_rejection_reasons(
-    rejected_data: pd.DataFrame, uid_col: str, uid_changes: List[str], uid_conversions: List[str]
+    rejected_data: pd.DataFrame,
+    preprocessing_parameters: PreprocessingParameters,
+    data_columns: DataColumns,
 ) -> None:
     """Log the rejection reasons for UIDs that do not meet the required criteria.
 
     Args:
         rejected_data (pd.DataFrame): DataFrame containing the rejected UIDs.
-        uid_col (str): The column name for the UID.
-        uid_changes (List[str]): List of UIDs with sufficient changes.
-        uid_conversions (List[str]): List of UIDs with sufficient conversions.
+        preprocessing_parameters (PreprocessingParameters): parameters used for
+        preprocessing data.
+        data_columns (DataColumns): An instance of the DataColumns class.
     """
-    rejected_uids = rejected_data[uid_col].unique()
+    rejected_uids = rejected_data[data_columns.uid].unique()
 
     # Check if there are any rejected UIDs
     if len(rejected_uids) == 0:
         logging.info("No rejected UIDs found.")
         return
 
-    rejected_uids_df = pd.DataFrame(rejected_uids, columns=[uid_col])
-    rejected_uids_df["reason"] = rejected_uids_df[uid_col].apply(
+    rejected_uids_df = pd.DataFrame(rejected_uids, columns=[data_columns.uid])
+
+    uid_changes, uid_conversions = get_uid_changes_and_conversions(
+        data_to_test=rejected_data,
+        preprocessing_parameters=preprocessing_parameters,
+        data_columns=data_columns,
+    )
+
+    rejected_uids_df["reason"] = rejected_uids_df[data_columns.uid].apply(
         lambda uid: get_rejection_reason(uid, uid_changes, uid_conversions)
     )
 
@@ -155,22 +264,24 @@ def calculate_last_values(input_df: pd.DataFrame, data_columns: DataColumns) -> 
 
     # Merge back to get the last price corresponding to the last date for each uid
     last_values_df = last_values_df.merge(
-        input_df[[data_columns.uid, data_columns.date, data_columns.price]],
+        input_df[[data_columns.uid, data_columns.date, data_columns.shelf_price]],
         on=[data_columns.uid, data_columns.date],
         how="left",
     )
 
     return last_values_df.rename(
-        columns={data_columns.price: "last_price", data_columns.date: "last_date"}
+        columns={data_columns.shelf_price: "last_price", data_columns.date: "last_date"}
     )
 
 
-def get_revenue(df_revenue: pd.DataFrame, uid_col: str) -> Tuple[int, float, pd.DataFrame]:
+def get_revenue(
+    df_revenue: pd.DataFrame, data_columns: DataColumns
+) -> Tuple[int, float, pd.DataFrame]:
     """Calculate the revenue and revenue percentage by uid.
 
     Args:
         df_revenue (pandas.DataFrame): The input dataframe containing the revenue data.
-        uid_col (str): The name of the column representing the unique identifier.
+        data_columns (DataColumns): An instance of the DataColumns class.
 
     Returns:
         tuple: A tuple containing:
@@ -179,16 +290,17 @@ def get_revenue(df_revenue: pd.DataFrame, uid_col: str) -> Tuple[int, float, pd.
             - df_revenue_uid (Optional[pd.DataFrame]): A dataframe with the revenue and
             revenue percentage for each unique identifier.
     """
-    total_uid = df_revenue[uid_col].nunique()
+    total_uid = df_revenue[data_columns.uid].nunique()
 
-    df_revenue["revenue"] = df_revenue["shelf_price"] * df_revenue["units"]
-    total_revenue = df_revenue["revenue"].sum()
+    # df_revenue[data_columns.revenue] = df_revenue[data_columns.shelf_price] *
+    # df_revenue[data_columns.quantity]
+    total_revenue = df_revenue[data_columns.revenue].sum()
 
-    df_revenue_uid = df_revenue.groupby(uid_col)["revenue"].sum().reset_index()
-    df_revenue_uid["revenue"] = df_revenue_uid["revenue"].astype("float32")
-    df_revenue_uid["revenue_percentage"] = (df_revenue_uid["revenue"] / total_revenue).astype(
-        "float32"
-    )
+    df_revenue_uid = df_revenue.groupby(data_columns.uid)[data_columns.revenue].sum().reset_index()
+    df_revenue_uid[data_columns.revenue] = df_revenue_uid[data_columns.revenue].astype("float32")
+    df_revenue_uid["revenue_percentage"] = (
+        df_revenue_uid[data_columns.revenue] / total_revenue
+    ).astype("float32")
 
     logging.info(f"Total uid: {total_uid}")
     return total_uid, total_revenue, df_revenue_uid
@@ -265,7 +377,7 @@ def preprocess_by_price(
     if data_columns is None:
         data_columns = DataColumns()
     uid_col = data_columns.uid
-    price_col = data_columns.price
+    price_col = data_columns.round_price
     quantity_col = data_columns.quantity
     date_col = data_columns.date
 
@@ -310,7 +422,7 @@ def uid_with_price_changes(
     if data_columns is None:
         data_columns = DataColumns()
     uid_col = data_columns.uid
-    price_col = data_columns.price
+    price_col = data_columns.round_price
 
     # Preprocess data
     df_by_price = preprocess_by_price(input_df=input_df, data_columns=data_columns)
@@ -416,44 +528,38 @@ def uid_with_min_conversions(
 
 
 def initialize_dates(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> Tuple[str, str]:
-    """Initializes the start and end dates for data processing.
+    date_range: Optional[DateRange] = None,
+) -> DateRange:
+    """Initializes the start and end dates for data processing, with an optional DateRange.
 
     Args:
-        start_date (str, optional): The start date in the format 'YYYY-MM-DD'.
-        Defaults to None.
-        end_date (str, optional): The end date in the format 'YYYY-MM-DD'.
-        Defaults to None.
+        date_range (DateRange, optional): Optional DateRange object with start and end dates.
 
     Returns:
-        tuple: A tuple containing the initialized start date and end date.
+        DateRange: A DateRange object containing the initialized start date and end date.
 
-    If either start_date or end_date is None, the function calculates the default
-    values based on the current date.
-    The default end_date is two days ago, with the day set to the first day of
-    the previous month.
+    If date_range is not provided, the function calculates default values based on the current date.
+    The default end_date is the last day of the previous month.
     The default start_date is 11 months before the end_date.
-
-    Example:
-        start_date, end_date = initialize_dates()
-        print(start_date, end_date)
-        # Output: '2021-01-01', '2021-12-01'
     """
-    if end_date is None:
-        end_date = datetime.now().replace(day=1) - relativedelta(days=1)
-        end_date = str(end_date.strftime("%Y-%m-%d"))
+    if date_range:
+        logging.info(
+            f"Using provided date_range: start_date={date_range.start_date},"
+            f"end_date={date_range.end_date}"
+        )
+        return date_range
+    # Calculate default end_date (last day of the previous month)
+    end_date = datetime.now().replace(day=1) - relativedelta(days=1)
+    end_date_str = str(end_date.strftime("%Y-%m-%d"))
 
-    if start_date is None:
-        end_date_dt = datetime.strptime(end_date, "%Y-%m-%d")
-        start_date_dt = end_date_dt - relativedelta(months=11)
-        start_date = str(start_date_dt.strftime("%Y-%m-%d"))
+    # Calculate default start_date (11 months before the end_date)
+    start_date_dt = end_date - relativedelta(months=11)
+    start_date_str = str(start_date_dt.strftime("%Y-%m-%d"))
 
-    logging.info(f"start_date: {start_date}")
-    logging.info(f"end_date: {end_date}")
+    logging.info(f"Calculated default start_date: {start_date_str}")
+    logging.info(f"Calculated default end_date: {end_date_str}")
 
-    return start_date, end_date
+    return DateRange(start_date=start_date_str, end_date=end_date_str)
 
 
 # TODO: REFACTOR

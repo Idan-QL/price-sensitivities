@@ -7,6 +7,7 @@ from typing import Tuple
 import numpy as np
 import pandas as pd
 
+from elasticity.data.configurator import DataColumns
 from elasticity.model.cross_validation import cross_validation
 from elasticity.model.model import estimate_coefficients
 from elasticity.utils.consts import (
@@ -21,12 +22,7 @@ from elasticity.utils.consts import (
 
 
 def run_model_type(
-    data: pd.DataFrame,
-    model_type: str,
-    test_size: float,
-    price_col: str,
-    quantity_col: str,
-    weights_col: str,
+    data: pd.DataFrame, model_type: str, test_size: float, data_columns: DataColumns
 ) -> Tuple[dict, float, float]:
     """Calculate cross-validation and regression results.
 
@@ -34,9 +30,7 @@ def run_model_type(
         data (pd.DataFrame): The input data.
         model_type (str): The type of model to run.
         test_size (float): The proportion of the dataset to include in the test split.
-        price_col (str): The name of the column containing the prices.
-        quantity_col (str): The name of the column containing the quantities.
-        weights_col (str): The name of the column containing the weights.
+        data_columns (DataColumns): Configuration for data columns.
 
     Returns:
         dict: A dictionary containing the calculated results.
@@ -47,18 +41,14 @@ def run_model_type(
         ValueError: If there is an error.
     """
     results = {}
-    median_price = data[price_col].median()
-    median_quantity = data[quantity_col].median()
+    median_price = data[data_columns.round_price].median()
+    median_quantity = data[data_columns.quantity].median()
     try:
         cv_result = cross_validation(
-            data, model_type, test_size, price_col, quantity_col, weights_col
+            data=data, model_type=model_type, test_size=test_size, data_columns=data_columns
         )
         estimation_result = estimate_coefficients(
-            data,
-            model_type,
-            price_col=price_col,
-            quantity_col=quantity_col,
-            weights_col=weights_col,
+            data=data, model_type=model_type, data_columns=data_columns
         )
         # Store the results in a dictionary
         for suffix in CV_SUFFIXES_CS:
@@ -199,10 +189,8 @@ def make_details(is_quality_test_passed: bool, is_high_quality_test_passed: bool
 # TO DO REVIEW QUALITY TEST
 def run_experiment(
     data: pd.DataFrame,
+    data_columns: DataColumns,
     test_size: float = 0.1,
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
     max_pvalue: float = 0.05,
     threshold_best_model_cv_or_refit: int = 7,
     quality_test_error_col: str = "best_relative_absolute_error",
@@ -217,11 +205,9 @@ def run_experiment(
 
     Args:
         data (pd.DataFrame): DataFrame containing the dataset.
+        data_columns (DataColumns): Configuration for data columns.
         test_size (float, optional): Proportion of the dataset to include in the test split.
         Defaults to 0.1.
-        price_col (str, optional): Column name for prices. Defaults to "price".
-        quantity_col (str, optional): Column name for quantities. Defaults to "quantity".
-        weights_col (str, optional): Column name for weights. Defaults to "days".
         max_pvalue (float, optional): Maximum p-value for model acceptance. Defaults to 0.05.
         threshold_best_model_cv_or_refit (int, optional): threshold to choose best model from
         cv test score or refit. Defaults to 7.
@@ -261,7 +247,7 @@ def run_experiment(
 
     for model_type in MODEL_TYPES:
         model_results, median_quantity, median_price = run_model_type(
-            data, model_type, test_size, price_col, quantity_col, weights_col
+            data=data, model_type=model_type, test_size=test_size, data_columns=data_columns
         )
 
         if len(data) > threshold_best_model_cv_or_refit:
@@ -327,120 +313,82 @@ def run_experiment(
 def run_experiment_for_uid(
     uid: str,
     data: pd.DataFrame,
+    data_columns: DataColumns,
     test_size: float = 0.1,
-    uid_col: str = "uid",
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
 ) -> pd.DataFrame:
     """Run experiment for a specific user ID.
 
     Args:
         uid (str): The user ID for which the experiment is run.
         data (pd.DataFrame): The input data containing the user's data.
+        data_columns (DataColumns): Configuration for data columns.
         test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
-        uid_col (str, optional): The name of the column containing the uid.
-        Defaults to "uid".
-        price_col (str, optional): The column name for the price data. Defaults to "price".
-        quantity_col (str, optional): The column name for the quantity data. Defaults to "quantity".
-        weights_col (str, optional): The column name for the weights data. Defaults to "days".
 
     Returns:
         pd.DataFrame: The results of the experiment for the specified user ID.
     """
-    subset_data = data[data[uid_col] == uid]
+    subset_data = data[data[data_columns.uid] == uid]
     try:
         results_df = run_experiment(
             data=subset_data,
+            data_columns=data_columns,
             test_size=test_size,
-            price_col=price_col,
-            quantity_col=quantity_col,
-            weights_col=weights_col,
         )
     except Exception as e:
         logging.info(f"Error for UID {uid}: {e}")
 
         results_df = pd.DataFrame(np.nan, index=[0], columns=OUTPUT_CS)
-    results_df[uid_col] = uid
+    results_df[data_columns.uid] = uid
     return results_df
 
 
 def run_experiment_for_uids_parallel(
-    df_input: pd.DataFrame,
-    test_size: float = 0.1,
-    uid_col: str = "uid",
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
+    df_input: pd.DataFrame, data_columns: DataColumns, test_size: float = 0.1
 ) -> pd.DataFrame:
     """Run experiment for multiple UID in parallel.
 
     Args:
         df_input (pd.DataFrame): The input DataFrame containing the data.
+        data_columns (DataColumns): Configuration for data columns.
         test_size (float, optional): The proportion of the data to use for testing. Defaults to 0.1.
-        uid_col (str, optional): The name of the column containing the uid.
-        Defaults to "uid".
-        price_col (str, optional): The name of the column containing the price data.
-        Defaults to "price".
-        quantity_col (str, optional): The name of the column containing the quantity data.
-        Defaults to "quantity".
-        weights_col (str, optional): The name of the column containing the weights data.
-        Defaults to "days".
 
     Returns:
         pd.DataFrame: The concatenated DataFrame containing the results of the experiments
         for each user ID.
     """
     # Delete rows with price equal to zero
-    df_input = df_input[df_input[price_col] != 0]
-    unique_uids = df_input[uid_col].unique()
+    df_input = df_input[df_input[data_columns.round_price] != 0]
+    unique_uids = df_input[data_columns.uid].unique()
     total_cores = multiprocessing.cpu_count()
-    pool = multiprocessing.Pool((total_cores - 1))
-    results_list = pool.starmap(
-        run_experiment_for_uid,
-        [
-            (uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col)
-            for uid in unique_uids
-        ],
-    )
-    pool.close()
-    pool.join()
+    with multiprocessing.Pool(total_cores - 1) as pool:
+        results_list = pool.starmap(
+            run_experiment_for_uid,
+            [(uid, df_input, data_columns, test_size) for uid in unique_uids],
+        )
     return pd.concat(results_list)
 
 
 def run_experiment_for_uids_not_parallel(
-    df_input: pd.DataFrame,
-    test_size: float = 0.1,
-    uid_col: str = "uid",
-    price_col: str = "price",
-    quantity_col: str = "quantity",
-    weights_col: str = "days",
+    df_input: pd.DataFrame, data_columns: DataColumns, test_size: float = 0.1
 ) -> pd.DataFrame:
     """Run experiment for multiple user IDs (not in parallel).
 
     Args:
         df_input (pd.DataFrame): The input DataFrame containing the data.
+        data_columns (DataColumns): Configuration for data columns.
         test_size (float, optional): The proportion of the data to use for testing.
         Defaults to 0.1.
-        uid_col (str, optional): The name of the column containing the uid.
-        Defaults to "uid".
-        price_col (str, optional): The name of the column containing the price data.
-        Defaults to "price".
-        quantity_col (str, optional): The name of the column containing the quantity data.
-        Defaults to "quantity".
-        weights_col (str, optional): The name of the column containing the weights data.
-        Defaults to "days".
 
     Returns:
         pd.DataFrame: The concatenated DataFrame of results for each user ID.
     """
     # Delete rows with price equal to zero
-    df_input = df_input[df_input[price_col] != 0]
+    df_input = df_input[df_input[data_columns.round_price] != 0]
     results_list = []
-    unique_uids = df_input[uid_col].unique()
+    unique_uids = df_input[data_columns.uid].unique()
     for uid in unique_uids:
         results_df = run_experiment_for_uid(
-            uid, df_input, test_size, uid_col, price_col, quantity_col, weights_col
+            uid=uid, data=df_input, data_columns=data_columns, test_size=test_size
         )
         results_list.append(results_df)
     return pd.concat(results_list)

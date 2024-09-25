@@ -380,10 +380,21 @@ def preprocess_by_price(
     price_col = data_columns.round_price
     quantity_col = data_columns.quantity
     date_col = data_columns.date
+    avg_competitors_price_col = data_columns.avg_competitors_price
+    min_competitors_price_col = data_columns.min_competitors_price
+    max_competitors_price_col = data_columns.max_competitors_price
 
     df_by_price_norm = (
         input_df.groupby([uid_col, price_col, "outlier_quantity"])
-        .agg({quantity_col: "mean", date_col: "count"})
+        .agg(
+            {
+                quantity_col: "mean",
+                avg_competitors_price_col: "mean",
+                min_competitors_price_col: "mean",
+                max_competitors_price_col: "mean",
+                date_col: "count",
+            }
+        )
         .reset_index()
         .sort_values(by=[uid_col, price_col])
         .rename(columns={date_col: data_columns.weight})

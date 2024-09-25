@@ -16,6 +16,7 @@ from elasticity.data.preprocessing import run_preprocessing, save_preprocess_to_
 
 # from elasticity.data.group import data_for_group_elasticity
 from elasticity.data.utils import initialize_dates
+from elasticity.model.competitors import calculate_residuals_with_report
 from elasticity.model.group import handle_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
@@ -84,7 +85,7 @@ def process_client_channel(
     is_local: bool,
     is_qa_run: bool,
 ) -> None:
-    """Process a client and channel.
+    """Process client and channel data.Preprocessing, running experiments, and uploading results.
 
     Args:
         data_fetch_params (DataFetchParameters): Parameters related to data fetching.
@@ -136,6 +137,35 @@ def process_client_channel(
         # Step 5: Merge with revenue data
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
         log_quality_tests(df_results=df_results)
+
+        # model with competitors
+        run_competitors = True
+        if run_competitors:
+            df_by_price_with_residuals, report_df = calculate_residuals_with_report(
+                df_by_price=df_by_price, data_columns=data_columns, p_value_threshold=0.05
+            )
+
+            print(report_df.describe())
+            df_results_competitors = run_experiment_for_uids_parallel(
+                df_input=df_by_price_with_residuals[
+                    ~df_by_price_with_residuals["outlier_quantity"]
+                ],
+                data_columns=data_columns,
+            )
+
+            # Step 4: Handle group elasticity if needed
+            df_results_competitors = handle_group_elasticity(
+                df_by_price=df_by_price_with_residuals,
+                data_fetch_params=data_fetch_params,
+                date_range=date_range,
+                df_results=df_results_competitors,
+                data_columns=data_columns,
+            )
+            # Step 5: Merge with revenue data
+            df_results_competitors = df_results_competitors.merge(
+                df_revenue_uid, on="uid", how="left"
+            )
+            log_quality_tests(df_results=df_results_competitors)
 
         # Step 6: Action list and upload to athena
         upload_elasticity_data_to_athena(

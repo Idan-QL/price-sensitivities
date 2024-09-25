@@ -45,6 +45,19 @@ class DataColumns(BaseModel):
     date: Optional[str] = Field("date", description="The column name for the date")
     weight: Optional[str] = Field("days", description="The column name for the weight")
     inventory: Optional[str] = Field("inventory", description="The column name for the inventory")
+    avg_competitors_price: Optional[str] = Field(
+        "avg_competitors_price", description="The column name for the avg competitors price"
+    )
+    min_competitors_price: Optional[str] = Field(
+        "min__competitors_price", description="The column name for the min competitors price"
+    )
+    max_competitors_price: Optional[str] = Field(
+        "max_competitors_price", description="The column name for the max competitors price"
+    )
+    quantity_adjusted: Optional[str] = Field(
+        "quantity_adjusted",
+        description="The column name for the quantity_adjusted from residual of competitors model",
+    )
     outlier_quantity: Optional[str] = Field(
         "outlier_quantity", description="The column name for the outlier_quantity"
     )

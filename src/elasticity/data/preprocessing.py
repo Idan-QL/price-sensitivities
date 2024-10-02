@@ -40,7 +40,10 @@ warnings.filterwarnings(
 
 
 def run_preprocessing(
-    data_fetch_params: DataFetchParameters, date_range: DateRange, data_columns: DataColumns
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
+    data_columns: DataColumns,
+    csv_path: Optional[str] = None,
 ) -> tuple:
     """Preprocess and load the required data.
 
@@ -50,6 +53,7 @@ def run_preprocessing(
         date_range (DateRange): The date range for fetching the data.
         data_columns (DataColumns): Configuration for column mappings used in the
         preprocessing step.
+        csv_path (Optional[str]): Path to a CSV file. If provided, reads data from CSV instead.
 
     Returns:
         tuple: A tuple containing:
@@ -59,7 +63,10 @@ def run_preprocessing(
             - total_revenue (float): The total revenue calculated from the data.
     """
     df_by_price, _, total_end_date_uid, df_revenue_uid, total_revenue = read_and_preprocess(
-        data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+        data_fetch_params=data_fetch_params,
+        date_range=date_range,
+        data_columns=data_columns,
+        csv_path=csv_path,
     )
 
     if df_by_price is None or df_by_price.empty:
@@ -104,6 +111,7 @@ def read_and_preprocess(
     date_range: Optional[DateRange] = None,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
+    csv_path: Optional[str] = None,
 ) -> Tuple[
     Optional[pd.DataFrame],
     Optional[pd.DataFrame],
@@ -118,6 +126,7 @@ def read_and_preprocess(
         date_range (Optional[DateRange]): Date range for filtering data.
         preprocessing_parameters (Optional[PreprocessingParameters]): Parameters for preprocessing.
         data_columns (Optional[DataColumns]): Configuration of data columns.
+        csv_path (Optional[str]): Path to a CSV file. If provided, reads data from CSV instead.
 
     Returns:
         Tuple: Processed data and statistics.
@@ -134,6 +143,7 @@ def read_and_preprocess(
             date_range=date_range,
             preprocessing_parameters=preprocessing_parameters,
             data_columns=data_columns,
+            csv_path=csv_path,
         )
         if raw_df is None:
             return None, None, None, None, None
@@ -155,6 +165,7 @@ def fetch_data(
     date_range: DateRange,
     preprocessing_parameters: PreprocessingParameters,
     data_columns: DataColumns,
+    csv_path: Optional[str] = None,
 ) -> Tuple[Optional[pd.DataFrame], Optional[int], Optional[pd.DataFrame], Optional[int]]:
     """Handles data fetching and returns necessary components."""
     try:
@@ -163,6 +174,7 @@ def fetch_data(
             date_range=date_range,
             preprocessing_parameters=preprocessing_parameters,
             data_columns=data_columns,
+            csv_path=csv_path,
         )
     except Exception as e:
         logging.error(f"Error retrieving data: {e}")
@@ -192,6 +204,7 @@ def progressive_monthly_aggregate(
     date_range: DateRange,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
+    csv_path: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, int, pd.DataFrame, int]:
     """Perform progressive aggregation on monthly data.
 
@@ -200,6 +213,7 @@ def progressive_monthly_aggregate(
         date_range (DateRange): The date range for fetching the data.
         preprocessing_parameters (Optional[PreprocessingParameters]): Preprocessing parameters.
         data_columns (Optional[DataColumns]): Configuration for data columns.
+        csv_path (Optional[str]): Path to a CSV file. If provided, reads data from CSV instead.
 
     Returns:
         Tuple: Aggregated data and statistics.
@@ -221,6 +235,7 @@ def progressive_monthly_aggregate(
             data_columns=data_columns,
             approved_uids=approved_uids,
             rejected_data=rejected_data,
+            csv_path=csv_path,
         )
         approved_data_list.append(approved_data)
 
@@ -231,6 +246,7 @@ def progressive_monthly_aggregate(
                 data_month=date_month,
                 data_columns=data_columns,
                 filter_units=False,
+                csv_path=csv_path,
             )
             total_uid, total_revenue, df_revenue_uid = get_revenue(
                 df_revenue=df_revenue, data_columns=data_columns
@@ -256,10 +272,14 @@ def process_month_data(
     data_columns: DataColumns,
     approved_uids: List[str],
     rejected_data: pd.DataFrame,
+    csv_path: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Processes data for a single month, filters approved and rejected UIDs."""
     df_month = read_data(
-        data_fetch_params=data_fetch_params, data_month=date_month, data_columns=data_columns
+        data_fetch_params=data_fetch_params,
+        data_month=date_month,
+        data_columns=data_columns,
+        csv_path=csv_path,
     )
 
     data_to_test = pd.concat([df_month, rejected_data])
@@ -286,6 +306,7 @@ def read_data(
     data_month: str,
     data_columns: DataColumns,
     filter_units: bool = True,
+    csv_path: Optional[str] = None,
 ) -> pd.DataFrame:
     """Read one month of data. Filter out inventory <= 0 and negative units. Optionally filter UIDs.
 
@@ -295,6 +316,7 @@ def read_data(
         data_month (str): The month of the data in "YYYY-MM-DD" format.
         data_columns (DataColumns): Configuration of data columns.
         filter_units (bool): True to get only rows where units > 0 (defaults to True).
+        csv_path (Optional[str]): Path to a CSV file. If provided, reads data from CSV instead.
 
     Returns:
         pd.DataFrame: The DataFrame containing the filtered data.
@@ -312,12 +334,19 @@ def read_data(
     }
 
     try:
-        df_read = read_data_query(
-            data_fetch_params=data_fetch_params,
-            date_params=date_params,
-            filter_units=filter_units,
-            data_columns=data_columns,
-        )
+        if csv_path:
+            df_read = pd.read_csv(csv_path, parse_dates=[data_columns.date])
+            df_read = df_read[
+                (df_read[data_columns.date] >= date_params["start_date"])
+                & (df_read[data_columns.date] <= date_params["end_date"])
+            ]
+        else:
+            df_read = read_data_query(
+                data_fetch_params=data_fetch_params,
+                date_params=date_params,
+                filter_units=filter_units,
+                data_columns=data_columns,
+            )
         df_read = filter_data_by_uids(
             df=df_read, uids_to_filter=data_fetch_params.uids_to_filter, uid_column=data_columns.uid
         )

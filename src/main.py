@@ -7,6 +7,7 @@ Run with `python src/main.py -d us -c config_qa -p elasticity` from the project 
 import logging
 import traceback
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 
@@ -83,6 +84,7 @@ def process_client_channel(
     date_range: DateRange,
     is_local: bool,
     is_qa_run: bool,
+    csv_path: Optional[str] = None,
 ) -> None:
     """Process a client and channel.
 
@@ -91,6 +93,7 @@ def process_client_channel(
         date_range (DateRange): The date range for fetching the data.
         is_local (bool): Flag indicating if the script is running locally.
         is_qa_run (bool): Flag indicating if the script is running in qa.
+        csv_path (Optional[str]): Path to a CSV file. If provided, reads data from CSV instead.
 
     Returns:
         dict: The results of processing.
@@ -108,7 +111,10 @@ def process_client_channel(
     try:
         # Step 1: Preprocessing and data loading
         df_by_price, df_revenue_uid, total_end_date_uid, total_revenue = run_preprocessing(
-            data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            data_columns=data_columns,
+            csv_path=csv_path,
         )
 
         # Step 2: Save the data to S3

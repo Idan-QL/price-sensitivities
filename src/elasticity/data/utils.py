@@ -66,6 +66,25 @@ def clean_inventory_data(df_input: pd.DataFrame, inventory_column: str) -> pd.Da
     )
 
 
+def clean_shelf_price_data(df_input: pd.DataFrame, shelf_price_column: str) -> pd.DataFrame:
+    """Remove rows with NaN, negative, or zero shelf price and drop the shelf price column.
+
+    Args:
+        df_input (pd.DataFrame): The input DataFrame.
+        shelf_price_column (str): The column name for shelf price.
+
+    Returns:
+        pd.DataFrame: The cleaned DataFrame.
+    """
+    # Logging the number of rows with invalid shelf price values
+    num_invalid_prices = len(
+        df_input[(df_input[shelf_price_column].isna()) | (df_input[shelf_price_column] <= 0)]
+    )
+    logging.info(f"Number of rows with NaN, negative, or zero shelf price: {num_invalid_prices}")
+
+    return df_input[df_input[shelf_price_column].notna() & (df_input[shelf_price_column] > 0)]
+
+
 def clean_quantity_data(df_input: pd.DataFrame, quantity_column: str) -> pd.DataFrame:
     """Filter out rows with negative quantities and fill missing values with 0.
 

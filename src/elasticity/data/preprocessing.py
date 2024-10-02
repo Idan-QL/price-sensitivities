@@ -19,6 +19,7 @@ from elasticity.data.utils import (
     calculate_last_values,
     clean_inventory_data,
     clean_quantity_data,
+    clean_shelf_price_data,
     create_date_list,
     filter_data_by_uids,
     get_revenue,
@@ -320,6 +321,9 @@ def read_data(
         )
         df_read = filter_data_by_uids(
             df=df_read, uids_to_filter=data_fetch_params.uids_to_filter, uid_column=data_columns.uid
+        )
+        df_read = clean_shelf_price_data(
+            df_input=df_read, shelf_price_column=data_columns.shelf_price
         )
         df_read[data_columns.round_price] = df_read[data_columns.shelf_price].apply(
             round_price_effect

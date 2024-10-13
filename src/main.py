@@ -143,6 +143,7 @@ def process_client_channel(
             end_date=date_range.end_date,
             df_upload=df_results,
             table_name=app_state.models_monitoring_table_name,
+            is_qa_run=is_qa_run,
         )
         process_actions_list(
             df_results=df_results,
@@ -170,6 +171,7 @@ def process_client_channel(
             total_revenue=total_revenue,
             error_count=error_counter.error_count,
             end_date=date_range.end_date,
+            is_qa_run=is_qa_run,
         )
 
         write_graphs.save_distribution_graph(
@@ -185,6 +187,7 @@ def process_client_channel(
             end_date=date_range.end_date,
             df_upload=data_report,
             table_name=app_state.projects_kpis_table_name,
+            is_qa_run=is_qa_run,
         )
 
     except (KeyError, pd.errors.EmptyDataError, ValueError) as e:

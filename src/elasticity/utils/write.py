@@ -70,7 +70,11 @@ def clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def upload_elasticity_data_to_athena(
-    data_fetch_params: DataFetchParameters, end_date: str, df_upload: pd.DataFrame, table_name: str
+    data_fetch_params: DataFetchParameters,
+    end_date: str,
+    df_upload: pd.DataFrame,
+    table_name: str,
+    is_qa_run: bool,
 ) -> None:
     """Upload elasticity data to an Athena partition using AthenaDataManager.
 
@@ -79,6 +83,7 @@ def upload_elasticity_data_to_athena(
         end_date (str): The date to be used for partitioning.
         df_upload (pd.DataFrame): The DataFrame containing elasticity data.
         table_name (str): The name of the Glue table.
+        is_qa_run (bool): Save is_qa_run value.
 
     Returns:
         None
@@ -100,6 +105,9 @@ def upload_elasticity_data_to_athena(
         "client_key": data_fetch_params.client_key,
         "channel": data_fetch_params.channel,
     }
+
+    # Add run_type
+    columns_to_add["run_type"] = "QA" if is_qa_run else "Production"
 
     # Add missing columns to df_upload
     df_upload = add_missing_columns(df=df_upload, columns=columns_to_add)

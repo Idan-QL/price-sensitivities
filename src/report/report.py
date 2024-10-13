@@ -203,6 +203,7 @@ def generate_run_report(
     total_revenue: int,
     error_count: int,
     end_date: str,
+    is_qa_run: bool,
     min_elasticity: float = -3.8,
 ) -> pd.DataFrame:
     """Generate a report DataFrame for the current run, ensuring appropriate types for each field.
@@ -215,6 +216,7 @@ def generate_run_report(
         total_revenue (int): The total revenue for the client.
         error_count (int): The number of errors encountered during the run.
         end_date (str): The date marking the end of the run period.
+        is_qa_run (bool): Save is_qa_run value.
         min_elasticity (float, optional): The minimum elasticity threshold. Defaults to -3.8.
 
     Returns:
@@ -267,6 +269,9 @@ def generate_run_report(
         "model_changes": model_changes,
         "error_count": error_count,
     }
+
+    # Add is_qa_run only if it is True
+    report_row["run_type"] = "QA" if is_qa_run else "Production"
 
     # Convert to DataFrame and ensure correct types for numeric columns
     df_report = pd.DataFrame([report_row])

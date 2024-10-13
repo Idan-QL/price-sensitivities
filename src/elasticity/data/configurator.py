@@ -17,7 +17,7 @@ class DataFetchParameters(BaseModel):
 
     client_key: str = Field(..., description="The client key for data retrieval")
     channel: str = Field(..., description="The channel for data filtering")
-    attr_name: str = Field(None, description="The attribut name if any")
+    attr_name: Optional[str] = Field(None, description="The attribut name if any")
     read_from_datalake: bool = Field(..., description="Flag to read from datalake or not")
     uids_to_filter: Optional[List[str]] = Field(None, description="List of UIDs to filter data by")
 

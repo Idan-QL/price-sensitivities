@@ -263,6 +263,34 @@ def extract_date_params(
     return days_back, start_date, end_date
 
 
+def summarize_price_history(input_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataFrame:
+    """Get last price, first/last date, min/max price for each uid in a new DataFrame.
+
+    Args:
+        input_df (pd.DataFrame): The input DataFrame.
+        data_columns (DataColumns): An instance of the DataColumns class containing
+        the column names.
+
+    Returns:
+        pd.DataFrame: A new DataFrame with columns uid, last_price, last_date, first_date,
+                      min_price, and max_price.
+    """
+    # Sort by uid and date to ensure last() will return the correct last price for each uid
+    sorted_df = input_df.sort_values([data_columns.uid, data_columns.date])
+
+    return (
+        sorted_df.groupby(data_columns.uid)
+        .agg(
+            last_date=(data_columns.date, "max"),
+            first_date=(data_columns.date, "min"),
+            min_price=(data_columns.shelf_price, "min"),
+            max_price=(data_columns.shelf_price, "max"),
+            last_price=(data_columns.shelf_price, "last"),
+        )
+        .reset_index()
+    )
+
+
 def calculate_last_values(input_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataFrame:
     """Get last price and date for each uid in a new df.
 

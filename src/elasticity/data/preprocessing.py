@@ -16,7 +16,6 @@ from elasticity.data.configurator import (
 )
 from elasticity.data.read import read_data_query
 from elasticity.data.utils import (
-    calculate_last_values,
     clean_inventory_data,
     clean_quantity_data,
     clean_shelf_price_data,
@@ -30,6 +29,7 @@ from elasticity.data.utils import (
     parse_data_month,
     preprocess_by_price,
     round_price_effect,
+    summarize_price_history,
 )
 from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.s3 import io_tools as s3io
@@ -174,8 +174,12 @@ def preprocess_data(raw_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataF
     """Preprocesses the data after fetching."""
     try:
         df_by_price = preprocess_by_price(input_df=raw_df, data_columns=data_columns)
-        last_values_df = calculate_last_values(input_df=raw_df, data_columns=data_columns)
-        df_by_price = df_by_price.merge(last_values_df, on=[data_columns.uid], how="left")
+        summarize_price_history_df = summarize_price_history(
+            input_df=raw_df, data_columns=data_columns
+        )
+        df_by_price = df_by_price.merge(
+            summarize_price_history_df, on=[data_columns.uid], how="left"
+        )
         logging.info(f"Number of unique UIDs: {df_by_price[data_columns.uid].nunique()}")
 
         outliers_count = df_by_price[df_by_price["outlier_quantity"]][data_columns.uid].nunique()

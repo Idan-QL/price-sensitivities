@@ -7,6 +7,7 @@ import pandas as pd
 
 from elasticity.data.configurator import DataColumns, DataFetchParameters
 from elasticity.data.utils import calculate_date_range, extract_date_params
+from ql_toolkit.config.runtime_config import app_state
 from ql_toolkit.data_lake.athena_query import AthenaQuery
 
 
@@ -57,7 +58,9 @@ def read_data_query(
         else ""
     )
 
-    file_name = f"elasticity{'_datalake' if data_fetch_params.read_from_datalake else ''}"
+    file_name = (
+        f"{app_state.project_name}{'_datalake' if data_fetch_params.read_from_datalake else ''}"
+    )
 
     athena_query = AthenaQuery(
         client_key=data_fetch_params.client_key,

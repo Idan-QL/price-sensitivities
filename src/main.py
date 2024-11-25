@@ -25,8 +25,8 @@ from elasticity.utils.write import upload_elasticity_data_to_athena
 
 # from ql_toolkit.attrs import data_classes as dc
 # from ql_toolkit.attrs.write import _write_actions_list
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.runtime_env import setup
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.env_setup.initialize_runtime import run_setup
 
 # from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
@@ -44,8 +44,8 @@ def setup_environment() -> tuple:
     Returns:
         tuple: args_dict, client_keys_map, is_local, is_qa_run
     """
-    config_dict, client_keys_map = setup.run_setup(
-        args_dict=cli_default_args.args_kv,
+    config_dict, client_keys_map = run_setup(
+        cli_args_dict=cli_default_args.args_kv,
         google_sheet_keep_cols=["client_keys", "channels", "attr_name"],
     )
     logging.info("config_dict: %s", config_dict)
@@ -54,7 +54,7 @@ def setup_environment() -> tuple:
     date_range = initialize_dates()
 
     is_local = config_dict.get("local", False)
-    is_qa_run = config_dict.get("is_qa_run", False)
+    is_qa_run = app_state.results_type == "qa"
     log_environment_mode(is_local=is_local, is_qa_run=is_qa_run)
 
     return (client_keys_map, is_local, is_qa_run, date_range)
@@ -81,7 +81,6 @@ def log_quality_tests(df_results: pd.DataFrame) -> None:
 def process_client_channel(
     data_fetch_params: DataFetchParameters,
     date_range: DateRange,
-    is_local: bool,
     is_qa_run: bool,
 ) -> None:
     """Process a client and channel.
@@ -143,12 +142,10 @@ def process_client_channel(
             end_date=date_range.end_date,
             df_upload=df_results,
             table_name=app_state.models_monitoring_table_name,
-            is_qa_run=is_qa_run,
         )
         process_actions_list(
             df_results=df_results,
             data_fetch_params=data_fetch_params,
-            is_local=is_local,
             is_qa_run=is_qa_run,
         )
 
@@ -187,7 +184,6 @@ def process_client_channel(
             end_date=date_range.end_date,
             df_upload=data_report,
             table_name=app_state.projects_kpis_table_name,
-            is_qa_run=is_qa_run,
         )
 
     except (KeyError, pd.errors.EmptyDataError, ValueError) as e:
@@ -202,7 +198,7 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (client_keys_map, is_local, is_qa_run, date_range) = setup_environment()
+    (client_keys_map, _, is_qa_run, date_range) = setup_environment()
     for client_key in client_keys_map:
 
         channels_list = client_keys_map[client_key]["channels"]
@@ -220,7 +216,6 @@ def run() -> None:
             process_client_channel(
                 data_fetch_params=data_fetch_params,
                 date_range=date_range,
-                is_local=is_local,
                 is_qa_run=is_qa_run,
             )
 

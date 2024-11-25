@@ -10,8 +10,8 @@ import pyarrow.parquet as pq
 import s3fs
 from pyarrow import Table
 
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3 import io_tools as s3io
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.aws_data_management.s3 import io_tools as s3io
 
 
 def get_arrow_table(

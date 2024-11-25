@@ -7,8 +7,8 @@ import boto3
 from botocore.exceptions import ClientError
 from botocore.paginate import PageIterator
 
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3.utils import get_s3_client
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.aws_data_management.s3.utils import get_s3_client
 
 
 def is_file_exists(s3_dir: str, file_name: str, s3_client: boto3.client = None) -> bool:

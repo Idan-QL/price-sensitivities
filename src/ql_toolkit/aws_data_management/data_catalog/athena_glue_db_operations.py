@@ -8,11 +8,11 @@ import boto3
 import pandas as pd
 import pyarrow as pa
 
+from ql_toolkit.application_state.manager import app_state
 from ql_toolkit.arrow import io_tools as arrow_io
 from ql_toolkit.arrow import utils as arrow_utils
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.data_lake.data_classes import GlueDBKeys
-from ql_toolkit.s3 import io_tools as s3io
+from ql_toolkit.aws_data_management.data_catalog.pydantic_models import GlueDBKeys
+from ql_toolkit.aws_data_management.s3 import io_tools as s3io
 
 # Type alias for boto3 Glue client
 GlueClient: TypeAlias = boto3.client
@@ -285,7 +285,8 @@ class AthenaDataManager:
         except Exception as err:
             logging.error(f"Error deleting partition from table '{self.table_name}': {err}")
 
-    def create_map_column(self, data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
+    @staticmethod
+    def create_map_column(data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
         """Create a map column from specified columns in the DataFrame.
 
         Args:
@@ -302,7 +303,8 @@ class AthenaDataManager:
             )
         return pd.Series([{}] * len(data_df))
 
-    def create_strings_map_column(self, data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
+    @staticmethod
+    def create_strings_map_column(data_df: pd.DataFrame, columns: List[str]) -> pd.Series:
         """Create a map column for string values, converting booleans to strings.
 
         Args:

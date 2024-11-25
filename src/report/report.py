@@ -6,7 +6,7 @@ from typing import Dict
 import pandas as pd
 
 from elasticity.data.configurator import DataFetchParameters
-from ql_toolkit.data_lake.athena_query import AthenaQuery
+from ql_toolkit.aws_data_management.data_catalog.athena_query_manager import AthenaQuery
 
 
 def get_previous_month_df(client_key: str, channel: str, end_date: str) -> pd.DataFrame:

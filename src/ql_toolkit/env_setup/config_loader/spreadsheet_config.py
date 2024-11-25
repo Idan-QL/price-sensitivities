@@ -1,4 +1,4 @@
-"""This module contains utils functions to retrieve the configurations."""
+"""This module contains functions to retrieve the configurations from a Google Sheet."""
 
 import logging
 from ast import literal_eval
@@ -10,50 +10,14 @@ import pandas as pd
 from google.auth.exceptions import GoogleAuthError
 from oauth2client.service_account import ServiceAccountCredentials
 
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3.io_tools import maybe_get_json_file
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.aws_data_management.secrets_manager.loader import get_secret
 
 
 class ConfigurationNotFoundError(Exception):
     """Exception raised for errors in the configuration retrieval process."""
 
     pass
-
-
-def is_client_keys_config(config_dict: Optional[dict], client_keys: str) -> bool:
-    """Check if the configuration contains client_keys.
-
-    Args:
-        config_dict (Optional[dict]): The configuration.
-        client_keys (str): The client keys identifier.
-
-    Returns:
-        bool: True if the configuration contains client_keys.
-    """
-    return config_dict and config_dict.get(client_keys) is not None
-
-
-def split_config_dict(config_dict: dict, client_keys_key: str) -> tuple[dict, dict]:
-    """Break a configuration dictionary into two separate dictionaries.
-
-    Args:
-        config_dict (dict): The configuration dictionary.
-        client_keys_key (str): The client-keys dictionary key in the config Dict.
-
-    Returns:
-        tuple[dict, dict]: A tuple containing two dictionaries:
-            - One excluding the client_keys key.
-            - One containing only the client_keys key.
-    """
-    # Dictionary excluding the client_key
-    principal_configuration = {
-        key: value for key, value in config_dict.items() if key != client_keys_key
-    }
-
-    # Dictionary containing only the client_key data, or an empty dictionary if not present
-    client_keys_map = config_dict.get(client_keys_key, {})
-
-    return principal_configuration, client_keys_map
 
 
 def get_spreadsheet_name(config_dict: Optional[dict]) -> str:
@@ -83,7 +47,6 @@ def get_spreadsheet_name(config_dict: Optional[dict]) -> str:
 
 def fetch_google_sheet_config(
     spreadsheet_name: str,
-    data_center: str,
     google_sheet_keep_cols: List[str],
     client_keys_col_name: str,
     channels_col_name: str,
@@ -92,7 +55,6 @@ def fetch_google_sheet_config(
 
     Args:
         spreadsheet_name (str): The name of the spreadsheet to read.
-        data_center (str): The data center to filter by.
         google_sheet_keep_cols (List[str]): The columns to keep from the Google Sheet.
         client_keys_col_name (str): The client keys column name in the Google spreadsheet.
         channels_col_name (str): The channels' column name in the Google spreadsheet.
@@ -107,7 +69,6 @@ def fetch_google_sheet_config(
         google_sheet_config_dict = get_config_from_google_sheet(
             spreadsheet_name=spreadsheet_name,
             google_sheet_keep_cols=google_sheet_keep_cols,
-            data_center=data_center,
             client_keys_col_name=client_keys_col_name,
             channels_col_name=channels_col_name,
         )
@@ -127,7 +88,6 @@ def fetch_google_sheet_config(
 
 def get_config_from_google_sheet(
     spreadsheet_name: str,
-    data_center: str,
     google_sheet_keep_cols: List[str],
     client_keys_col_name: str,
     channels_col_name: str,
@@ -136,7 +96,6 @@ def get_config_from_google_sheet(
 
     Args:
         spreadsheet_name (str): The name of the spreadsheet to read.
-        data_center (str): The data center to filter by.
         google_sheet_keep_cols (List[str]): The columns to keep from the Google Sheet.
         client_keys_col_name (str): The client keys column name in the Google spreadsheet.
         channels_col_name (str): The channels' column name in the Google spreadsheet.
@@ -152,7 +111,7 @@ def get_config_from_google_sheet(
         )
 
         filtered_df = filtered_google_sheet_by_region(
-            google_sheet_client_keys_map=google_sheet_df, aws_region=data_center
+            google_sheet_client_keys_map=google_sheet_df, aws_region=app_state.aws_region
         )
 
         filtered_df = filter_google_sheet_columns(
@@ -196,10 +155,11 @@ def get_google_sheet_data(spreadsheet_name: str, sheet_name: str) -> pd.DataFram
     ]
 
     try:
-        creds_dict = maybe_get_json_file(
-            s3_dir=app_state.s3_vault_dir, file_name="ds_config_credential.json"
+        creds_dict = get_secret("prod/google_cloud/ds/api_key")
+
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            keyfile_dict=creds_dict, scopes=scope
         )
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         sheet = client.open(spreadsheet_name).worksheet(sheet_name)
         data = sheet.get_all_records()
@@ -235,6 +195,28 @@ def filter_google_sheet_columns(
     return google_sheet_client_keys_map[google_sheet_keep_cols]
 
 
+def derive_aws_region_code(aws_region: str) -> str:
+    """Derive the AWS region code from the AWS region name.
+
+    This function derives the AWS region code from the AWS region name by taking the first part
+    of the region name before the hyphen and converting it to lowercase.
+
+    Args:
+        aws_region (str): The AWS region name.
+
+    Returns:
+        str: The AWS region code.
+
+    Examples:
+        >>> derive_aws_region_code("us-east-1")
+        "us"
+        >>> derive_aws_region_code("eu-central-1")
+        "eu"
+    """
+    aws_region_code = aws_region.split("-")[0]
+    return aws_region_code.lower()
+
+
 def filtered_google_sheet_by_region(
     google_sheet_client_keys_map: pd.DataFrame, aws_region: str
 ) -> pd.DataFrame:
@@ -257,15 +239,21 @@ def filtered_google_sheet_by_region(
         google_sheet_client_keys_map=google_sheet_client_keys_map
     )
 
+    aws_region_code = derive_aws_region_code(aws_region)
+
     filtered_df = google_sheet_client_keys_map[
-        google_sheet_client_keys_map[filter_col] == aws_region
+        google_sheet_client_keys_map[filter_col] == aws_region_code
     ]
 
     if not filtered_df.empty:
         return filtered_df.drop(filter_col, axis=1)
 
-    logging.error(f"No data found for requested region '{aws_region}'. Exiting application!")
-    sys_exit()
+    err_msg = (
+        f"No data found for requested region '{aws_region}' "
+        f"(using region code: {aws_region_code})"
+    )
+    logging.error(err_msg)
+    sys_exit(err_msg)
 
 
 def get_google_sheet_region_based_col(google_sheet_client_keys_map: pd.DataFrame) -> str:

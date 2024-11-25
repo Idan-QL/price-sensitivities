@@ -8,15 +8,16 @@ import pandas as pd
 
 from elasticity.data.configurator import DataFetchParameters
 from elasticity.utils.consts import CODE_VERSION
-from ql_toolkit.attrs import data_classes as dc
-from ql_toolkit.attrs.action_list import create_actions_list
-from ql_toolkit.attrs.write import _write_actions_list
+from ql_toolkit.results_persistence.old_action_list import data_classes as dc
+from ql_toolkit.results_persistence.old_action_list.action_list import (
+    create_actions_list,
+)
+from ql_toolkit.results_persistence.old_action_list.write import _write_actions_list
 
 
 def process_actions_list(
     df_results: pd.DataFrame,
     data_fetch_params: DataFetchParameters,
-    is_local: bool,
     is_qa_run: bool,
 ) -> None:
     """Generate and write the actions list based on the results.
@@ -25,7 +26,6 @@ def process_actions_list(
         df_results (pd.DataFrame): The DataFrame containing experiment results.
         data_fetch_params (DataFetchParameters): Parameters related to data fetching
         such as client key and channel.
-        is_local (bool): Flag indicating if the script is running locally.
         is_qa_run (bool): Flag indicating if the script is running in QA environment.
 
     Returns:
@@ -40,7 +40,6 @@ def process_actions_list(
     input_args = dc.WriteActionsListKWArgs(
         client_key=data_fetch_params.client_key,
         channel=data_fetch_params.channel,
-        is_local=is_local,
         qa_run=is_qa_run,
     )
 

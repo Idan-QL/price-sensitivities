@@ -7,8 +7,8 @@ import pandas as pd
 
 from elasticity.data.configurator import DataColumns, DataFetchParameters
 from elasticity.data.utils import calculate_date_range, extract_date_params
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.data_lake.athena_query import AthenaQuery
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.aws_data_management.data_catalog.athena_query_manager import AthenaQuery
 
 
 def read_data_query(

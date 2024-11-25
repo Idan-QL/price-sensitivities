@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 
-from ql_toolkit.config.runtime_config import app_state
+from ql_toolkit.application_state.manager import app_state
 
 
 def create_actions_list(

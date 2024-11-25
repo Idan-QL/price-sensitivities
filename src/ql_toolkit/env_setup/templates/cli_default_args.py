@@ -1,27 +1,27 @@
-"""The default values of the command line argument for this project."""
+"""The REQUIRED command line argument for the project."""
 
 from ast import literal_eval
 
-args_kv = {
+default_args_dict = {
     "aws_key": {
         "flag": "-k",
         "default": "",
         "type": str,
-        "help": "AWS access key",
+        "help": "AWS access key. Default is an empty `str`.",
         "required": False,
     },
     "aws_secret": {
         "flag": "-s",
         "default": "",
         "type": str,
-        "help": "AWS secret key",
+        "help": "AWS secret key. Default is an empty `str`.",
         "required": False,
     },
     "project_name": {
         "flag": "-p",
-        "default": "elasticity",
+        "default": "",
         "type": str,
-        "help": "Project name",
+        "help": "Project name.",
         "required": True,
     },
     "storage_location": {
@@ -31,19 +31,20 @@ args_kv = {
         "help": "Bucket name or Data-Center ('us' or 'eu').",
         "required": True,
     },
-    "is_qa_run": {
-        "flag": "-q",
-        "default": "False",
-        "type": literal_eval,
-        "help": "Read/Write results to QA/staging or production environment. "
-        "May be `True` (QA/staging run) or `False` (production run)",
-        "required": False,
-    },
     "config": {
         "flag": "-c",
-        "default": "config",
+        "default": "",
         "type": str,
-        "help": "Config file location in s3",
-        "required": False,
+        "help": "Config file name (without file post-fix. E.g. `qa_config`).",
+        "required": True,
     },
+    "is_qa_run": {
+        "flag": "-q",
+        "default": "",
+        "type": literal_eval,
+        "help": "Write results to QA/staging or production environment. "
+        "May be `True` (QA/staging run) or `False` (production run)",
+        "required": True,
+    },
+    # Add other arguments as needed
 }

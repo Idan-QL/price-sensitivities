@@ -9,7 +9,7 @@ from pyathena import connect
 from pyathena.error import DatabaseError, OperationalError
 from pyathena.pandas.cursor import PandasCursor
 
-from ql_toolkit.config.runtime_config import app_state
+from ql_toolkit.application_state.manager import app_state
 
 
 class AthenaQuery:
@@ -50,8 +50,7 @@ class AthenaQuery:
         Raises:
             FileNotFoundError: If the SQL file does not exist in the specified directory.
         """
-        script_dir = path.dirname(__file__)
-        queries_dir = path.join(script_dir, "query_scripts")
+        queries_dir = path.join(path.dirname(__file__), "query_scripts")
         file_path = path.join(queries_dir, self.file_name)
         logging.info(f"Loading query from file: {file_path}")
         try:
@@ -112,7 +111,7 @@ class AthenaQuery:
             logging.info("Executing query...")
             with connect(
                 s3_staging_dir=app_state.s3_athena_staging_dir,
-                region_name=app_state.s3_region,
+                region_name=app_state.aws_region,
                 cursor_class=PandasCursor,
             ) as conn:
                 athena_df = conn.cursor().execute(query).as_pandas()

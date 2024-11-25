@@ -16,10 +16,10 @@ from joblib import dump
 from pyarrow.lib import ArrowInvalid
 from pydantic import ValidationError
 
-import ql_toolkit.s3.data_classes as s3dc
-from ql_toolkit.config.runtime_config import app_state
-from ql_toolkit.s3.ls_tools import is_file_exists
-from ql_toolkit.s3.utils import get_s3_client, get_s3_resource
+import ql_toolkit.aws_data_management.s3.pydantic_models as s3dc
+from ql_toolkit.application_state.manager import app_state
+from ql_toolkit.aws_data_management.s3.ls_tools import is_file_exists
+from ql_toolkit.aws_data_management.s3.utils import get_s3_client, get_s3_resource
 
 
 def download_file(

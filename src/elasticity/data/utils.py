@@ -492,7 +492,7 @@ def uid_with_price_changes(
         df_by_price[df_by_price["price_change_without_outliers"].abs() > threshold]
         .groupby(uid_col)[price_col]
         .nunique()
-        .loc[lambda x: x > price_changes]
+        .loc[lambda x: x >= price_changes]
         .index.tolist()
     )
 

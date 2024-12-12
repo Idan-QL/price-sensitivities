@@ -2,7 +2,7 @@
 """The elasticity batch job entry point.
 
 source $(poetry env info --path)/bin/activate
-Run with `python src/main.py -d us -c config_qa -p elasticity` from the project root.
+Run with `python src/main.py -d us -c config_qa -p elasticity -q True` from the project root.
 """
 import logging
 import traceback
@@ -13,8 +13,6 @@ import pandas as pd
 import elasticity.utils.plot_demands as plot_demands
 from elasticity.data.configurator import DataColumns, DataFetchParameters, DateRange
 from elasticity.data.preprocessing import run_preprocessing, save_preprocess_to_s3
-
-# from elasticity.data.group import data_for_group_elasticity
 from elasticity.data.utils import initialize_dates
 from elasticity.model.group import handle_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
@@ -22,13 +20,8 @@ from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import process_actions_list
 from elasticity.utils.utils import log_environment_mode
 from elasticity.utils.write import upload_elasticity_data_to_athena
-
-# from ql_toolkit.attrs import data_classes as dc
-# from ql_toolkit.attrs.write import _write_actions_list
 from ql_toolkit.application_state.manager import app_state
 from ql_toolkit.env_setup.initialize_runtime import run_setup
-
-# from ql_toolkit.s3 import io_tools as s3io
 from report import logging_error, report, write_graphs
 
 # Configure the root logger
@@ -46,7 +39,7 @@ def setup_environment() -> tuple:
     """
     config_dict, client_keys_map = run_setup(
         cli_args_dict=cli_default_args.args_kv,
-        google_sheet_keep_cols=["client_keys", "channels", "attr_name"],
+        google_sheet_keep_cols=["client_keys", "channels", "attr_names", "source"],
     )
     logging.info("config_dict: %s", config_dict)
     logging.info("client_keys_map: %s", client_keys_map)
@@ -100,15 +93,23 @@ def process_client_channel(
     data_columns = DataColumns()
     logging.info(
         f"Processing {data_fetch_params.client_key} - {data_fetch_params.channel}"
-        f"- attr: {data_fetch_params.attr_name}"
+        f"- attr: {data_fetch_params.attr_names}"
+        f"- source: {data_fetch_params.source}"
     )
 
     start_time = datetime.now()
     try:
         # Step 1: Preprocessing and data loading
-        df_by_price, df_revenue_uid, total_end_date_uid, total_revenue = run_preprocessing(
+        preprocessing_results = run_preprocessing(
             data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
         )
+
+        df_by_price = preprocessing_results.df_by_price
+        df_revenue_uid = preprocessing_results.df_revenue_uid
+        total_uid = preprocessing_results.total_uid
+        total_revenue = preprocessing_results.total_revenue
+        # TODO: Test group on all and uncomment if approved
+        # df_by_price_all = preprocessing_results.df_by_price_all
 
         # Step 2: Save the data to S3
         save_preprocess_to_s3(
@@ -124,13 +125,25 @@ def process_client_channel(
         )
 
         # Step 4: Handle group elasticity if needed
+        # TODO: Test group on all and uncomment if approved
+        # df_results = handle_group_elasticity(
+        #     df_by_price=df_by_price_all[~df_by_price_all["outlier_quantity"]],
+        #     data_fetch_params=data_fetch_params,
+        #     date_range=date_range,
+        #     df_results=df_results,
+        #     data_columns=data_columns,
+        # )
+
         df_results = handle_group_elasticity(
-            df_by_price=df_by_price,
+            df_by_price=df_by_price[~df_by_price["outlier_quantity"]],
             data_fetch_params=data_fetch_params,
             date_range=date_range,
             df_results=df_results,
             data_columns=data_columns,
         )
+
+        # TODO: For xxxls only
+        # df_results[df_results["result_to_push"]].to_csv("xxxls_df_results_group.csv", index=False)
 
         # Step 5: Merge with revenue data
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
@@ -159,10 +172,9 @@ def process_client_channel(
 
         # Step 8: Build and save report to Athena
         runtime_duration = (datetime.now() - start_time).total_seconds() / 60
-
         data_report = report.generate_run_report(
             data_fetch_params=data_fetch_params,
-            total_uid=total_end_date_uid,
+            total_uid=total_uid,
             results_df=df_results,
             runtime_duration=runtime_duration,
             total_revenue=total_revenue,
@@ -173,7 +185,7 @@ def process_client_channel(
 
         write_graphs.save_distribution_graph(
             data_fetch_params=data_fetch_params,
-            total_uid=total_end_date_uid,
+            total_uid=total_uid,
             df_report=data_report,
             end_date=date_range.end_date,
             s3_dir=app_state.s3_eval_results_dir + "/graphs/",
@@ -202,15 +214,15 @@ def run() -> None:
     for client_key in client_keys_map:
 
         channels_list = client_keys_map[client_key]["channels"]
-        attr_name = client_keys_map[client_key]["attr_name"]
-        read_from_datalake = client_keys_map[client_key].get("read_from_datalake", False)
+        attr_names = client_keys_map[client_key]["attr_names"]
+        source = client_keys_map[client_key].get("source", "analytics")
 
         for channel in channels_list:
             data_fetch_params = DataFetchParameters(
                 client_key=client_key,
                 channel=channel,
-                attr_name=attr_name,
-                read_from_datalake=read_from_datalake,
+                attr_names=attr_names,
+                source=source,
             )
 
             process_client_channel(

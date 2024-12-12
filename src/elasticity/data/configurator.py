@@ -1,6 +1,6 @@
 """Module of configurator."""
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,11 +15,18 @@ class DateRange(BaseModel):
 class DataFetchParameters(BaseModel):
     """Parameters related to fetching data."""
 
-    client_key: str = Field(..., description="The client key for data retrieval")
-    channel: str = Field(..., description="The channel for data filtering")
-    attr_name: Optional[str] = Field(None, description="The attribut name if any")
-    read_from_datalake: bool = Field(..., description="Flag to read from datalake or not")
-    uids_to_filter: Optional[List[str]] = Field(None, description="List of UIDs to filter data by")
+    client_key: str = Field(..., description="The client key for identifying data retrieval scope.")
+    channel: str = Field(..., description="The specific channel used for data filtering.")
+    attr_names: Optional[List[str]] = Field(
+        None, description="Optional attribute name for additional filtering."
+    )
+    source: Literal["analytics", "product_extended_daily", "product_transaction"] = Field(
+        "analytics",
+        description="The data source:analytics, product_extended_daily, or transaction.",
+    )
+    uids_to_filter: Optional[List[str]] = Field(
+        None, description="Optional list of UIDs to filter the data by."
+    )
 
 
 class PreprocessingParameters(BaseModel):

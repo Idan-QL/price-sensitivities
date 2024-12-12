@@ -33,7 +33,7 @@ args_kv = {
     },
     "is_qa_run": {
         "flag": "-q",
-        "default": "False",
+        "default": "True",
         "type": literal_eval,
         "help": "Read/Write results to QA/staging or production environment. "
         "May be `True` (QA/staging run) or `False` (production run)",

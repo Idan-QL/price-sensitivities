@@ -3,7 +3,7 @@
 import calendar
 import logging
 import warnings
-from typing import List, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 import pandas as pd
 from pydantic import ValidationError
@@ -40,64 +40,98 @@ warnings.filterwarnings(
 )
 
 
-def run_preprocessing(
-    data_fetch_params: DataFetchParameters, date_range: DateRange, data_columns: DataColumns
-) -> tuple:
-    """Preprocess and load the required data.
+class FetchDataResults(NamedTuple):
+    """Represents the results obtained from fetching and aggregating data.
 
-    Args:
-        data_fetch_params (DataFetchParameters): Parameters related to data fetching such as
-        client key, channel, and attribute name.
-        date_range (DateRange): The date range for fetching the data.
-        data_columns (DataColumns): Configuration for column mappings used in the
-        preprocessing step.
+    Attributes:
+        raw_df (Optional[pd.DataFrame]):
+            The raw aggregated approved data DataFrame.
+            Contains all approved entries without any filters applied.
 
-    Returns:
-        tuple: A tuple containing:
-            - df_by_price (pd.DataFrame): The DataFrame containing price data.
-            - df_revenue_uid (pd.DataFrame): The DataFrame containing revenue data by UID.
-            - total_end_date_uid (int): The total number of UIDs for the end date.
-            - total_revenue (float): The total revenue calculated from the data.
+        rejected_df (Optional[pd.DataFrame]):
+            The aggregated rejected data DataFrame.
+            Contains entries that were rejected during the data fetching or preprocessing stages.
+
+        total_uid (Optional[int]):
+            The total number of UIDs fetched across all data (last month only).
+
+        df_revenue_uid (Optional[pd.DataFrame]):
+            A DataFrame containing revenue data segmented by UID (last month only).
+
+        total_revenue (Optional[float]):
+            The total revenue calculated from the fetched data (last month only).
     """
-    df_by_price, _, total_end_date_uid, df_revenue_uid, total_revenue = read_and_preprocess(
-        data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
-    )
 
-    if df_by_price is None or df_by_price.empty:
-        raise ValueError("Error: df_by_price is None or Empty")
-
-    return df_by_price, df_revenue_uid, total_end_date_uid, total_revenue
+    raw_df: Optional[pd.DataFrame]
+    rejected_df: Optional[pd.DataFrame]
+    total_uid: Optional[int]
+    df_revenue_uid: Optional[pd.DataFrame]
+    total_revenue: Optional[float]
 
 
-def save_preprocess_to_s3(
-    df_by_price: pd.DataFrame,
+class PreprocessingResults(NamedTuple):
+    """Encapsulates the results obtained after preprocessing the fetched data.
+
+    Attributes:
+        df_by_price (pd.DataFrame):
+            The DataFrame containing agglomerated price data for validated UIDs.
+
+        df_by_price_all (pd.DataFrame):
+            The DataFrame containing agglomerated price data for all UIDs.
+            Including both approved and rejected uids.
+
+        df_revenue_uid (Optional[pd.DataFrame]):
+            A DataFrame containing revenue data segmented by UID (last month only).
+
+        total_uid (int):
+            The total number of UIDs fetched across all data (last month only).
+
+        total_revenue (float):
+           The total revenue calculated from the fetched data (last month only).
+    """
+
+    df_by_price: pd.DataFrame
+    df_by_price_all: pd.DataFrame
+    df_revenue_uid: pd.DataFrame
+    total_uid: int
+    total_revenue: float
+
+
+def fetch_data(
     data_fetch_params: DataFetchParameters,
     date_range: DateRange,
-    is_qa_run: bool,
-) -> None:
-    """Save the processed data to S3.
+    preprocessing_parameters: PreprocessingParameters,
+    data_columns: DataColumns,
+) -> FetchDataResults:
+    """Handles data fetching and returns necessary components.
 
     Args:
-        df_by_price (pd.DataFrame): The DataFrame containing price data.
-        data_fetch_params (DataFetchParameters): Parameters related to data fetching
-        such as client key, channel, and attribute name.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching.
         date_range (DateRange): The date range for fetching the data.
-        is_qa_run (bool): Flag indicating if the script is running in QA environment.
+        preprocessing_parameters (PreprocessingParameters): Parameters for preprocessing.
+        data_columns (DataColumns): Configuration for column mappings.
 
     Returns:
-        None
+        FetchDataResults: A NamedTuple containing:
+            - raw_df (Optional[pd.DataFrame]): Raw data DataFrame.
+            - rejected_df (Optional[pd.DataFrame]): Rejected data DataFrame.
+            - total_uid (Optional[int]): Total number of UIDs.
+            - df_revenue_uid (Optional[pd.DataFrame]): Revenue data by UID.
+            - total_revenue (Optional[float]): Total revenue calculated from the data.
     """
-    file_name_suffix = "_qa" if is_qa_run else ""
-    file_name = (
-        f"df_by_price_{data_fetch_params.client_key}_{data_fetch_params.channel}_"
-        f"{date_range.end_date}{file_name_suffix}.parquet"
-    )
+    try:
+        return progressive_monthly_aggregate(
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            preprocessing_parameters=preprocessing_parameters,
+            data_columns=data_columns,
+        )
 
-    s3io.write_dataframe_to_s3(
-        file_name=file_name,
-        xdf=df_by_price,
-        s3_dir=app_state.s3_eval_results_dir,
-    )
+    except Exception as e:
+        logging.error(f"Error retrieving data: {e}")
+        return FetchDataResults(
+            raw_df=None, rejected_df=None, total_uid=None, df_revenue_uid=None, total_revenue=None
+        )
 
 
 def read_and_preprocess(
@@ -105,14 +139,10 @@ def read_and_preprocess(
     date_range: Optional[DateRange] = None,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
-) -> Tuple[
-    Optional[pd.DataFrame],
-    Optional[pd.DataFrame],
-    Optional[int],
-    Optional[pd.DataFrame],
-    Optional[int],
-]:
-    """Reads and preprocesses data, handling errors and logging information throughout the process.
+) -> Optional[PreprocessingResults]:
+    """Reads and preprocesses data.
+
+    Handling errors and logging information throughout the process.
 
     Args:
         data_fetch_params (DataFetchParameters): Parameters related to data fetching.
@@ -121,7 +151,9 @@ def read_and_preprocess(
         data_columns (Optional[DataColumns]): Configuration of data columns.
 
     Returns:
-        Tuple: Processed data and statistics.
+        Optional[PreprocessingResults]:
+            PreprocessingResults: A NamedTuple with processed data and statistics.
+        Returns None if an error occurs during preprocessing.
     """
     preprocessing_parameters = preprocessing_parameters or PreprocessingParameters()
     data_columns = data_columns or DataColumns()
@@ -130,44 +162,76 @@ def read_and_preprocess(
         date_range = initialize_dates(date_range=date_range)
         logging.info(f"Start date: {date_range.start_date}, End date: {date_range.end_date}")
 
-        raw_df, total_uid, df_revenue_uid, total_revenue = fetch_data(
+        fetch_results = fetch_data(
             data_fetch_params=data_fetch_params,
             date_range=date_range,
             preprocessing_parameters=preprocessing_parameters,
             data_columns=data_columns,
         )
+        raw_df = fetch_results.raw_df
+        rejected_df = fetch_results.rejected_df
+        total_uid = fetch_results.total_uid
+        df_revenue_uid = fetch_results.df_revenue_uid
+        total_revenue = fetch_results.total_revenue
+
         if raw_df is None:
-            return None, None, None, None, None
+            logging.error("fetch_data returned None for raw_df.")
+            return None
 
         df_by_price = preprocess_data(raw_df=raw_df, data_columns=data_columns)
+        df_by_price_all = preprocess_data(
+            raw_df=pd.concat([raw_df, rejected_df], ignore_index=True), data_columns=data_columns
+        )
 
-        return df_by_price, raw_df, total_uid, df_revenue_uid, total_revenue
+        return PreprocessingResults(
+            df_by_price=df_by_price,
+            df_by_price_all=df_by_price_all,
+            df_revenue_uid=df_revenue_uid,
+            total_uid=total_uid,
+            total_revenue=total_revenue,
+        )
 
     except ValidationError as e:
         logging.error(f"Validation error: {e}")
-        return None, None, None, None, None
+        return None
     except Exception as e:
         logging.error(f"Unexpected error: {e}")
-        return None, None, None, None, None
+        return None
 
 
-def fetch_data(
-    data_fetch_params: DataFetchParameters,
-    date_range: DateRange,
-    preprocessing_parameters: PreprocessingParameters,
-    data_columns: DataColumns,
-) -> Tuple[Optional[pd.DataFrame], Optional[int], Optional[pd.DataFrame], Optional[int]]:
-    """Handles data fetching and returns necessary components."""
-    try:
-        return progressive_monthly_aggregate(
-            data_fetch_params=data_fetch_params,
-            date_range=date_range,
-            preprocessing_parameters=preprocessing_parameters,
-            data_columns=data_columns,
-        )
-    except Exception as e:
-        logging.error(f"Error retrieving data: {e}")
-        return None, None, None, None
+def run_preprocessing(
+    data_fetch_params: DataFetchParameters, date_range: DateRange, data_columns: DataColumns
+) -> PreprocessingResults:
+    """Preprocess and load the required data.
+
+    Args:
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching such as
+            client key, channel, and attribute names.
+        date_range (DateRange): The date range for fetching the data.
+        data_columns (DataColumns): Configuration for column mappings.
+
+    Returns:
+        PreprocessingResults: A NamedTuple containing:
+            - df_by_price (pd.DataFrame): The DataFrame containing price data for validated UIDs.
+            - df_by_price_all (pd.DataFrame): The DataFrame containing price data for all UIDs.
+            - df_revenue_uid (pd.DataFrame): The DataFrame containing revenue data by UID.
+            - total_uid (int): The total number of UIDs for the end date.
+            - total_revenue (float): The total revenue calculated from the data.
+
+    Raises:
+        ValueError: If `read_and_preprocess` fails or if `df_by_price` is empty after preprocessing.
+    """
+    preprocessing_results = read_and_preprocess(
+        data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+    )
+
+    if preprocessing_results is None:
+        raise ValueError("Error: Preprocessing failed during read_and_preprocess.")
+
+    if preprocessing_results.df_by_price.empty:
+        raise ValueError("Error: df_by_price is empty after preprocessing.")
+
+    return preprocessing_results
 
 
 def preprocess_data(raw_df: pd.DataFrame, data_columns: DataColumns) -> pd.DataFrame:
@@ -197,7 +261,7 @@ def progressive_monthly_aggregate(
     date_range: DateRange,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
-) -> Tuple[pd.DataFrame, int, pd.DataFrame, int]:
+) -> FetchDataResults:
     """Perform progressive aggregation on monthly data.
 
     Args:
@@ -207,7 +271,12 @@ def progressive_monthly_aggregate(
         data_columns (Optional[DataColumns]): Configuration for data columns.
 
     Returns:
-        Tuple: Aggregated data and statistics.
+        FetchDataResults: A NamedTuple containing:
+            - raw_df (Optional[pd.DataFrame]): Aggregated approved data.
+            - rejected_df (Optional[pd.DataFrame]): Aggregated rejected data.
+            - total_uid (Optional[int]): Total number of UIDs.
+            - df_revenue_uid (Optional[pd.DataFrame]): Revenue data by UID.
+            - total_revenue (Optional[float]): Total revenue calculated from the data.
     """
     preprocessing_parameters = preprocessing_parameters or PreprocessingParameters()
     data_columns = data_columns or DataColumns()
@@ -251,7 +320,44 @@ def progressive_monthly_aggregate(
     result_df[data_columns.revenue] = result_df[data_columns.revenue].fillna(0).astype("float32")
     logging.info(f"Number of unique user IDs: {result_df[data_columns.uid].nunique()}")
 
-    return result_df, total_uid, df_revenue_uid, total_revenue
+    return FetchDataResults(
+        raw_df=result_df,
+        rejected_df=rejected_data,
+        total_uid=total_uid,
+        df_revenue_uid=df_revenue_uid,
+        total_revenue=total_revenue,
+    )
+
+
+def save_preprocess_to_s3(
+    df_by_price: pd.DataFrame,
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
+    is_qa_run: bool,
+) -> None:
+    """Save the processed data to S3.
+
+    Args:
+        df_by_price (pd.DataFrame): The DataFrame containing price data.
+        data_fetch_params (DataFetchParameters): Parameters related to data fetching
+        such as client key, channel, and attribute name.
+        date_range (DateRange): The date range for fetching the data.
+        is_qa_run (bool): Flag indicating if the script is running in QA environment.
+
+    Returns:
+        None
+    """
+    file_name_suffix = "_qa" if is_qa_run else ""
+    file_name = (
+        f"df_by_price_{data_fetch_params.client_key}_{data_fetch_params.channel}_"
+        f"{date_range.end_date}{file_name_suffix}.parquet"
+    )
+
+    s3io.write_dataframe_to_s3(
+        file_name=file_name,
+        xdf=df_by_price,
+        s3_dir=app_state.s3_eval_results_dir,
+    )
 
 
 def process_month_data(

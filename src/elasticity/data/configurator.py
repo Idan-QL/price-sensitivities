@@ -20,9 +20,12 @@ class DataFetchParameters(BaseModel):
     attr_names: Optional[List[str]] = Field(
         None, description="Optional attribute name for additional filtering."
     )
-    source: Literal["analytics", "product_extended_daily", "product_transaction"] = Field(
+    source: Literal[
+        "analytics", "product_extended_daily", "product_transaction", "product_daily_sales_summary"
+    ] = Field(
         "analytics",
-        description="The data source:analytics, product_extended_daily, or transaction.",
+        description="The data source:analytics, product_extended_daily,\
+        transaction or product_daily_sales_summary.",
     )
     uids_to_filter: Optional[List[str]] = Field(
         None, description="Optional list of UIDs to filter the data by."
@@ -32,7 +35,7 @@ class DataFetchParameters(BaseModel):
 class PreprocessingParameters(BaseModel):
     """Represents the parameters used for preprocessing data."""
 
-    price_changes: int = Field(5, description="Number of price changes required")
+    price_changes: int = Field(6, description="Number of price changes required")
     threshold: float = Field(0.01, description="Threshold value for detecting price changes")
     min_conversions_days: int = Field(10, description="Minimum number of days for conversions")
 

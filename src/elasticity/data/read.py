@@ -47,27 +47,19 @@ def read_data_query(
         "ELSE CAST(product_info_analytics['units_sold'] AS DOUBLE) END > 0 )"
     )
 
-    filter_units_condition_analytics = "AND units > 0"
+    # Define the mapping between source values and their corresponding conditions
+    source_condition_mapping = {
+        "product_extended_daily": filter_units_condition_datalake,
+        "product_transaction": "AND units_sold > 0",
+        "analytics": "AND units > 0",
+        "product_daily_sales_summary": "AND total_units_sold_per_day > 0",
+    }
 
-    filter_units_condition_transaction = "AND units_sold > 0"
-
-    filter_units_condition = (
-        (
-            filter_units_condition_datalake
-            if data_fetch_params.source == "product_extended_daily"
-            else (
-                filter_units_condition_transaction
-                if data_fetch_params.source == "product_transaction"
-                else (
-                    filter_units_condition_analytics
-                    if data_fetch_params.source == "analytics"
-                    else ""
-                )
-            )
-        )
-        if filter_units
-        else ""
-    )
+    # Assign filter_units_condition based on the mapping
+    if filter_units:
+        filter_units_condition = source_condition_mapping.get(data_fetch_params.source, "")
+    else:
+        filter_units_condition = ""
 
     file_name = f"{app_state.project_name}_{data_fetch_params.source}"
 
@@ -82,7 +74,8 @@ def read_data_query(
     )
 
     data_df = athena_query.execute_query()
-    logging.info(f"Finishing reading data from data-lake. Shape: {data_df.shape}")
+
+    logging.info(f"Finishing reading data from {data_fetch_params.source}. Shape: {data_df.shape}")
     return data_df
 
 

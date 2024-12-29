@@ -11,14 +11,19 @@ from datetime import datetime
 import pandas as pd
 
 import elasticity.utils.plot_demands as plot_demands
-from elasticity.data.configurator import DataColumns, DataFetchParameters, DateRange
+from elasticity.data.configurator import (
+    DataColumns,
+    DataFetchParameters,
+    DateRange,
+    SensitivityParameters,
+)
 from elasticity.data.preprocessing import run_preprocessing, save_preprocess_to_s3
+from elasticity.data.read_sensitivity import read_top_competitors
 from elasticity.data.utils import initialize_dates
 from elasticity.model.group import handle_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
 from elasticity.utils.elasticity_action_list import process_actions_list
-from elasticity.utils.utils import log_environment_mode
 from elasticity.utils.write import upload_elasticity_data_to_athena
 from ql_toolkit.application_state.manager import app_state
 from ql_toolkit.env_setup.initialize_runtime import run_setup
@@ -26,7 +31,7 @@ from report import logging_error, report, write_graphs
 
 # Configure the root logger
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.ERROR,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
@@ -48,9 +53,23 @@ def setup_environment() -> tuple:
 
     is_local = config_dict.get("local", False)
     is_qa_run = app_state.results_type == "qa"
-    log_environment_mode(is_local=is_local, is_qa_run=is_qa_run)
 
-    return (client_keys_map, is_local, is_qa_run, date_range)
+    if app_state.project_name == "sensitivity":
+        default_sp = SensitivityParameters()
+        max_lag = config_dict.get("max_lag", default_sp.max_lag)
+        max_diff = config_dict.get("max_diff", default_sp.max_diff)
+        coverage_threshold = config_dict.get("coverage_threshold", default_sp.coverage_threshold)
+        min_abs_correlation = config_dict.get("min_abs_correlation", default_sp.min_abs_correlation)
+        sensitivity_parameters = SensitivityParameters(
+            max_lag=max_lag,
+            max_diff=max_diff,
+            coverage_threshold=coverage_threshold,
+            min_abs_correlation=min_abs_correlation,
+        )
+    else:
+        sensitivity_parameters = None
+
+    return (client_keys_map, is_local, is_qa_run, date_range, sensitivity_parameters)
 
 
 def log_quality_tests(df_results: pd.DataFrame) -> None:
@@ -75,6 +94,7 @@ def process_client_channel(
     data_fetch_params: DataFetchParameters,
     date_range: DateRange,
     is_qa_run: bool,
+    sensitivity_parameters: SensitivityParameters,
 ) -> None:
     """Process a client and channel.
 
@@ -83,6 +103,7 @@ def process_client_channel(
         date_range (DateRange): The date range for fetching the data.
         is_local (bool): Flag indicating if the script is running locally.
         is_qa_run (bool): Flag indicating if the script is running in qa.
+        sensitivity_parameters (SensitivityParameters): Sensitivity parameters.
 
     Returns:
         dict: The results of processing.
@@ -95,13 +116,17 @@ def process_client_channel(
         f"Processing {data_fetch_params.client_key} - {data_fetch_params.channel}"
         f"- attr: {data_fetch_params.attr_names}"
         f"- source: {data_fetch_params.source}"
+        f"- competitor: {data_fetch_params.competitor_name}"
     )
 
     start_time = datetime.now()
     try:
         # Step 1: Preprocessing and data loading
         preprocessing_results = run_preprocessing(
-            data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+            data_fetch_params=data_fetch_params,
+            date_range=date_range,
+            data_columns=data_columns,
+            sensitivity_parameters=sensitivity_parameters,
         )
 
         df_by_price = preprocessing_results.df_by_price
@@ -141,62 +166,78 @@ def process_client_channel(
             df_results=df_results,
             data_columns=data_columns,
         )
-
-        # TODO: For xxxls only
-        # df_results[df_results["result_to_push"]].to_csv("xxxls_df_results_group.csv", index=False)
-
-        # Step 5: Merge with revenue data
-        df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
         log_quality_tests(df_results=df_results)
 
         # Step 6: Action list and upload to athena
+        if app_state.project_name == "sensitivity":
+            df_results = df_results.merge(
+                preprocessing_results.df_correlation, on="uid", how="outer"
+            )
+
         upload_elasticity_data_to_athena(
             data_fetch_params=data_fetch_params,
             end_date=date_range.end_date,
             df_upload=df_results,
             table_name=app_state.models_monitoring_table_name,
         )
-        process_actions_list(
-            df_results=df_results,
-            data_fetch_params=data_fetch_params,
-            is_qa_run=is_qa_run,
-        )
 
-        # Step 7: Save graphs
-        plot_demands.run_save_graph_top10(
-            df_results=df_results,
-            df_by_price=df_by_price,
-            data_fetch_params=data_fetch_params,
-            end_date=date_range.end_date,
-        )
+        if app_state.project_name != "sensitivity":
+            # TODO: For xxxls only
+            # df_results[df_results["result_to_push"]].to_csv(
+            # "xxxls_df_results_group.csv",  index=False)
 
-        # Step 8: Build and save report to Athena
-        runtime_duration = (datetime.now() - start_time).total_seconds() / 60
-        data_report = report.generate_run_report(
-            data_fetch_params=data_fetch_params,
-            total_uid=total_uid,
-            results_df=df_results,
-            runtime_duration=runtime_duration,
-            total_revenue=total_revenue,
-            error_count=error_counter.error_count,
-            end_date=date_range.end_date,
-            is_qa_run=is_qa_run,
-        )
+            # Step 5: Merge with revenue data
+            df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
+            log_quality_tests(df_results=df_results)
 
-        write_graphs.save_distribution_graph(
-            data_fetch_params=data_fetch_params,
-            total_uid=total_uid,
-            df_report=data_report,
-            end_date=date_range.end_date,
-            s3_dir=app_state.s3_eval_results_dir + "/graphs/",
-        )
+            # Step 6: Action list and upload to athena
+            upload_elasticity_data_to_athena(
+                data_fetch_params=data_fetch_params,
+                end_date=date_range.end_date,
+                df_upload=df_results,
+                table_name=app_state.models_monitoring_table_name,
+            )
+            process_actions_list(
+                df_results=df_results,
+                data_fetch_params=data_fetch_params,
+                is_qa_run=is_qa_run,
+            )
 
-        upload_elasticity_data_to_athena(
-            data_fetch_params=data_fetch_params,
-            end_date=date_range.end_date,
-            df_upload=data_report,
-            table_name=app_state.projects_kpis_table_name,
-        )
+            # Step 7: Save graphs
+            plot_demands.run_save_graph_top10(
+                df_results=df_results,
+                df_by_price=df_by_price,
+                data_fetch_params=data_fetch_params,
+                end_date=date_range.end_date,
+            )
+
+            # Step 8: Build and save report to Athena
+            runtime_duration = (datetime.now() - start_time).total_seconds() / 60
+            data_report = report.generate_run_report(
+                data_fetch_params=data_fetch_params,
+                total_uid=total_uid,
+                results_df=df_results,
+                runtime_duration=runtime_duration,
+                total_revenue=total_revenue,
+                error_count=error_counter.error_count,
+                end_date=date_range.end_date,
+                is_qa_run=is_qa_run,
+            )
+
+            write_graphs.save_distribution_graph(
+                data_fetch_params=data_fetch_params,
+                total_uid=total_uid,
+                df_report=data_report,
+                end_date=date_range.end_date,
+                s3_dir=app_state.s3_eval_results_dir + "/graphs/",
+            )
+
+            upload_elasticity_data_to_athena(
+                data_fetch_params=data_fetch_params,
+                end_date=date_range.end_date,
+                df_upload=data_report,
+                table_name=app_state.projects_kpis_table_name,
+            )
 
     except (KeyError, pd.errors.EmptyDataError, ValueError) as e:
         logging.error(
@@ -210,9 +251,8 @@ def process_client_channel(
 
 def run() -> None:
     """Main function to run the elasticity job."""
-    (client_keys_map, _, is_qa_run, date_range) = setup_environment()
+    (client_keys_map, _, is_qa_run, date_range, sensitivity_parameters) = setup_environment()
     for client_key in client_keys_map:
-
         channels_list = client_keys_map[client_key]["channels"]
         attr_names = client_keys_map[client_key]["attr_names"]
         source = client_keys_map[client_key].get("source", "analytics")
@@ -224,12 +264,28 @@ def run() -> None:
                 attr_names=attr_names,
                 source=source,
             )
-
-            process_client_channel(
-                data_fetch_params=data_fetch_params,
-                date_range=date_range,
-                is_qa_run=is_qa_run,
-            )
+            if app_state.project_name == "sensitivity":
+                competitor_list = read_top_competitors(
+                    data_fetch_params=data_fetch_params, date_range=date_range
+                ).competitor_name.tolist()
+                logging.info(f"Competitor_list: {competitor_list}")
+                for competitor in competitor_list:
+                    data_fetch_params.competitor_name = competitor
+                    print(data_fetch_params.competitor_name)
+                    # add sensitivity_parameters
+                    process_client_channel(
+                        data_fetch_params=data_fetch_params,
+                        date_range=date_range,
+                        is_qa_run=is_qa_run,
+                        sensitivity_parameters=sensitivity_parameters,
+                    )
+            else:
+                process_client_channel(
+                    data_fetch_params=data_fetch_params,
+                    date_range=date_range,
+                    is_qa_run=is_qa_run,
+                    sensitivity_parameters=sensitivity_parameters,
+                )
 
 
 if __name__ == "__main__":

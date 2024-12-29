@@ -13,8 +13,10 @@ from elasticity.data.configurator import (
     DataFetchParameters,
     DateRange,
     PreprocessingParameters,
+    SensitivityParameters,
 )
 from elasticity.data.read import read_data_query
+from elasticity.data.read_sensitivity import read_data_query_per_competitor
 from elasticity.data.utils import (
     clean_inventory_data,
     clean_quantity_data,
@@ -31,6 +33,7 @@ from elasticity.data.utils import (
     round_price_effect,
     summarize_price_history,
 )
+from elasticity.data.utils_sensitivity import run_correlation_test
 from ql_toolkit.application_state.manager import app_state
 from ql_toolkit.aws_data_management.s3 import io_tools as s3io
 
@@ -92,6 +95,7 @@ class PreprocessingResults(NamedTuple):
 
     df_by_price: pd.DataFrame
     df_by_price_all: pd.DataFrame
+    df_correlation: pd.DataFrame
     df_revenue_uid: pd.DataFrame
     total_uid: int
     total_revenue: float
@@ -139,6 +143,7 @@ def read_and_preprocess(
     date_range: Optional[DateRange] = None,
     preprocessing_parameters: Optional[PreprocessingParameters] = None,
     data_columns: Optional[DataColumns] = None,
+    sensitivity_parameters: Optional[SensitivityParameters] = None,
 ) -> Optional[PreprocessingResults]:
     """Reads and preprocesses data.
 
@@ -149,6 +154,7 @@ def read_and_preprocess(
         date_range (Optional[DateRange]): Date range for filtering data.
         preprocessing_parameters (Optional[PreprocessingParameters]): Parameters for preprocessing.
         data_columns (Optional[DataColumns]): Configuration of data columns.
+        sensitivity_parameters (SensitivityParameters): Sensitivity parameters.
 
     Returns:
         Optional[PreprocessingResults]:
@@ -157,6 +163,7 @@ def read_and_preprocess(
     """
     preprocessing_parameters = preprocessing_parameters or PreprocessingParameters()
     data_columns = data_columns or DataColumns()
+    sensitivity_parameters = sensitivity_parameters or SensitivityParameters()
 
     try:
         date_range = initialize_dates(date_range=date_range)
@@ -178,6 +185,20 @@ def read_and_preprocess(
             logging.error("fetch_data returned None for raw_df.")
             return None
 
+        if app_state.project_name == "sensitivity":
+            df_correlation = run_correlation_test(
+                raw_df=raw_df,
+                data_columns=data_columns,
+                sensitivity_parameters=sensitivity_parameters,
+            )
+            raw_df = raw_df[
+                raw_df[data_columns.uid].isin(
+                    df_correlation[df_correlation.correlation_test][data_columns.uid].tolist()
+                )
+            ]
+        else:
+            df_correlation = pd.DataFrame()
+
         df_by_price = preprocess_data(raw_df=raw_df, data_columns=data_columns)
         df_by_price_all = preprocess_data(
             raw_df=pd.concat([raw_df, rejected_df], ignore_index=True), data_columns=data_columns
@@ -186,6 +207,7 @@ def read_and_preprocess(
         return PreprocessingResults(
             df_by_price=df_by_price,
             df_by_price_all=df_by_price_all,
+            df_correlation=df_correlation,
             df_revenue_uid=df_revenue_uid,
             total_uid=total_uid,
             total_revenue=total_revenue,
@@ -200,7 +222,10 @@ def read_and_preprocess(
 
 
 def run_preprocessing(
-    data_fetch_params: DataFetchParameters, date_range: DateRange, data_columns: DataColumns
+    data_fetch_params: DataFetchParameters,
+    date_range: DateRange,
+    data_columns: DataColumns,
+    sensitivity_parameters: SensitivityParameters,
 ) -> PreprocessingResults:
     """Preprocess and load the required data.
 
@@ -209,6 +234,7 @@ def run_preprocessing(
             client key, channel, and attribute names.
         date_range (DateRange): The date range for fetching the data.
         data_columns (DataColumns): Configuration for column mappings.
+        sensitivity_parameters (SensitivityParameters): Sensitivity parameter.
 
     Returns:
         PreprocessingResults: A NamedTuple containing:
@@ -221,8 +247,12 @@ def run_preprocessing(
     Raises:
         ValueError: If `read_and_preprocess` fails or if `df_by_price` is empty after preprocessing.
     """
+    sensitivity_parameters = sensitivity_parameters or SensitivityParameters()
     preprocessing_results = read_and_preprocess(
-        data_fetch_params=data_fetch_params, date_range=date_range, data_columns=data_columns
+        data_fetch_params=data_fetch_params,
+        date_range=date_range,
+        data_columns=data_columns,
+        sensitivity_parameters=sensitivity_parameters,
     )
 
     if preprocessing_results is None:
@@ -370,7 +400,9 @@ def process_month_data(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Processes data for a single month, filters approved and rejected UIDs."""
     df_month = read_data(
-        data_fetch_params=data_fetch_params, data_month=date_month, data_columns=data_columns
+        data_fetch_params=data_fetch_params,
+        data_month=date_month,
+        data_columns=data_columns,
     )
 
     data_to_test = pd.concat([df_month, rejected_data])
@@ -423,21 +455,36 @@ def read_data(
     }
 
     try:
-        df_read = read_data_query(
-            data_fetch_params=data_fetch_params,
-            date_params=date_params,
-            filter_units=filter_units,
-            data_columns=data_columns,
-        )
+        if app_state.project_name == "sensitivity":
+            df_read = read_data_query_per_competitor(
+                data_fetch_params=data_fetch_params,
+                date_params=date_params,
+                data_columns=data_columns,
+            )
+        else:
+            df_read = read_data_query(
+                data_fetch_params=data_fetch_params,
+                date_params=date_params,
+                filter_units=filter_units,
+                data_columns=data_columns,
+            )
+
         df_read = filter_data_by_uids(
             df=df_read, uids_to_filter=data_fetch_params.uids_to_filter, uid_column=data_columns.uid
         )
         df_read = clean_shelf_price_data(
             df_input=df_read, shelf_price_column=data_columns.shelf_price
         )
-        df_read[data_columns.round_price] = df_read[data_columns.shelf_price].apply(
-            round_price_effect
-        )
+
+        if app_state.project_name == "sensitivity":
+            df_read[data_columns.round_price] = df_read[
+                data_columns.ratio_shelf_price_competitor
+            ].round(2)
+        else:
+            df_read[data_columns.round_price] = df_read[data_columns.shelf_price].apply(
+                round_price_effect
+            )
+
         df_read = clean_inventory_data(df_input=df_read, inventory_column=data_columns.inventory)
         df_read = clean_quantity_data(df_input=df_read, quantity_column=data_columns.quantity)
 
@@ -452,6 +499,7 @@ def read_data(
                 data_columns.revenue,
                 data_columns.round_price,
             ]
+            + ([data_columns.competitor_price] if app_state.project_name == "sensitivity" else [])
         )
 
     return df_read

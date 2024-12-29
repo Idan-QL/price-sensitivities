@@ -86,7 +86,11 @@ def upload_elasticity_data_to_athena(
     # Upload DataFrame to Athena
     config = AthenaUploadConfig(
         client_key=data_fetch_params.client_key,
-        channel=data_fetch_params.channel,
+        channel=(
+            f"{data_fetch_params.channel}_{data_fetch_params.competitor_name}"
+            if data_fetch_params.competitor_name
+            else data_fetch_params.channel
+        ),
         table_name=table_name,
     )
 

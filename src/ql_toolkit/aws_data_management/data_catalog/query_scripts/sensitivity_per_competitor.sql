@@ -10,7 +10,7 @@ WITH expanded_competitors AS (
                 THEN CAST(ped.product_events_shelf_price_stats['most_units_sold'] AS DOUBLE)
                 ELSE CAST(ped.product_info_shelf_price_stats['most_units_sold'] AS DOUBLE) 
             END
-        ) AS shelf_price_base,
+        ) AS shelf_price,
         (
             CASE 
                 WHEN ped.product_events_analytics['units_sold'] IS NOT NULL 
@@ -30,16 +30,15 @@ WITH expanded_competitors AS (
         AND t.key = '{competitor_name}'
 )
 SELECT
-    uid,
-    date,
-    competitor_name as competitor_name,
-    shelf_price_base,
-    competitor_price,
-    shelf_price_base - competitor_price AS diff_shelf_price_minus_competitor_price,
-    shelf_price_base / competitor_price AS ratio_shelf_price_competitor,
-    quantity,
-    revenue,
-    inventory
+    uid AS {data_columns.uid},
+    date AS {data_columns.date},
+    competitor_name  AS {data_columns.competitor_name},
+    shelf_price AS {data_columns.shelf_price},
+    competitor_price AS {data_columns.competitor_price},
+    shelf_price / competitor_price AS {data_columns.ratio_shelf_price_competitor},
+    quantity AS {data_columns.quantity},
+    revenue AS {data_columns.revenue},
+    inventory AS {data_columns.inventory}
 FROM expanded_competitors
 WHERE competitor_price IS NOT NULL
   AND inventory > 0;

@@ -2,111 +2,167 @@
 
 import logging
 import warnings
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 from statsmodels.tsa.stattools import adfuller, grangercausalitytests
 
+from elasticity.data.configurator import DataColumns, SensitivityParameters
 
-def perform_bi_directional_granger_tests(
-    df: pd.DataFrame, max_lag: int = 5, max_diff: int = 2
-) -> dict:
-    """Perform Granger causality tests.
 
-    In both directions between 'competitor_price' and 'shelf_price_base'.
-    Handles constant series and insufficient sample sizes by returning appropriate flags.
+def run_granger_test(
+    series_1: pd.Series,
+    series_2: pd.Series,
+    max_lag: int,
+) -> Optional[Dict[str, Any]]:
+    """Run Granger causality test between two series.
 
-    Parameters:
-    ----------
-    df : pd.DataFrame
-        DataFrame containing 'competitor_price' and 'shelf_price_base' columns.
-    max_lag : int, optional
-        The maximum number of lags to test for Granger causality. Default is 5.
-    max_diff : int, optional
-        The maximum number of differences to apply to achieve stationarity. Default is 2.
+    Args:
+        series_1 (pd.Series): The time series hypothesized as the effect.
+        series_2 (pd.Series): The time series hypothesized as the cause.
+        max_lag (int): The maximum number of lags to test for Granger causality.
 
     Returns:
-    -------
-    dict
-        Dictionary containing p-values and causality flags for both directions and
-        the merged 'Granger_Causes'.
+        Optional[Dict[str, Any]]
+        Dictionary with p-values and causality flag, or None if the test fails.
+    """
+    try:
+        data = pd.concat([series_1, series_2], axis=1)
+        data.columns = ["effect", "cause"]
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", category=FutureWarning, message=".*verbose is deprecated.*"
+            )
+            granger_test = grangercausalitytests(data, maxlag=max_lag, verbose=False)
+
+        p_values = [round(granger_test[lag][0]["ssr_ftest"][1], 4) for lag in range(1, max_lag + 1)]
+        causality = any(p < 0.05 for p in p_values)
+        return {"p_values": p_values, "causality": causality}
+
+    except Exception as e:
+        logging.error(f"Error during Granger test: {e}")
+        return None
+
+
+def granger_causality_test(
+    cause: pd.Series,
+    effect: pd.Series,
+    max_lag: int = 5,
+    max_diff: int = 2,
+) -> Optional[Dict[str, Any]]:
+    """Perform a Granger causality test in both directions.
+
+    Handles constant series, non-stationary data, insufficient sample sizes,
+    and missing values gracefully.
+
+    Args:
+        cause (pd.Series): The time series hypothesized to cause the effect.
+        effect (pd.Series): The time series hypothesized to be affected by the cause.
+        max_lag (int, optional): The maximum number of lags to test for Granger causality.
+        Default is 5.
+        max_diff (int, optional): The maximum number of differences to apply to achieve
+        stationarity. Default is 2.
+
+    Returns:
+        Optional[Dict[str, Any]]
+        Dictionary with p-values and causality flags for both directions, or None if the test
+        cannot be performed.
 
     Example:
-            {
-                'p_values_competitor_to_shelf': [...],
-                'causality_competitor_to_shelf': True,
-                'p_values_shelf_to_competitor': [...],
-                'causality_shelf_to_competitor': False,
-                'Granger_Causes': True
-            }
+        {
+            'p_values_cause_to_effect': [0.0033, 0.0066, 0.0087],
+            'causality_cause_to_effect': True,
+            'p_values_effect_to_cause': [0.0456, 0.0789, 0.1234],
+            'causality_effect_to_cause': False
+        }
     """
-    group_identifier = (
-        df["uid_competitor_name"].iloc[0] if "uid_competitor_name" in df.columns else "unknown"
-    )
+    try:
+        # Drop NaN values
+        combined_df = pd.concat([cause, effect], axis=1).dropna()
+        cause = combined_df.iloc[:, 0]
+        effect = combined_df.iloc[:, 1]
 
-    causality_result_1 = granger_causality_test(
-        cause=df["competitor_price"],
-        effect=df["shelf_price_base"],
-        max_lag=max_lag,
-        max_diff=max_diff,
-        group_identifier=group_identifier,
-    )
+        # Ensure sufficient data for Granger causality
+        if len(cause) <= max_lag + 1:
+            # logging.warning(f"Insufficient data for Granger causality: {len(cause)} rows.")
+            return None
 
-    causality_result_2 = granger_causality_test(
-        cause=df["shelf_price_base"],
-        effect=df["competitor_price"],
-        max_lag=max_lag,
-        max_diff=max_diff,
-        group_identifier=group_identifier,
-    )
+        # Ensure variance in both series
+        if cause.std() == 0 or effect.std() == 0:
+            # logging.warning("One or both series have zero variance. Skipping test.")
+            return None
 
-    result = {}
+        # Make both series stationary
+        cause_stationary = make_stationary(cause, max_diff=max_diff)
+        effect_stationary = make_stationary(effect, max_diff=max_diff)
 
-    if causality_result_1:
-        result["p_values_competitor_to_shelf"] = causality_result_1["p_values"]
-        result["causality_competitor_to_shelf"] = causality_result_1["causality"]
-    else:
-        result["p_values_competitor_to_shelf"] = None
-        result["causality_competitor_to_shelf"] = False
+        if cause_stationary is None or effect_stationary is None:
+            # logging.warning("Stationarity could not be achieved for one or both series.")
+            return None
 
-    if causality_result_2:
-        result["p_values_shelf_to_competitor"] = causality_result_2["p_values"]
-        result["causality_shelf_to_competitor"] = causality_result_2["causality"]
-    else:
-        result["p_values_shelf_to_competitor"] = None
-        result["causality_shelf_to_competitor"] = False
+        # Align after differencing
+        min_length = min(len(cause_stationary), len(effect_stationary))
+        cause_stationary = cause_stationary[-min_length:]
+        effect_stationary = effect_stationary[-min_length:]
 
-    causality_flags = [
-        causality_result_1["causality"] if causality_result_1 else False,
-        causality_result_2["causality"] if causality_result_2 else False,
-    ]
+        # Run Granger tests in both directions
+        result_cause_to_effect = run_granger_test(
+            series_1=cause_stationary, series_2=effect_stationary, max_lag=max_lag
+        )
+        result_effect_to_cause = run_granger_test(
+            series_1=effect_stationary, series_2=cause_stationary, max_lag=max_lag
+        )
 
-    result["Granger_Causes"] = any(causality_flags)
+        return {
+            "p_values_cause_to_effect": (
+                result_cause_to_effect.get("p_values") if result_cause_to_effect else None
+            ),
+            "causality_cause_to_effect": (
+                result_cause_to_effect.get("causality") if result_cause_to_effect else None
+            ),
+            "p_values_effect_to_cause": (
+                result_effect_to_cause.get("p_values") if result_effect_to_cause else None
+            ),
+            "causality_effect_to_cause": (
+                result_effect_to_cause.get("causality") if result_effect_to_cause else None
+            ),
+        }
 
-    return result
+    except Exception as e:
+        logging.error(f"Unexpected error during Granger causality test: {e}")
+        return None
 
 
 def compute_corr(sub_df: pd.DataFrame, col1: str, col2: str) -> float:
     """Compute the Pearson correlation between two columns in a dataframe subset.
 
-    Parameters:
-    ----------
-    sub_df : pd.DataFrame
-        Subset of the main DataFrame for a specific competitor.
-    col1 : str
-        Name of the first column.
-    col2 : str
-        Name of the second column.
+    Args:
+        sub_df (pd.DataFrame): Subset of the main DataFrame for a specific competitor.
+        col1 (str): Name of the first column.
+        col2 (str): Name of the second column.
 
     Returns:
-    -------
-    float
-        Pearson correlation coefficient or np.nan if not computable.
+        float
+        Pearson correlation coefficient or 0 if not computable.
     """
-    valid = sub_df[[col1, col2]].dropna()
-    if len(valid) < 2:
+    # Check if columns exist
+    if col1 not in sub_df.columns or col2 not in sub_df.columns:
         return np.nan
+
+    # Drop rows with NaN or infinite values
+    valid = sub_df[[col1, col2]].replace([np.inf, -np.inf], np.nan).dropna()
+
+    # Ensure sufficient non-NaN data
+    if len(valid) < 2:
+        return 0
+
+    # Check for zero variance in either column
+    if valid[col1].std() == 0 or valid[col2].std() == 0:
+        return 0
+
+    # Compute and return the Pearson correlation
     return valid[col1].corr(valid[col2])
 
 
@@ -115,16 +171,12 @@ def make_stationary(series: pd.Series, max_diff: int = 2) -> Optional[pd.Series]
 
     Handles constant series and insufficient sample sizes by returning None.
 
-    Parameters
-    ----------
-    series : pd.Series
-        The time series data.
-    max_diff : int
-        Maximum number of differences to apply.
+    Args:
+        series (pd.Series): The time series data.
+        max_diff (int): Maximum number of differences to apply.
 
     Returns:
-    -------
-    pd.Series or None
+        pd.Series or None
         Stationary series if achieved, else None.
     """
     # Check if the series is constant
@@ -133,13 +185,10 @@ def make_stationary(series: pd.Series, max_diff: int = 2) -> Optional[pd.Series]
         return None
 
     try:
-        for d in range(max_diff + 1):
+        for _ in range(max_diff + 1):
             result = adfuller(series.dropna())
             p_value = result[1]
             if p_value < 0.05:
-                logging.info(
-                    f"Series is stationary with p-value={p_value} at differencing level {d}."
-                )
                 return series
             series = series.diff().dropna()
             if series.min() == series.max():
@@ -157,242 +206,316 @@ def make_stationary(series: pd.Series, max_diff: int = 2) -> Optional[pd.Series]
     return None
 
 
-def granger_causality_test(
-    cause: pd.Series,
-    effect: pd.Series,
-    max_lag: int = 5,
-    max_diff: int = 2,
-    group_identifier: str = "unknown",
-) -> Optional[Dict[str, Any]]:
-    """Perform Granger causality test to determine if 'cause' Granger-causes 'effect'.
+def calculate_coverage(df: pd.DataFrame, date_column: str) -> float:
+    """Calculate the percentage of days covered in the DataFrame.
 
-    Handles constant series and insufficient sample sizes by returning None.
-
-    Parameters
-    ----------
-    cause : pd.Series
-        The time series hypothesized to cause the effect.
-    effect : pd.Series
-        The time series hypothesized to be affected by the cause.
-    max_lag : int, optional
-        The maximum number of lags to test for Granger causality. Default is 5.
-    max_diff : int, optional
-        The maximum number of differences to apply to achieve stationarity. Default is 2.
-    group_identifier : str, optional
-        Identifier for the group being tested (used for logging). Default is 'unknown'.
+    Args:
+        df (pd.DataFrame): The DataFrame to evaluate.
+        date_column (str): The name of the date column.
 
     Returns:
-    -------
-    dict or None
-        If successful, returns a dictionary with p-values and causality flag.
-
-    Example:
-    -------
-        {
-            'p_values': [0.0033, 0.0066, 0.0087, 0.0123, 0.0150],
-            'causality': True
-        }
-        If stationarity cannot be achieved or sample size is insufficient, returns None.
+        float:
+            The percentage of days covered based on the range between the minimum and maximum dates.
     """
-    # Ensure both series are aligned
-    combined_df = pd.concat([cause, effect], axis=1).dropna()
-    cause_aligned = combined_df.iloc[:, 0]
-    effect_aligned = combined_df.iloc[:, 1]
+    # Check if the column is already datetime, otherwise convert
+    if not pd.api.types.is_datetime64_any_dtype(df[date_column]):
+        df[date_column] = pd.to_datetime(df[date_column], errors="coerce")
 
-    # Make both series stationary
-    cause_stationary = make_stationary(cause_aligned, max_diff=max_diff)
-    effect_stationary = make_stationary(effect_aligned, max_diff=max_diff)
+    # Calculate the range of days
+    min_date = df[date_column].min()
+    max_date = df[date_column].max()
 
-    if cause_stationary is None or effect_stationary is None:
-        logging.warning(
-            f"Granger causality test skipped for group '{group_identifier}' due to constant "
-            "series or insufficient data."
-        )
+    # Handle edge case where min_date or max_date is NaT
+    if pd.isna(min_date) or pd.isna(max_date):
         return None
 
-    # Align the series after differencing
-    min_length = min(len(cause_stationary), len(effect_stationary))
-    cause_stationary = cause_stationary[-min_length:]
-    effect_stationary = effect_stationary[-min_length:]
+    # Total days in the range
+    total_days = (max_date - min_date).days + 1
 
-    # Define minimum required observations
-    min_required_obs = 10 * max_lag + 1  # Example: 10 times max_lag + 1
+    # Unique days in the column
+    num_unique_days = df[date_column].nunique()
 
-    if min_length < min_required_obs:
-        logging.warning(
-            f"Granger causality test skipped for group '{group_identifier}' due to insufficient "
-            f"sample size ({min_length} observations). Required: {min_required_obs}."
-        )
-        return None
+    # Calculate coverage percentage
+    return round((num_unique_days / total_days) * 100, 2)
 
-    # Combine into DataFrame
-    data_granger = pd.concat([effect_stationary, cause_stationary], axis=1)
-    data_granger.columns = ["effect", "cause"]
 
-    try:
-        with warnings.catch_warnings():
-            # Suppress only the specific FutureWarning related to 'verbose'
-            warnings.filterwarnings(
-                "ignore", category=FutureWarning, message=".*verbose is deprecated.*"
+def initialize_result_for_insufficient_coverage(
+    correlation_pairs: List[Tuple[str, str]], granger_pairs: List[Tuple[str, str]]
+) -> Dict[str, Optional[float]]:
+    """Initialize result dictionary with NaN for insufficient coverage.
+
+    Args:
+        correlation_pairs (list of tuples): List of column pairs for correlation.
+        granger_pairs (list of tuples): List of column pairs for Granger causality.
+
+    Returns:
+        dict
+        A dictionary with NaN values for all correlation and Granger fields.
+    """
+    result = {}
+
+    for col1, col2 in correlation_pairs:
+        result[f"corr_{col1}_{col2}_overall"] = np.nan
+        result[f"corr_{col1}_{col2}_quantity_gt0"] = np.nan
+
+    for col1, col2 in granger_pairs:
+        set_granger_results_to_nan(result, col1, col2)
+
+    return result
+
+
+def calculate_correlations(
+    df: pd.DataFrame,
+    correlation_pairs: List[Tuple[str, str]],
+    quantity_column: str,
+    min_abs_correlation: float,
+) -> Dict[str, Optional[float]]:
+    """Calculate correlations for the given pairs of columns.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to evaluate.
+        correlation_pairs (list of tuples): List of column pairs for correlation.
+        quantity_column (str): The column to use for filtering rows (e.g., where quantity > 0).
+        min_abs_correlation (float): Minimum absolute correlation threshold for the
+        correlation test to be considered `True`.
+
+    Returns:
+        dict
+        A dictionary containing correlation scores and boolean results for each pair.
+    """
+
+    def compute_and_check_correlation(
+        df_subset: pd.DataFrame, col1: str, col2: str
+    ) -> Tuple[Optional[float], bool]:
+        """Compute correlation and check against the threshold."""
+        if df_subset.empty:
+            return np.nan, False
+        corr = compute_corr(df_subset, col1, col2)
+        return corr, abs(corr) >= min_abs_correlation
+
+    result = {}
+
+    for col1, col2 in correlation_pairs:
+        # Skip if required columns are missing
+        if col1 not in df.columns or col2 not in df.columns:
+            result.update(
+                {
+                    f"score_corr_{col1}_{col2}_overall": np.nan,
+                    f"corr_{col1}_{col2}_overall": False,
+                    f"score_corr_{col1}_{col2}_quantity_gt0": np.nan,
+                    f"corr_{col1}_{col2}_quantity_gt0": False,
+                }
             )
-            # Perform Granger Causality Test without verbose
-            granger_test = grangercausalitytests(data_granger, maxlag=max_lag, verbose=False)
+            continue
 
-        # Collect p-values for each lag
-        p_values = []
-        for lag in range(1, max_lag + 1):
-            p_value = granger_test[lag][0]["ssr_ftest"][1]
-            p_values.append(round(p_value, 4))
+        # Overall correlation
+        overall_corr, overall_flag = compute_and_check_correlation(df, col1, col2)
+        result[f"score_corr_{col1}_{col2}_overall"] = overall_corr
+        result[f"corr_{col1}_{col2}_overall"] = overall_flag
 
-        # Determine causality: any p-value < 0.05
-        causality = any(p < 0.05 for p in p_values)
+        # Conditional correlation (quantity > 0)
+        if quantity_column in df.columns:
+            conditional_corr, conditional_flag = compute_and_check_correlation(
+                df[df[quantity_column] > 0], col1, col2
+            )
+            result[f"score_corr_{col1}_{col2}_quantity_gt0"] = conditional_corr
+            result[f"corr_{col1}_{col2}_quantity_gt0"] = conditional_flag
+        else:
+            result.update(
+                {
+                    f"score_corr_{col1}_{col2}_quantity_gt0": np.nan,
+                    f"corr_{col1}_{col2}_quantity_gt0": False,
+                }
+            )
 
-        logging.info(
-            f"Granger causality test completed for group '{group_identifier}'. "
-            f"Causality: {causality}."
+    return result
+
+
+def set_granger_results_to_nan(result: Dict[str, Optional[float]], col1: str, col2: str) -> None:
+    """Helper function to set Granger causality results to NaN for a specific column pair.
+
+    Args:
+        result (dict): The dictionary to update.
+        col1 (str): The first column name in the pair.
+        col2 (str): The second column name in the pair.
+    """
+    result[f"granger_p_values_{col1}_to_{col2}"] = np.nan
+    result[f"granger_cause_{col1}_to_{col2}"] = np.nan
+    result[f"granger_p_values_{col2}_to_{col1}"] = np.nan
+    result[f"granger_cause_{col2}_to_{col1}"] = np.nan
+
+
+def calculate_granger_causality(
+    df: pd.DataFrame, granger_pairs: List[Tuple[str, str]], max_lag: int, max_diff: int
+) -> Dict[str, Optional[float]]:
+    """Perform Granger causality tests for the given pairs of columns.
+
+    Args:
+        df (pd.DataFrame): The DataFrame to evaluate.
+        granger_pairs (list of tuples): List of column pairs for Granger causality.
+        max_lag (int): Maximum number of lags for Granger causality.
+        max_diff (int): Maximum number of differences to apply for stationarity.
+
+    Returns:
+        dict
+        A dictionary containing Granger causality results for both directions for each pair.
+    """
+    result = {}
+
+    for col1, col2 in granger_pairs:
+        if col1 in df.columns and col2 in df.columns:
+            # Perform Granger causality tests in both directions
+            causality_results = granger_causality_test(
+                cause=df[col1], effect=df[col2], max_lag=max_lag, max_diff=max_diff
+            )
+
+            if causality_results is not None:
+                # Cause -> Effect
+                result[f"granger_p_values_{col1}_to_{col2}"] = causality_results.get(
+                    "p_values_cause_to_effect", np.nan
+                )
+                result[f"granger_cause_{col1}_to_{col2}"] = causality_results.get(
+                    "causality_cause_to_effect", np.nan
+                )
+                # Effect -> Cause
+                result[f"granger_p_values_{col2}_to_{col1}"] = causality_results.get(
+                    "p_values_effect_to_cause", np.nan
+                )
+                result[f"granger_cause_{col2}_to_{col1}"] = causality_results.get(
+                    "causality_effect_to_cause", np.nan
+                )
+            else:
+                set_granger_results_to_nan(result, col1, col2)
+        else:
+            set_granger_results_to_nan(result, col1, col2)
+
+    return result
+
+
+def correlation_test(
+    df_uid: pd.DataFrame,
+    correlation_pairs: List[Tuple[str, str]],
+    granger_pairs: List[Tuple[str, str]],
+    data_columns: DataColumns,
+    sensitivity_parameters: Optional[SensitivityParameters],
+) -> pd.Series:
+    """Perform correlation and Granger causality tests on a unique DataFrame subset.
+
+    Args:
+        df_uid (pd.DataFrame): The subset DataFrame for a specific group.
+        correlation_pairs (list of tuples): List of column pairs for correlation tests.
+        granger_pairs (list of tuples): List of column pairs for Granger causality tests.
+        data_columns (DataColumns): Object containing column names for the analysis.
+        sensitivity_parameters : SensitivityParameters.
+        Default SensitivityParameters()
+
+    Returns:
+        pd.Series
+        A Series containing correlation coefficients, % days covered, Granger causality results,
+        a `correlation_test` column that is True if any test is True, and a `details` column
+        listing all the True tests.
+    """
+    result = {}
+
+    # Calculate % days covered
+    percent_days_covered = calculate_coverage(df_uid, data_columns.date)
+    result["%_days_covered"] = percent_days_covered
+
+    sensitivity_parameters = sensitivity_parameters or SensitivityParameters()
+    coverage_threshold = sensitivity_parameters.coverage_threshold
+    min_abs_correlation = sensitivity_parameters.min_abs_correlation
+    max_lag = sensitivity_parameters.max_lag
+    max_diff = sensitivity_parameters.max_diff
+
+    # Handle insufficient coverage
+    if percent_days_covered is None or percent_days_covered < coverage_threshold:
+        insufficient_result = initialize_result_for_insufficient_coverage(
+            correlation_pairs, granger_pairs
         )
-        return {"p_values": p_values, "causality": causality}
-    except ValueError as ve:
-        logging.error(f"Granger causality test failed for group '{group_identifier}': {ve}")
-        return None
-    except Exception as e:
-        logging.error(
-            f"An unexpected error occurred during Granger causality test for group "
-            f"'{group_identifier}': {e}"
+        result.update(insufficient_result)
+        result["correlation_test"] = False
+        result["details_correlation_test"] = "low coverage"
+        return pd.Series(result)
+
+    # Calculate correlations
+    correlation_result = calculate_correlations(
+        df=df_uid,
+        correlation_pairs=correlation_pairs,
+        quantity_column=data_columns.quantity,
+        min_abs_correlation=min_abs_correlation,
+    )
+    result.update(correlation_result)
+
+    # Identify correlation tests exceeding the minimum absolute correlation threshold
+    correlation_tests = [
+        key for key, value in result.items() if key.startswith("corr_") and bool(value) is True
+    ]
+
+    # Perform Granger causality tests
+    granger_result = calculate_granger_causality(df_uid, granger_pairs, max_lag, max_diff)
+    result.update(granger_result)
+
+    # Identify all tests that are True
+    granger_tests = [
+        key
+        for key, value in result.items()
+        if key.startswith("granger_cause_") and bool(value) is True
+    ]
+
+    # Combine correlation and Granger test results
+    all_true_tests = correlation_tests + granger_tests
+
+    # Set 'test' and 'details'
+    if all_true_tests:
+        result["correlation_test"] = True
+        result["details_correlation_test"] = ", ".join(all_true_tests)
+    else:
+        result["correlation_test"] = False
+        result["details_correlation_test"] = "All test False"
+
+    return pd.Series(result)
+
+
+def run_correlation_test(
+    raw_df: pd.DataFrame,
+    data_columns: DataColumns,
+    sensitivity_parameters: SensitivityParameters,
+) -> pd.DataFrame:
+    """Run correlation tests with default parameters on the provided DataFrame.
+
+    Args:
+        raw_df (pd.DataFrame): The raw DataFrame containing the data to analyze.
+        data_columns (DataColumns): Configuration for column mappings.
+        sensitivity_parameters (SensitivityParameters): Sensitivity parameters.
+
+    Returns:
+        pd.DataFrame: A summary DataFrame containing the results of the analysis.
+    """
+    # Convert 'date' column to datetime
+    raw_df[data_columns.date] = pd.to_datetime(raw_df[data_columns.date], errors="coerce")
+
+    # Define correlation and Granger pairs
+    correlation_pairs = [(data_columns.ratio_shelf_price_competitor, data_columns.quantity)]
+    granger_pairs = [(data_columns.shelf_price, data_columns.competitor_price)]
+
+    # Group the DataFrame by 'uid' and apply the test function
+    grouped = raw_df.groupby(data_columns.uid)
+    results = grouped.apply(
+        lambda group: correlation_test(
+            df_uid=group,
+            correlation_pairs=correlation_pairs,
+            granger_pairs=granger_pairs,
+            data_columns=data_columns,
+            sensitivity_parameters=sensitivity_parameters,
         )
-        return None
+    )
+    # print('type(results)', type(results))
+    # type(results) <class 'pandas.core.series.Series'>
+    # results.to_pickle("results.pkl")
 
-
-# def test(
-#     df_group,
-#     correlation_pairs=[
-#         ("ratio_shelf_price_competitor", "quantity"),
-#         ("diff_shelf_price_minus_competitor_price", "quantity"),
-#         ("shelf_price_base", "competitor_price"),
-#     ],
-#     max_lag=5,
-#     max_diff=2,
-#     total_days=None,
-#     coverage_threshold=30,
-# ):
-#     """Perform correlation and Granger causality tests on a unique DataFrame subset.
-#     If the percentage of days covered is below the specified threshold or is None,
-#       set all results to NaN.
-
-#     Parameters:
-#     ----------
-#     df_group : pd.DataFrame
-#         The unique DataFrame subset for a specific 'uid_competitor_name'.
-#     correlation_pairs : list of tuples, optional
-#         List of column pairs to compute Pearson correlation. Default is predefined pairs.
-#     max_lag : int, optional
-#         The maximum number of lags to test for Granger causality. Default is 5.
-#     max_diff : int, optional
-#         The maximum number of differences to apply to achieve stationarity. Default is 2.
-#     total_days : int, optional
-#         Total number of days in the analysis period for percentage calculation. Default is None.
-#     coverage_threshold : float, optional
-#         The minimum percentage of days required to perform tests. Default is 30.
-
-#     Returns:
-#     -------
-#     pd.Series
-#         A Series containing correlation coefficients, % days covered, Granger causality results,
-#         or NaNs if coverage is below the threshold or is None.
-#     """
-#     result = {}
-
-#     # Extract 'uid_competitor_name' from the group
-#     if "uid_competitor_name" in df_group.columns:
-#         unique_identifier = df_group["uid_competitor_name"].iloc[0]
-#         result["uid_competitor_name"] = unique_identifier
-#     else:
-#         unique_identifier = "unknown"
-#         result["uid_competitor_name"] = unique_identifier
-
-#     # Calculate percentage of days covered
-#     if total_days and "date" in df_group.columns:
-#         num_unique_days = df_group["date"].nunique()
-#         percent_days_covered = (num_unique_days / total_days) * 100
-#         percent_days_covered = round(percent_days_covered, 2)
-#         result["%_days_covered"] = percent_days_covered
-#     else:
-#         percent_days_covered = None
-#         result["%_days_covered"] = np.nan
-
-#     # Check if coverage meets the threshold or is None
-#     if percent_days_covered is None or percent_days_covered < coverage_threshold:
-#         logging.info(
-#             f"Group '{unique_identifier}' has {percent_days_covered}% days covered
-# (< {coverage_threshold}%)
-# or coverage is None. Setting all results to NaN."
-#         )
-#         # Define all expected result fields
-#         expected_fields = [
-#             "corr_ratio_shelf_price_competitor_quantity_overall",
-#             "corr_ratio_shelf_price_competitor_quantity_total_units_sold_gt0",
-#             "corr_diff_shelf_price_minus_competitor_price_quantity_overall",
-#             "corr_diff_shelf_price_minus_competitor_price_quantity_total_units_sold_gt0",
-#             "corr_shelf_price_base_competitor_price_overall",
-#             "corr_shelf_price_base_competitor_price_total_units_sold_gt0",
-#             "Granger_Causality_p_values_competitor_price_to_shelf_price_base",
-#             "Granger_Causes_competitor_price_to_shelf_price_base",
-#             "Granger_Causality_p_values_shelf_price_base_to_competitor_price",
-#             "Granger_Causes_shelf_price_base_to_competitor_price",
-#             "Granger_Causes",
-#         ]
-#         # Set all fields to NaN
-#         for field in expected_fields:
-#             result[field] = np.nan
-#         return pd.Series(result)
-
-#     # Proceed with calculations if coverage is sufficient
-#     # Calculate correlations
-#     for col1, col2 in correlation_pairs:
-#         # Check if both columns exist
-#         if col1 not in df_group.columns or col2 not in df_group.columns:
-#             result[f"corr_{col1}_{col2}_overall"] = np.nan
-#             result[f"corr_{col1}_{col2}_quantity_gt0"] = np.nan
-#             continue
-
-#         # Overall correlation
-#         corr_overall = compute_corr(df_group, col1, col2)
-#         result[f"corr_{col1}_{col2}_overall"] = corr_overall
-
-#         # Conditional correlation (quantity > 0)
-#         if "quantity" in df_group.columns:
-#             cond_group = df_group[df_group["quantity"] > 0]
-#             corr_conditional = compute_corr(cond_group, col1, col2)
-#             result[f"corr_{col1}_{col2}_quantity_gt0"] = corr_conditional
-#         else:
-#             result[f"corr_{col1}_{col2}_tquantity_gt0"] = np.nan
-
-#     # Perform Granger Causality Tests in Both Directions
-#     if "competitor_price" in df_group.columns and "shelf_price_base" in df_group.columns:
-#         causality_results = perform_bi_directional_granger_tests(
-#             df=df_group, max_lag=max_lag, max_diff=max_diff
-#         )
-
-#         # Populate Granger Causality Results
-#         result["Granger_Causality_p_values_competitor_price_to_shelf_price_base"] = (
-#             causality_results.get("p_values_competitor_to_shelf", None)
-#         )
-#         result["Granger_Causes_competitor_price_to_shelf_price_base"] = causality_results.get(
-#             "causality_competitor_to_shelf", False
-#         )
-#         result["Granger_Causality_p_values_shelf_price_base_to_competitor_price"] = (
-#             causality_results.get("p_values_shelf_to_competitor", None)
-#         )
-#         result["Granger_Causes_shelf_price_base_to_competitor_price"] = causality_results.get(
-#             "causality_shelf_to_competitor", False
-#         )
-#         result["Granger_Causes"] = causality_results.get("Granger_Causes", False)
-#     else:
-#         # If necessary columns are missing, set Granger causality results to None or False
-#         result["Granger_Causality_p_values_competitor_price_to_shelf_price_base"] = None
-#         result["Granger_Causes_competitor_price_to_shelf_price_base"] = False
-#         result["Granger_Causality_p_values_shelf_price_base_to_competitor_price"] = None
-#         result["Granger_Causes_shelf_price_base_to_competitor_price"] = False
-#         result["Granger_Causes"] = False
-
-#     return pd.Series(result)
+    # ERROR:root:Unexpected error: agg function failed [how->mean,dtype->object]
+    # return results_df.pivot_table(
+    #     index=results_df.columns[0],
+    #     columns=results_df.columns[1],
+    #     values=results_df.columns[2]).reset_index()
+    return results.unstack().reset_index()

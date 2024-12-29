@@ -27,6 +27,7 @@ class DataFetchParameters(BaseModel):
     uids_to_filter: Optional[List[str]] = Field(
         None, description="Optional list of UIDs to filter the data by."
     )
+    competitor_name: Optional[str] = Field(None, description="Competitor names.")
 
 
 class PreprocessingParameters(BaseModel):
@@ -35,6 +36,15 @@ class PreprocessingParameters(BaseModel):
     price_changes: int = Field(5, description="Number of price changes required")
     threshold: float = Field(0.01, description="Threshold value for detecting price changes")
     min_conversions_days: int = Field(10, description="Minimum number of days for conversions")
+
+
+class SensitivityParameters(BaseModel):
+    """Represents the parameters used for preprocessing data."""
+
+    max_lag: int = Field(4, description="Number of lags for Granger causality tests")
+    max_diff: int = Field(2, description="Number of differences for stationarity")
+    coverage_threshold: int = Field(30, description="Minimum number of days for conversions")
+    min_abs_correlation: float = Field(0.1, description="Minimum correlation threshold")
 
 
 class DataColumns(BaseModel):
@@ -47,11 +57,21 @@ class DataColumns(BaseModel):
     shelf_price: Optional[str] = Field(
         "shelf_price", description="The column name for the shelf price"
     )
+    ratio_shelf_price_competitor: Optional[str] = Field(
+        "ratio_shelf_price_competitor",
+        description="The column name for the ratio_shelf_price_competitor",
+    )
     quantity: Optional[str] = Field("units", description="The column name for the quantity")
     revenue: Optional[str] = Field("revenue", description="The column name for the revenue")
     date: Optional[str] = Field("date", description="The column name for the date")
     weight: Optional[str] = Field("days", description="The column name for the weight")
     inventory: Optional[str] = Field("inventory", description="The column name for the inventory")
+    competitor_price: Optional[str] = Field(
+        "competitor_price", description="The column name for the competitor_price"
+    )
+    competitor_name: Optional[str] = Field(
+        "competitor_name", description="The column name for the competitor_name"
+    )
     outlier_quantity: Optional[str] = Field(
         "outlier_quantity", description="The column name for the outlier_quantity"
     )

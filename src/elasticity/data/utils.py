@@ -1,6 +1,7 @@
 """Module of utils."""
 
 import logging
+import math
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -317,7 +318,10 @@ def calculate_last_values(input_df: pd.DataFrame, data_columns: DataColumns) -> 
     )
 
     return last_values_df.rename(
-        columns={data_columns.shelf_price: "last_price", data_columns.date: "last_date"}
+        columns={
+            data_columns.shelf_price: "last_price",
+            data_columns.date: "last_date",
+        }
     )
 
 
@@ -354,13 +358,16 @@ def get_revenue(
 
 
 def round_down_to_nearest_half(number: float) -> float:
-    """Rounds down a given number to the nearest half.
+    """Rounds down a given number to the nearest half, raising an error if negative.
 
     Args:
         number (float): The number to be rounded down.
 
     Returns:
         float: The rounded down number.
+
+    Raises:
+        ValueError: If the input number is negative.
 
     Example:
         >>> round_down_to_nearest_half(3.7)
@@ -369,11 +376,16 @@ def round_down_to_nearest_half(number: float) -> float:
         6.0
         >>> round_down_to_nearest_half(0.1)
         0.0
+        >>> round_down_to_nearest_half(-1.0)
+        Traceback (most recent call last):
+        ...
+        ValueError: Number must be non-negative.
     """
-    nearest_integer = int(number)
-    decimal_part = number - nearest_integer
-    nearest_half = 0 if decimal_part < 0.5 else 0.5
-    return nearest_integer + nearest_half
+    if number < 0:
+        err_msg = "Number must be non-negative."
+        logging.error(err_msg)
+        raise ValueError(err_msg)
+    return math.floor(number * 2) / 2
 
 
 def round_price_effect(price: float) -> float:

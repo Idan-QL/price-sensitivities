@@ -548,7 +548,11 @@ def outliers_iqr_filtered(
     if filtered_range <= range_threshold:
         return [False] * len(ys)
 
-    quartile_1, quartile_3 = np.percentile(filtered_ys, [quartile, 100 - quartile])
+    quartile_1, quartile_3 = np.percentile(
+        filtered_ys,
+        [quartile, 100 - quartile],
+        method="linear",
+    )
     iqr = quartile_3 - quartile_1
     lower_bound = quartile_1 - q * iqr
     upper_bound = quartile_3 + q * iqr
@@ -557,7 +561,7 @@ def outliers_iqr_filtered(
     # Set values less than or equal to the outlier_threshold to False
     outliers[ys <= outlier_threshold] = False
 
-    return outliers
+    return outliers.tolist()
 
 
 def uid_with_min_conversions(

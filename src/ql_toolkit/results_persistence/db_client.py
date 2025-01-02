@@ -2,12 +2,14 @@
 
 import asyncio
 import logging
+from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from ql_toolkit.results_persistence import db_payload
+from ql_toolkit.results_persistence.api_utils import get_ds_service_api_url
 from ql_toolkit.results_persistence.pydantic_models import WriteModelResults
 
 
@@ -38,7 +40,7 @@ async def write_payloads_to_db(
     failed_payloads = []
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             tasks = [
                 send_post_request(client=client, url=api_url, payload=payload, semaphore=semaphore)
                 for payload in payloads
@@ -81,7 +83,7 @@ async def finalize_results_cycle(api_url: str, payload: dict) -> None:
             - computed_at_str (str): The timestamp when the results were computed.
             - status (str): The status to update the metadata to.
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         try:
             response = await client.post(url=api_url, json=payload)
             response.raise_for_status()
@@ -98,7 +100,8 @@ async def finalize_results_cycle(api_url: str, payload: dict) -> None:
 
 
 async def write_model_results_to_db(
-    api_base_url: str, write_model_results_struct: WriteModelResults
+    write_model_results_struct: WriteModelResults,
+    api_base_url: Optional[str] = None,
 ) -> None:
     """Write model results to the database.
 
@@ -106,13 +109,16 @@ async def write_model_results_to_db(
     endpoint. It then finalizes the results cycle by updating the metadata status.
 
     Args:
-        api_base_url (str): The base URL of the database API endpoint.
         write_model_results_struct (WriteModelResults): The request body containing model results
             data.
+        api_base_url (Optional[str]): The base URL of the ds-service API endpoint.
     """
     payloads_list, computed_at_str = db_payload.generate_payloads(
         write_model_results_struct=write_model_results_struct
     )
+
+    if api_base_url is None:
+        api_base_url = get_ds_service_api_url()
 
     write_results_url = urljoin(base=api_base_url, url="write-results")
 

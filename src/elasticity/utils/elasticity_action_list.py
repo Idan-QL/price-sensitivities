@@ -7,7 +7,6 @@ from typing import List
 import pandas as pd
 
 from elasticity.data.configurator import DataFetchParameters
-from elasticity.utils.consts import CODE_VERSION
 from ql_toolkit.results_persistence.old_action_list import data_classes as dc
 from ql_toolkit.results_persistence.old_action_list.action_list import (
     create_actions_list,
@@ -42,39 +41,15 @@ def process_actions_list(
         channel=data_fetch_params.channel,
         qa_run=is_qa_run,
     )
-
+    
     _write_actions_list(
         actions_list=actions_list,
         input_args=input_args,
     )
 
 
-def add_code_version(model: dict) -> dict:
-    """Adds a `code_version` entry to the provided model dictionary.
-
-    Args:
-        model (dict): The dictionary representing the model to which `code_version` will be added.
-
-    Returns:
-        dict: The updated model dictionary with the `code_version` key set to `CODE_VERSION`.
-    """
-    model["code_version"] = CODE_VERSION
-    return model
-
-
 def generate_actions_list(df_results: pd.DataFrame, client_key: str, channel: str) -> List[dict]:
     """Generate actions list from the results DataFrame."""
-    # Combine best_a, best_b, and best_model into a dictionary
-    df_results["qlia_elasticity_model"] = (
-        df_results[["best_a", "best_b", "best_model"]]
-        .rename(columns={"best_a": "a", "best_b": "b", "best_model": "model"})
-        .to_dict(orient="records")
-    )
-
-    df_results["qlia_elasticity_model"] = df_results["qlia_elasticity_model"].apply(
-        add_code_version
-    )
-
     attr_cs = [
         "uid",
         "qlia_elasticity_model",

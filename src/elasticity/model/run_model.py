@@ -8,10 +8,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 from elasticity.data.configurator import DataColumns
-from elasticity.model.cross_validation import (
-    CrossValidationResult,
-    cross_validation,
-)
+from elasticity.model.cross_validation import CrossValidationResult, cross_validation
 from elasticity.model.model import EstimationResult, estimate_coefficients
 from elasticity.utils.consts import (
     CV_SUFFIXES_CS,
@@ -55,9 +52,7 @@ class ModelResults:
             key = f"{self.model_type}_{suffix}"
             self.results[key] = getattr(cv_result, suffix)
 
-    def add_estimation_result(
-        self, estimation_result: EstimationResult
-    ) -> None:
+    def add_estimation_result(self, estimation_result: EstimationResult) -> None:
         """Adds estimation results to the results dictionary.
 
         Args:
@@ -125,9 +120,7 @@ class ExperimentResults:
         data_config (DataConfig): Configuration settings for data-specific parameters.
     """
 
-    def __init__(
-        self, experiment_config: ExperimentConfig, data_config: DataConfig
-    ) -> None:
+    def __init__(self, experiment_config: ExperimentConfig, data_config: DataConfig) -> None:
         """Initializes a new instance of the ExperimentResults class.
 
         Args:
@@ -164,14 +157,9 @@ class ExperimentResults:
         """
         best_error = float("inf")
         for model_type in MODEL_TYPES:
-            model_error_key = (
-                f"{model_type}_{self.experiment_config.best_model_error_type}"
-            )
+            model_error_key = f"{model_type}_{self.experiment_config.best_model_error_type}"
             model_pvalue_key = f"{model_type}_pvalue"
-            if (
-                model_error_key not in self.results
-                or model_pvalue_key not in self.results
-            ):
+            if model_error_key not in self.results or model_pvalue_key not in self.results:
                 # If required keys are not found, log as error and skip this model
                 err_msg = f"""Required keys not found in `results` for the {model_type} model.\n
                 Ensure that all model's results have been added to the ExperimentResults object\n
@@ -208,9 +196,7 @@ class ExperimentResults:
         for suffix in MODEL_SUFFIXES_CS:
             self.results[f"best_{suffix}"] = np.nan
         # Add all fields from data_config with NaN values to results
-        self.results.update(
-            dict.fromkeys(self.data_config.model_dump(), np.nan)
-        )
+        self.results.update(dict.fromkeys(self.data_config.model_dump(), np.nan))
         quality_tests = {
             "quality_test": False,
             "quality_test_high": False,
@@ -230,9 +216,7 @@ class ExperimentResults:
         detailed text messages based on the quality tests outcomes and elasticity level.
         """
         for suffix in MODEL_SUFFIXES_CS:
-            self.results[f"best_{suffix}"] = self.results[
-                f"{self.results['best_model']}_{suffix}"
-            ]
+            self.results[f"best_{suffix}"] = self.results[f"{self.results['best_model']}_{suffix}"]
         # Add all fields from data_config to results
         self.results.update(self.data_config.model_dump())
         # Add fields for quality tests (quality_test, quality_test_high, quality_test_medium)
@@ -245,9 +229,7 @@ class ExperimentResults:
         self.results["details"] = make_details(
             self.results["quality_test"], self.results["quality_test_high"]
         )
-        self.results["elasticity_level"] = make_level(
-            self.results["best_elasticity"]
-        )
+        self.results["elasticity_level"] = make_level(self.results["best_elasticity"])
 
     def _run_quality_tests(self) -> None:
         """Conducts quality tests for the best model and updates the `results` dictionary.
@@ -259,9 +241,7 @@ class ExperimentResults:
         """
         elasticity = self.results["best_elasticity"]
         median_quantity = self.data_config.median_quantity
-        best_relative_absolute_error = self.results[
-            "best_relative_absolute_error"
-        ]
+        best_relative_absolute_error = self.results["best_relative_absolute_error"]
         quality_tests = {}
         quality_tests["quality_test"] = quality_test(
             elasticity, median_quantity, best_relative_absolute_error
@@ -273,8 +253,7 @@ class ExperimentResults:
             high_threshold=True,
         )
         quality_tests["quality_test_medium"] = (
-            quality_tests["quality_test"]
-            and not quality_tests["quality_test_high"]
+            quality_tests["quality_test"] and not quality_tests["quality_test_high"]
         )
         self.results.update(quality_tests)
 
@@ -393,18 +372,12 @@ def quality_test(
         if high_threshold:
             thresholds = [threshold // 2 for threshold in thresholds]
         return (
-            (
-                median_quantity < q_test_value_1
-                and best_relative_absolute_error <= thresholds[0]
-            )
+            (median_quantity < q_test_value_1 and best_relative_absolute_error <= thresholds[0])
             or (
                 q_test_value_1 <= median_quantity < q_test_value_2
                 and best_relative_absolute_error <= thresholds[1]
             )
-            or (
-                median_quantity >= q_test_value_2
-                and best_relative_absolute_error <= thresholds[2]
-            )
+            or (median_quantity >= q_test_value_2 and best_relative_absolute_error <= thresholds[2])
         )
     except ValueError as e:
         if high_threshold:
@@ -440,9 +413,7 @@ def make_level(elasticity: float) -> str:
     return f"{elasticity_level}"
 
 
-def make_details(
-    is_quality_test_passed: bool, is_high_quality_test_passed: bool
-) -> str:
+def make_details(is_quality_test_passed: bool, is_high_quality_test_passed: bool) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
     Args:
@@ -517,9 +488,7 @@ def run_experiment(
     )
     try:
         for model_type in MODEL_TYPES:
-            model_results = run_model_type(
-                data, data_columns, model_type, test_size
-            )
+            model_results = run_model_type(data, data_columns, model_type, test_size)
             experiment_results.add_model_results(model_results)
         experiment_results.compute_results()
     except Exception as e:

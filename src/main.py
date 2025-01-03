@@ -17,9 +17,11 @@ from elasticity.data.utils import initialize_dates
 from elasticity.model.group import handle_group_elasticity
 from elasticity.model.run_model import run_experiment_for_uids_parallel
 from elasticity.utils import cli_default_args
+from elasticity.utils.consts import CODE_VERSION
 from elasticity.utils.elasticity_action_list import process_actions_list
 from elasticity.utils.utils import log_environment_mode
 from elasticity.utils.write import upload_elasticity_data_to_athena
+from elasticity.utils.write_utils import upload_elasticity_results_to_attr_db
 from ql_toolkit.application_state.manager import app_state
 from ql_toolkit.env_setup.initialize_runtime import run_setup
 from report import logging_error, report, write_graphs
@@ -149,17 +151,22 @@ def process_client_channel(
         df_results = df_results.merge(df_revenue_uid, on="uid", how="left")
         log_quality_tests(df_results=df_results)
 
-        # Step 6: Action list and upload to athena
+        # Step 6: upload to athena, attr DB, and legacy process actions
         upload_elasticity_data_to_athena(
             data_fetch_params=data_fetch_params,
             end_date=date_range.end_date,
             df_upload=df_results,
             table_name=app_state.models_monitoring_table_name,
         )
+        df_results = create_model_dict_col(df_results)
         process_actions_list(
             df_results=df_results,
             data_fetch_params=data_fetch_params,
             is_qa_run=is_qa_run,
+        )
+        upload_elasticity_results_to_attr_db(
+            df_results=df_results,
+            data_fetch_params=data_fetch_params,
         )
 
         # Step 7: Save graphs
@@ -206,6 +213,33 @@ def process_client_channel(
         logging.error(f"Error occurred in {__file__} - {e} \n{error_info}")
 
     return
+
+
+def create_model_dict_col(df_results: pd.DataFrame) -> pd.DataFrame:
+    """Combines properties into a model dictionary column.
+
+    Args:
+        df_results (pd.DataFrame): Enriched DataFrame.
+
+    Returns:
+        pd.DataFrame: The updated DataFrame with the `qlia_elasticity_model` column added.
+
+    Raises:
+        KeyError: If any of the required columns ('best_a', 'best_b', 'best_model') are missing.
+    """
+    required_columns = {"best_a", "best_b", "best_model"}
+    if not required_columns.issubset(df_results.columns):
+        raise KeyError(f"Missing columns: {required_columns - set(df_results.columns)}")
+
+    # Combine best_a, best_b, and best_model into a dictionary
+    df_results["qlia_elasticity_model"] = (
+        df_results[["best_a", "best_b", "best_model"]]
+        .rename(columns={"best_a": "a", "best_b": "b", "best_model": "model"})
+        .assign(code_version=CODE_VERSION)
+        .to_dict(orient="records")
+    )
+
+    return df_results
 
 
 def run() -> None:

@@ -30,7 +30,6 @@ class WriteModelResults(BaseModel):
         channel (str): The channel.
         model (str): The model used.
         validity_days (int): The number of days the results are valid for. It must be at least 1.
-            Default is 7.
         results (List[ResultItem]): A list of result items. The list cannot be empty.
         chunk_size (int): The size of each chunk of the results list (default 1000). The chunk size
             must be greater than 0 and less than or equal to 2500.
@@ -40,7 +39,7 @@ class WriteModelResults(BaseModel):
     channel: str = Field(description="The channel.")
     model: str = Field(description="The model used.")
     validity_days: int = Field(
-        description="The number of days the results are valid for.", default=7
+        description="The number of days the results are valid for."
     )
     results: list[ResultItem] = Field(description="A list of result items.")
     chunk_size: int = Field(description="The size of each chunk.", default=1000)

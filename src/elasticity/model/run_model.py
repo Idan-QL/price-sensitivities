@@ -2,14 +2,17 @@
 
 import logging
 import multiprocessing
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel
 
 from elasticity.data.configurator import DataColumns
-from elasticity.model.cross_validation import cross_validation
-from elasticity.model.model import estimate_coefficients
+from elasticity.model.cross_validation import (
+    CrossValidationResult,
+    cross_validation,
+)
+from elasticity.model.model import EstimationResult, estimate_coefficients
 from elasticity.utils.consts import (
     CV_SUFFIXES_CS,
     ELASTIC_THRESHOLD,
@@ -21,49 +24,313 @@ from elasticity.utils.consts import (
 )
 
 
+class ModelResults:
+    """A class to store and manage results for a single model type.
+
+    This class encapsulates the results obtained from both cross-validation and
+    estimation phases of a model's computation.
+
+    Attributes:
+        model_type (str): The type of model for which results are stored.
+        results (dict): A dictionary to store various model metrics.
+    """
+
+    def __init__(self, model_type: str) -> None:
+        """Initializes a new instance of the ModelResults class.
+
+        Args:
+            model_type (str): The type of model for which results are stored.
+        """
+        self.model_type = model_type
+        self.results = {}
+
+    def add_cv_result(self, cv_result: CrossValidationResult) -> None:
+        """Adds cross-validation results to the results dictionary.
+
+        Args:
+            cv_result (CrossValidationResult): The cross-validation results object containing
+            metrics.
+        """
+        for suffix in CV_SUFFIXES_CS:
+            key = f"{self.model_type}_{suffix}"
+            self.results[key] = getattr(cv_result, suffix)
+
+    def add_estimation_result(
+        self, estimation_result: EstimationResult
+    ) -> None:
+        """Adds estimation results to the results dictionary.
+
+        Args:
+            estimation_result (EstimationResult): The estimation results object containing metrics.
+        """
+        for suffix in MODEL_SUFFIXES_CS:
+            key = f"{self.model_type}_{suffix}"
+            self.results[key] = getattr(estimation_result, suffix)
+
+    def clear_results(self) -> None:
+        """Clears all fields in the `results` dictionary by setting them to NaN."""
+        for suffix in CV_SUFFIXES_CS + MODEL_SUFFIXES_CS:
+            self.results[f"{self.model_type}_{suffix}"] = np.nan
+
+    def get_results(self) -> dict:
+        """Retrieves all stored results.
+
+        Returns:
+            dict: `results` attribute containing all results stored for the model.
+        """
+        return self.results
+
+
+class ExperimentConfig(BaseModel):
+    """Configuration settings for evaluating and selecting the best model in an experiment.
+
+    Attributes:
+        best_model_error_type (str): The name of error type to use for determining the best model.
+        max_pvalue (float): The maximum p-value threshold for considering a model as potentially
+        best.
+    """
+
+    best_model_error_type: str
+    max_pvalue: float
+
+
+class DataConfig(BaseModel):
+    """Configuration settings containing data-related parameters for an experiment.
+
+    These settings are used to provide contextual data which might be relevant for the experiment's
+    logic and outputs.
+
+    Attributes:
+        median_quantity (float): The median quantity value from the dataset.
+        median_price (float): The median price value from the dataset.
+        last_price (float): The last recorded price value from the dataset.
+        last_date (str): The date corresponding to the last data entry.
+    """
+
+    median_quantity: float
+    median_price: float
+    last_price: float
+    last_date: str
+
+
+class ExperimentResults:
+    """A class to store results of an experiment and determine the best model.
+
+    This class manages the integration of models' results and configuration settings to identify
+    and record the best-performing model according to specified performance metrics and thresholds.
+
+    Attributes:
+        results (dict): A dictionary to store experiment results and metadata.
+        experiment_config (ExperimentConfig): Configuration settings for experiment.
+        data_config (DataConfig): Configuration settings for data-specific parameters.
+    """
+
+    def __init__(
+        self, experiment_config: ExperimentConfig, data_config: DataConfig
+    ) -> None:
+        """Initializes a new instance of the ExperimentResults class.
+
+        Args:
+            experiment_config (ExperimentConfig): Configuration settings for experiment.
+            data_config (DataConfig): Configuration settings for data-specific parameters.
+        """
+        self.results = {}
+        self.results["best_model"] = None
+        self.experiment_config = experiment_config
+        self.data_config = data_config
+
+    def add_model_results(self, model_results: ModelResults) -> None:
+        """Integrates results from a single model into the experiment `results` dictionary.
+
+        Args:
+            model_results (ModelResults): ModelResults object containing data from a single model
+            run.
+        """
+        self.results.update(model_results.get_results())
+
+    def find_best_model(self) -> None:
+        """Identifies the best model based on pre-configured error type and p-value threshold.
+
+        This method iterates through each model type defined in the global `MODEL_TYPES`.
+        For each model, it retrieves the value of `best_model_error_type` and p-value from
+        `results` attribute. It then checks if the current model has the lowest value of
+        `best_model_error_type`, meets the p-value criterion, and has a non-negative error.
+        Once the best model is identified, the method updates the `results` dictionary.
+
+        If required keys (related to `best_model_error_type` or p-value) are not found in the
+        `results` for some model, this will be logged as error. Such model will not be
+        considered as potentially best model. This can happen if model's results are not
+        added to the ExperimentResults object (using `add_model_results` method).
+        """
+        best_error = float("inf")
+        for model_type in MODEL_TYPES:
+            model_error_key = (
+                f"{model_type}_{self.experiment_config.best_model_error_type}"
+            )
+            model_pvalue_key = f"{model_type}_pvalue"
+            if (
+                model_error_key not in self.results
+                or model_pvalue_key not in self.results
+            ):
+                # If required keys are not found, log as error and skip this model
+                err_msg = f"""Required keys not found in `results` for the {model_type} model.\n
+                Ensure that all model's results have been added to the ExperimentResults object\n
+                (using `add_model_results` method)."""
+                logging.error(err_msg)
+                continue
+            model_error = self.results[model_error_key]
+            model_pvalue = self.results[model_pvalue_key]
+
+            if (
+                model_error < best_error
+                and model_error >= 0
+                and model_pvalue <= self.experiment_config.max_pvalue
+            ):
+                self.results["best_model"] = model_type
+                best_error = model_error
+
+    def compute_results(self) -> None:
+        """Sets the best model for the experiment and populates the `results` dictionary.
+
+        This method first identifies the best model using the `find_best_model` method.
+        If the best model is identified, the method runs the `populate_results_for_best_model`,
+        otherwise it runs the `populate_results_for_no_best_model` method. Both methods populate
+        the `results` dictionary with the relevant data based on the best model or lack thereof.
+        """
+        self.find_best_model()
+        if self.results["best_model"] is None:
+            self._populate_results_for_no_best_model()
+        else:
+            self._populate_results_for_best_model()
+
+    def _populate_results_for_no_best_model(self) -> None:
+        """Populates the `results` with NaN or False values when no best model is found."""
+        for suffix in MODEL_SUFFIXES_CS:
+            self.results[f"best_{suffix}"] = np.nan
+        # Add all fields from data_config with NaN values to results
+        self.results.update(
+            dict.fromkeys(self.data_config.model_dump(), np.nan)
+        )
+        quality_tests = {
+            "quality_test": False,
+            "quality_test_high": False,
+            "quality_test_medium": False,
+        }
+        self.results.update(quality_tests)
+        self.results["details"] = np.nan
+        self.results["elasticity_level"] = np.nan
+
+    def _populate_results_for_best_model(self) -> None:
+        """Populates the `results` dictionary when the best model is found.
+
+        This method populates the `results` dictionary with data specific to the best model,
+        such as its error metrics and other relevant details. It also copies the data from the
+        `data_config` attribute into the `results` dictionary. In addition, it conducts quality
+        tests (to check if the best model meets high, medium, or low quality standards) and creates
+        detailed text messages based on the quality tests outcomes and elasticity level.
+        """
+        for suffix in MODEL_SUFFIXES_CS:
+            self.results[f"best_{suffix}"] = self.results[
+                f"{self.results['best_model']}_{suffix}"
+            ]
+        # Add all fields from data_config to results
+        self.results.update(self.data_config.model_dump())
+        # Add fields for quality tests (quality_test, quality_test_high, quality_test_medium)
+        self._run_quality_tests()
+        # Add text messages for details related to quality tests and elasticity level
+        self._make_details_and_level()
+
+    def _make_details_and_level(self) -> None:
+        """Updates the `results` with detailed messages on quality tests and elasticity level."""
+        self.results["details"] = make_details(
+            self.results["quality_test"], self.results["quality_test_high"]
+        )
+        self.results["elasticity_level"] = make_level(
+            self.results["best_elasticity"]
+        )
+
+    def _run_quality_tests(self) -> None:
+        """Conducts quality tests for the best model and updates the `results` dictionary.
+
+        This method performs quality tests based on the elasticity, median quantity, and
+        relative absolute error of the best model. It updates the `results` dictionary with the
+        information whether the model passes the (low) quality test, high quality test,
+        and medium quality test.
+        """
+        elasticity = self.results["best_elasticity"]
+        median_quantity = self.data_config.median_quantity
+        best_relative_absolute_error = self.results[
+            "best_relative_absolute_error"
+        ]
+        quality_tests = {}
+        quality_tests["quality_test"] = quality_test(
+            elasticity, median_quantity, best_relative_absolute_error
+        )
+        quality_tests["quality_test_high"] = quality_test(
+            elasticity,
+            median_quantity,
+            best_relative_absolute_error,
+            high_threshold=True,
+        )
+        quality_tests["quality_test_medium"] = (
+            quality_tests["quality_test"]
+            and not quality_tests["quality_test_high"]
+        )
+        self.results.update(quality_tests)
+
+    def clear_results(self) -> None:
+        """Clears all fields in the `results` dictionary by setting them to NaN."""
+        for suffix in OUTPUT_CS:
+            self.results[f"{suffix}"] = np.nan
+
+    def get_results(self) -> dict:
+        """Retrieves all stored results.
+
+        Returns:
+            dict: `results` attribute containing all results stored for the experiment.
+        """
+        return self.results
+
+
 def run_model_type(
-    data: pd.DataFrame, model_type: str, test_size: float, data_columns: DataColumns
-) -> Tuple[dict, float, float]:
-    """Calculate cross-validation and regression results.
+    data: pd.DataFrame,
+    data_columns: DataColumns,
+    model_type: str,
+    test_size: float,
+) -> ModelResults:
+    """Calculate cross-validation and regression results for specified `model_type`.
+
+    This function calculates the cross-validation and regression results for a specified model type
+    and saves the results in a ModelResults object. If an exception occurs during the calculation,
+    the function logs the error and returns an ModelResults object with NaN values.
 
     Args:
         data (pd.DataFrame): The input data.
+        data_columns (DataColumns): Configuration for data columns.
         model_type (str): The type of model to run.
         test_size (float): The proportion of the dataset to include in the test split.
-        data_columns (DataColumns): Configuration for data columns.
 
     Returns:
-        dict: A dictionary containing the calculated results.
-        float: The median quantity from the input data.
-        float: The median price from the input data.
-
-    Raises:
-        ValueError: If there is an error.
+        ModelResults: An object containing the calculated results.
     """
-    results = {}
-    median_price = data[data_columns.round_price].median()
-    median_quantity = data[data_columns.quantity].median()
+    model_results = ModelResults(model_type)
     try:
         cv_result = cross_validation(
-            data=data, model_type=model_type, test_size=test_size, data_columns=data_columns
+            data=data,
+            model_type=model_type,
+            test_size=test_size,
+            data_columns=data_columns,
         )
         estimation_result = estimate_coefficients(
             data=data, model_type=model_type, data_columns=data_columns
         )
-        # Store the results in a dictionary
-        for suffix in CV_SUFFIXES_CS:
-            key = model_type + "_" + suffix
-            results[key] = getattr(cv_result, suffix)
-        for suffix in MODEL_SUFFIXES_CS:
-            key = model_type + "_" + suffix
-            results[key] = getattr(estimation_result, suffix)
-
+        model_results.add_cv_result(cv_result)
+        model_results.add_estimation_result(estimation_result)
     except Exception as e:
-        logging.info(f"Error in run_model_type: {e}")
-        # Set all the results to np.nan
-        for col in [model_type + "_" + suffix for suffix in (CV_SUFFIXES_CS + MODEL_SUFFIXES_CS)]:
-            results[col] = np.nan
-    return results, median_quantity, median_price
+        # If exception occurs, log the error and and return empty results
+        logging.error(f"Error in run_model_type for {model_type}: {e}")
+        model_results.clear_results()
+    return model_results
 
 
 def quality_test(
@@ -118,16 +385,26 @@ def quality_test(
         if elasticity > 0:
             return False
 
-        thresholds = [q_test_threshold_1, q_test_threshold_2, q_test_threshold_3]
+        thresholds = [
+            q_test_threshold_1,
+            q_test_threshold_2,
+            q_test_threshold_3,
+        ]
         if high_threshold:
             thresholds = [threshold // 2 for threshold in thresholds]
         return (
-            (median_quantity < q_test_value_1 and best_relative_absolute_error <= thresholds[0])
+            (
+                median_quantity < q_test_value_1
+                and best_relative_absolute_error <= thresholds[0]
+            )
             or (
                 q_test_value_1 <= median_quantity < q_test_value_2
                 and best_relative_absolute_error <= thresholds[1]
             )
-            or (median_quantity >= q_test_value_2 and best_relative_absolute_error <= thresholds[2])
+            or (
+                median_quantity >= q_test_value_2
+                and best_relative_absolute_error <= thresholds[2]
+            )
         )
     except ValueError as e:
         if high_threshold:
@@ -163,7 +440,9 @@ def make_level(elasticity: float) -> str:
     return f"{elasticity_level}"
 
 
-def make_details(is_quality_test_passed: bool, is_high_quality_test_passed: bool) -> str:
+def make_details(
+    is_quality_test_passed: bool, is_high_quality_test_passed: bool
+) -> str:
     """Generate a concise message based on the quality test and elasticity.
 
     Args:
@@ -186,128 +465,69 @@ def make_details(is_quality_test_passed: bool, is_high_quality_test_passed: bool
     return f"{quality_test_message}."
 
 
-# TO DO REVIEW QUALITY TEST
 def run_experiment(
     data: pd.DataFrame,
     data_columns: DataColumns,
     test_size: float = 0.1,
     max_pvalue: float = 0.05,
     threshold_best_model_cv_or_refit: int = 7,
-    quality_test_error_col: str = "best_relative_absolute_error",
 ) -> pd.DataFrame:
-    """Run experiment and return results DataFrame.
+    """Run experiment and return results in a DataFrame.
 
     This function evaluates multiple regression models using cross-validation and
     coefficient estimation. It selects the best model based on the lowest
-    'best_model_error_col', given the model's p-value is within the max_pvalue limit.
-    It also performs quality tests on 'quality_test_error_col' and generates a
-    detailed result.
+    `best_model_error_type`, given the model's p-value is within the max_pvalue limit.
+    It also performs quality tests for the best model and generates a detailed result.
+    If the experiment fails, it logs the error and returns a DataFrame with NaN values
+    for all expected output columns.
 
     Args:
-        data (pd.DataFrame): DataFrame containing the dataset.
+        data (pd.DataFrame): The input data.
         data_columns (DataColumns): Configuration for data columns.
-        test_size (float, optional): Proportion of the dataset to include in the test split.
+        test_size (float, optional): The proportion of the dataset to include in the test split.
         Defaults to 0.1.
         max_pvalue (float, optional): Maximum p-value for model acceptance. Defaults to 0.05.
         threshold_best_model_cv_or_refit (int, optional): threshold to choose best model from
         cv test score or refit. Defaults to 7.
-        quality_test_error_col (str, optional): Column name for the quality test error.
-        Defaults to "best_relative_absolute_error".
-
-    The function follows these steps:
-    1. Initialize a dictionary `results` to store results and variables to track the best model
-    and error.
-    2. Iterate over each model type in MODEL_TYPES.
-       - For each model type, perform cross-validation and coefficient estimation using
-       `run_model_type`.
-       - Update `results` with the model-specific results.
-       - if len(data)>'threshold_best_model_cv_or_refit, best_model_error_col from CV test
-       otherwise from refit error
-       - Check if the current model has the lowest 'best_model_error_col', meets the p-value
-       criterion, and has a non-negative error.
-       - If the current model is better than the previous best, update `best_model` and
-       `best_error`.
-    3. If no model meets the criteria, log the information, assign NaN values for model-specific
-    results,
-    and set quality test flags to False.
-    4. If a best model is found:
-       - Assign best model-specific results to the final results.
-       - Perform quality tests to determine if the model meets high, medium, or low quality
-       standards.
-       - Generate a detailed message based on the quality tests and elasticity.
-    5. Convert the `results` dictionary to a DataFrame and return it.
 
     Returns:
-        pd.DataFrame: Results of the experiment.
+        pd.DataFrame: A DataFrame containing the aggregated results of the experiment, with one
+        row and various columns for each result metric and model type.
     """
-    # Initialize variables
-    results = {}
-    best_model = None
-    best_error = float("inf")  # Initialize with a very large value
+    best_model_error_type = (
+        "mean_relative_absolute_error"
+        if len(data) > threshold_best_model_cv_or_refit
+        else "relative_absolute_error"
+    )
+    median_quantity = data[data_columns.quantity].median()
+    median_price = data[data_columns.round_price].median()
+    last_price = data["last_price"].iloc[0]
+    last_date = data["last_date"].iloc[0]
+    data_config = DataConfig(
+        median_quantity=median_quantity,
+        median_price=median_price,
+        last_price=last_price,
+        last_date=last_date,
+    )
+    experiment_config = ExperimentConfig(
+        best_model_error_type=best_model_error_type, max_pvalue=max_pvalue
+    )
+    experiment_results = ExperimentResults(
+        experiment_config=experiment_config, data_config=data_config
+    )
+    try:
+        for model_type in MODEL_TYPES:
+            model_results = run_model_type(
+                data, data_columns, model_type, test_size
+            )
+            experiment_results.add_model_results(model_results)
+        experiment_results.compute_results()
+    except Exception as e:
+        # If exception occurs, log the error and clear the results
+        logging.error(f"Error in run_experiment: {e}")
+        experiment_results.clear_results()
 
-    for model_type in MODEL_TYPES:
-        model_results, median_quantity, median_price = run_model_type(
-            data=data, model_type=model_type, test_size=test_size, data_columns=data_columns
-        )
-
-        if len(data) > threshold_best_model_cv_or_refit:
-            best_model_error_col = "mean_relative_absolute_error"
-        else:
-            best_model_error_col = "relative_absolute_error"
-
-        if (
-            (model_results[model_type + "_" + best_model_error_col] < best_error)
-            and (model_results[model_type + "_pvalue"] <= max_pvalue)
-            and (model_results[model_type + "_" + best_model_error_col] >= 0)
-        ):
-            best_error = model_results[model_type + "_" + best_model_error_col]
-            best_model = model_type
-
-        results.update(model_results)
-
-    # If no best model is found, log and assign NaN values
-    if best_model is None:
-        results["best_model"] = np.nan
-        for suffix in MODEL_SUFFIXES_CS:
-            results[f"best_{suffix}"] = np.nan
-        results["median_quantity"] = np.nan
-        results["median_price"] = np.nan
-
-        for col in ["quality_test", "quality_test_high", "quality_test_medium"]:
-            results[col] = False
-
-        results["details"] = np.nan
-    else:
-        results["best_model"] = best_model
-
-        for suffix in MODEL_SUFFIXES_CS:
-            results[f"best_{suffix}"] = results[f"{best_model}_{suffix}"]
-
-        results["median_quantity"] = median_quantity
-        results["median_price"] = median_price
-        results["last_price"] = data["last_price"].iloc[0]
-        results["last_date"] = data["last_date"].iloc[0]
-
-        results["quality_test"] = quality_test(
-            results["best_elasticity"],
-            results["median_quantity"],
-            results[quality_test_error_col],
-        )
-        results["quality_test_high"] = quality_test(
-            results["best_elasticity"],
-            results["median_quantity"],
-            results[quality_test_error_col],
-            high_threshold=True,
-        )
-        results["quality_test_medium"] = (
-            results["quality_test"] and not results["quality_test_high"]
-        )
-
-        results["elasticity_level"] = make_level(results["best_elasticity"])
-
-        results["details"] = make_details(results["quality_test"], results["quality_test_high"])
-
-    return pd.DataFrame(results, index=[0])
+    return pd.DataFrame(experiment_results.get_results(), index=[0])
 
 
 def run_experiment_for_uid(
@@ -388,7 +608,10 @@ def run_experiment_for_uids_not_parallel(
     unique_uids = df_input[data_columns.uid].unique()
     for uid in unique_uids:
         results_df = run_experiment_for_uid(
-            uid=uid, data=df_input, data_columns=data_columns, test_size=test_size
+            uid=uid,
+            data=df_input,
+            data_columns=data_columns,
+            test_size=test_size,
         )
         results_list.append(results_df)
     return pd.concat(results_list)

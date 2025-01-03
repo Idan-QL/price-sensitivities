@@ -74,26 +74,83 @@ class AthenaQuery:
         )
         return raw_query.format(client_key=self.client_key, channel=self.channel, **self.kwargs)
 
-    @staticmethod
-    def convert_dtypes(data_df: pd.DataFrame) -> pd.DataFrame:
-        """Convert Int64 columns to int32 and float64 columns to float32 in the DataFrame.
+    def convert_dtypes(self, data_df: pd.DataFrame) -> pd.DataFrame:
+        """Convert numerical data types to optimize memory usage while preserving null values.
+
+        This function converts:
+        - Nullable integer columns (`Int64`) to 32-bit nullable integers (`Int32`).
+        - Floating-point columns (`float64`) to 32-bit floating-point numbers (`float32`).
 
         Args:
-            data_df (pd.DataFrame): The DataFrame to convert.
+            data_df (pd.DataFrame): The input DataFrame containing numerical and other data.
 
         Returns:
-            pd.DataFrame: The DataFrame with converted data types.
+            pd.DataFrame: The DataFrame with optimized numerical data types.
         """
-        # Convert int64 to int32
-        int_cols = data_df.select_dtypes(include=["Int64"]).columns
-        data_df[int_cols] = data_df[int_cols].astype("int32")
+        skipped_columns = []
 
-        # Convert float64 to float32
-        float_cols = data_df.select_dtypes(include=["float64"]).columns
-        data_df[float_cols] = data_df[float_cols].astype("float32")
+        # Process nullable integer columns
+        data_df, skipped_int_cols = self._convert_columns(
+            data_df=data_df,
+            dtype_filter="Int64",
+            target_dtype="Int32",
+            dtype_name="integer",
+        )
+        skipped_columns.extend(skipped_int_cols)
 
-        logging.info("Data types converted!")
+        # Process floating-point columns
+        data_df, skipped_float_cols = self._convert_columns(
+            data_df=data_df,
+            dtype_filter="float64",
+            target_dtype="float32",
+            dtype_name="float",
+        )
+        skipped_columns.extend(skipped_float_cols)
+
+        # Logging summary
+        logging.info(
+            f"DataFrame data types converted! "
+            f"{len(data_df.select_dtypes(include=['Int32']))} integer columns "
+            f"and {len(data_df.select_dtypes(include=['float32']))} float columns updated."
+        )
+        if skipped_columns:
+            logging.warning(
+                f"Skipped the following columns due to conversion issues: {skipped_columns}"
+            )
+
         return data_df
+
+    @staticmethod
+    def _convert_columns(
+        data_df: pd.DataFrame, dtype_filter: str, target_dtype: str, dtype_name: str
+    ) -> tuple[pd.DataFrame, list[str]]:
+        """Helper function to convert specific column types in a DataFrame.
+
+        Args:
+            data_df (pd.DataFrame): The input DataFrame.
+            dtype_filter (str): The dtype to filter columns by (e.g., "Int64").
+            target_dtype (str): The target dtype for conversion (e.g., "Int32").
+            dtype_name (str): Name of the type being converted for logging purposes.
+
+        Returns:
+            tuple[pd.DataFrame, list[str]]: The updated DataFrame and a list of skipped columns.
+        """
+        skipped_columns = []
+        cols_to_convert = data_df.select_dtypes(include=[dtype_filter]).columns
+
+        for col in cols_to_convert:
+            if not pd.api.types.is_numeric_dtype(data_df[col]):
+                skipped_columns.append(col)
+                continue
+            try:
+                data_df[col] = data_df[col].astype(target_dtype)
+            except ValueError as err:
+                logging.warning(
+                    f"Skipping conversion of column '{col}' to {dtype_name}. Error: {err}"
+                )
+                skipped_columns.append(col)
+
+        return data_df, skipped_columns
 
     def execute_query(self) -> pd.DataFrame:
         """Execute the built query on AWS Athena and return the results as a pandas DataFrame.

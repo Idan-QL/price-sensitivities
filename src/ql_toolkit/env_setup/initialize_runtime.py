@@ -38,6 +38,16 @@ def run_setup(
     logging.info(f"{app_state}")
     logging.info("Setup complete!")
 
+    if app_state.results_type == "production":
+        print(
+            "\n\n\033[1;31m"  # Bold Red
+            + "=" * 69
+            + "\n\n"
+            + "🚀🚀🚀 PRODUCTION RUN: The job is running in production mode! 🚀🚀🚀\n\n"
+            + "=" * 69
+            + "\033[0m\n\n"
+        )
+
     return config_dict, client_keys_map
 
 

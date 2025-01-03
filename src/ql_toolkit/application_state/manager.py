@@ -42,6 +42,7 @@ class AppState(metaclass=SingletonMeta):
             The default value is 'local'. Acceptable values are 'local', 'staging', 'production'.
             This value is typically used to indicate whether the application should connect to a
             production system/DB or to a local system/DB.
+        dc_code (str): The data center code. E.g. 'useb', 'usecp' or 'euca'.
         date_format (str): The format of the date string.
         s3_ds_dir (str): The S3 data science directory.
         s3_archive_dir (str): The S3 archive directory.
@@ -68,6 +69,7 @@ class AppState(metaclass=SingletonMeta):
         self._region = None
         self._results_type = None
         self.run_env = os.getenv("RUN_ENV", "local")
+        self.dc_code = os.getenv("DC", "")
         self.date_format = "%Y-%m-%d"
         self.s3_ds_dir = "data_science"
         self.s3_archive_dir = os.path.join(self.s3_ds_dir, "archive")
@@ -87,7 +89,8 @@ class AppState(metaclass=SingletonMeta):
             f"  Bucket      : {self.bucket_name}\n"
             f"  Project     : {self.project_name}\n"
             f"  Run Type    : {self.results_type}\n"
-            f"  Environment : {self.run_env}"
+            f"  Environment : {self.run_env}\n"
+            f"  DC Code     : {self.dc_code}\n"
         )
 
     def initialize(
@@ -95,11 +98,12 @@ class AppState(metaclass=SingletonMeta):
     ) -> None:
         """Initializes the AppState instance with the provided values.
 
-        To set the bucket name, pass either the data-center name (i.e. 'us' or 'eu') or the actual
-        bucket-name to the `storage_location`.
+        To set the bucket name, pass either the generic storage location name (i.e. 'us' or 'eu')
+        or the actual bucket-name to the `storage_location`. This indicates from which storage the
+        data will be read (and implies both the bucket and data lake location).
 
         Args:
-            storage_location (str): The name of the bucket or the data-center.
+            storage_location (str): Bucket name or generic storage location for reading data.
                 Must be one of 'us', 'eu', 'quicklizard', or 'quicklizard-eu-central'.
             project (str): The name of the project.
             is_qa_run (bool): If True, sets the run type to 'qa'; otherwise, sets it to 'prod'.
@@ -120,14 +124,42 @@ class AppState(metaclass=SingletonMeta):
         """
         self.bucket_name = storage_location
         self.project_name = project
-        self.results_type = "qa" if is_qa_run else "prod"
+        self.results_type = "qa" if is_qa_run else "production"
+
         if region:
             self.aws_region = region
+
+        self._assign_dc_code()
+        self._assign_attributes_db_sec_name()
+
         logging.info(
-            f"Initialized AppState with: region = '{self.aws_region}', "
+            f"Initialized AppState with: region = '{self.aws_region}', DC = {self.dc_code}, "
             f"bucket =  '{self.bucket_name}', project = '{self.project_name}' and "
             f"results_type = '{self.results_type}'"
         )
+
+    def _assign_dc_code(self) -> None:
+        """Assigns the data center code.
+
+        Assign the data center code based on the run environment and the AWS region.
+        It defines the k8s cluster to use for the run. Can be 'useb', 'usecp', 'euca', or 'local'.
+        """
+        if self.run_env == "production":
+            if self.aws_region == "us-east-1":
+                self.dc_code = "usecp"
+            elif self.aws_region == "eu-central-1":
+                self.dc_code = "euca"
+        elif self.run_env == "staging" and self.aws_region == "us-east-1":
+            self.dc_code = "useb"
+        else:
+            self.dc_code = "local"
+
+    def _assign_attributes_db_sec_name(self) -> None:
+        """Gets the attributes database section name."""
+        if self.dc_code != "local":
+            self.attributes_db_sec_name = (
+                f"rds/internal-attributes-{self.run_env}" f"-{self.dc_code}/rw"
+            )
 
     @property
     def aws_region(self) -> str:
@@ -210,11 +242,9 @@ class AppState(metaclass=SingletonMeta):
         if data_center_or_bucket_name in {"us", "quicklizard"}:
             self._bucket = "quicklizard"
             self._region = "us-east-1"
-            self.attributes_db_sec_name = "rds/internal-attributes-production-usecp/rw"
         elif data_center_or_bucket_name in {"eu", "quicklizard-eu-central"}:
             self._bucket = "quicklizard-eu-central"
             self._region = "eu-central-1"
-            self.attributes_db_sec_name = "rds/internal-attributes-production-euca/rw"
         else:
             err_msg = "Unsupported data center or bucket name!"
             raise ValueError(err_msg)
@@ -335,7 +365,7 @@ class AppState(metaclass=SingletonMeta):
         if self.results_type == "qa":
             return "ds_sandbox"
 
-        if self.results_type == "prod":
+        if self.results_type == "production":
             return "ds_production_monitoring"
 
         err_msg = "Run type is not set!"

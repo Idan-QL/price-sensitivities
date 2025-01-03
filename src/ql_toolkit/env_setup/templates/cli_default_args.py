@@ -28,7 +28,7 @@ default_args_dict = {
         "flag": "-d",
         "default": "",
         "type": str,
-        "help": "Bucket name or Data-Center ('us' or 'eu').",
+        "help": "Bucket name or generic storage location ('us' or 'eu') for reading data.",
         "required": True,
     },
     "config": {

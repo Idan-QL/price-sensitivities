@@ -1,0 +1,110 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '**.py'
+      - 'src/**'
+      - 'tests/**'
+      - 'pipeline_requirements.txt'
+      - '.github/workflows/**'
+      - '.ruff.toml'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - '**.py'
+      - 'src/**'
+      - 'tests/**'
+      - 'pipeline_requirements.txt'
+      - '.github/workflows/**'
+      - '.ruff.toml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUNBUFFERED: 1
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+  FORCE_COLOR: 1
+
+jobs:
+  format-and-lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install -r pipeline_requirements.txt
+        
+    - name: Run formatters and linters
+      run: |
+          black src/ tests/ --line-length=100
+          isort src/ tests/ --profile black
+          ruff check src/ tests/
+
+  run-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install -r pipeline_requirements.txt
+        
+    - name: Run tests
+      run: |
+        pytest tests/ -v \
+          --junitxml=test-results/results.xml \
+          --cov=src/elasticity/ \
+          --cov=src/report/ \
+          --cov-report=xml \
+          --cov-report=html \
+          --maxfail=3 \
+          --disable-warnings
+        
+    - name: Save pytest cache
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: .pytest_cache
+        key: ${{ runner.os }}-pytest-${{ hashFiles('tests/**/*.py') }}
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results
+        path: |
+          test-results/
+          coverage.xml
+          htmlcov/
+        retention-days: 14
+
+    - name: Test Summary
+      uses: test-summary/action@v2
+      if: always()
+      with:
+        paths: test-results/results.xml
